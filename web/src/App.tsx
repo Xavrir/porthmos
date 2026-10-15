@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Outlet, Route, Routes, useLocation } from 'react-router-dom'
-import { AppHeader, MarketBanner, ModeBanner, Notices, usePageTitle } from './components/chrome'
+import { AppShell, MarketBanner, ModeBanner, Notices, usePageTitle } from './components/chrome'
 import { SeatChooser } from './components/SeatChooser'
 import { Landing } from './pages/Landing'
 
@@ -14,16 +14,13 @@ const Start = lazy(() => import('./pages/Start'))
 function AppLayout() {
   const { pathname } = useLocation()
   return (
-    <div className="app">
-      <a className="skip" href="#main">Skip to content</a>
-      <AppHeader />
+    <AppShell>
       <MarketBanner />
       {pathname === '/start' ? null : <ModeBanner />}
       <Suspense fallback={<main id="main" className="page"><p className="empty wrap">Loading the page…</p></main>}>
         <Outlet />
       </Suspense>
-      <Notices />
-    </div>
+    </AppShell>
   )
 }
 
@@ -58,7 +55,7 @@ function NotFound() {
   usePageTitle('Page not found')
   return (
     <main id="main" className="page">
-      <section className="page-band c-black on-dark"><div className="wrap"><h1>No such page</h1><p>This address is not part of AEGIS. Use the pages above, or go back to the overview.</p></div></section>
+      <section className="page-band c-black on-dark"><div className="wrap"><h1>No such page</h1><p>This address is not part of AEGIS. Use the page list, or go back to the overview.</p></div></section>
     </main>
   )
 }

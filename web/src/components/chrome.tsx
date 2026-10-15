@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { zeroAddress } from 'viem'
 import { useConnect, useConnection, useConnectors, useDisconnect } from 'wagmi'
 import { DEFAULT_LIVE_URL, useAegis } from '../lib/source'
 import { useIdentity, type Seat } from '../lib/identity'
@@ -7,16 +8,18 @@ import { chainName } from '../lib/wallet'
 import { shortHex } from '../lib/format'
 import { RECORDED_SCENARIOS, SCHEDULED_SCENARIOS, scheduledAfter } from '../lib/proof'
 import { GlossaryButton } from './Glossary'
+import { Hash } from './bits'
+import { Icon } from './icons'
 import { useSeatPicker } from '../lib/seats'
 import { useMarket } from '../lib/queries'
 import type { Role } from '../lib/types'
 
 export const PAGES = [
-  { to: '/treasury', label: 'Treasury', chapter: 'surface' },
-  { to: '/copilot', label: 'Copilot', chapter: 'blue' },
-  { to: '/risk', label: 'Risk', chapter: 'red' },
-  { to: '/audit', label: 'Audit', chapter: 'black' },
-  { to: '/bank', label: 'Bank desk', chapter: 'navy' },
+  { to: '/treasury', label: 'Treasury', chapter: 'surface', icon: 'treasury', acts: 'owner', hint: 'Owner acts' },
+  { to: '/copilot', label: 'Copilot', chapter: 'blue', icon: 'copilot', acts: 'owner', hint: 'Owner acts' },
+  { to: '/risk', label: 'Risk', chapter: 'red', icon: 'risk', acts: null, hint: 'Every seat watches' },
+  { to: '/audit', label: 'Audit', chapter: 'black', icon: 'audit', acts: null, hint: 'Every seat reads' },
+  { to: '/bank', label: 'Bank desk', chapter: 'navy', icon: 'bank', acts: 'bank', hint: 'Home of the bank seat' },
 ] as const
 
 export const SEATS: { seat: Seat; name: string; what: string }[] = [
@@ -310,40 +313,141 @@ export function MarketBanner() {
   )
 }
 
-export function AppHeader() {
-  const [open, setOpen] = useState(false)
-  const loc = useLocation()
-  const navRef = useRef<HTMLElement>(null)
-  const menuRef = useRef<HTMLButtonElement>(null)
-  useEffect(() => { setOpen(false) }, [loc.pathname])
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); menuRef.current?.focus() } }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open])
+const WIDE = '(min-width: 1024px)'
+
+function subscribeWide(cb: () => void) {
+  const m = window.matchMedia(WIDE)
+  m.addEventListener('change', cb)
+  return () => m.removeEventListener('change', cb)
+}
+
+function useWide() {
+  return useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => true)
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
+
+function SideNav() {
+  const { role } = useIdentity()
   return (
-    <header className="app-header">
-      <NavLink to="/" className="wordmark" aria-label="AEGIS Treasury, home">AEGIS<span className="wordmark-long"> Treasury</span></NavLink>
-      <nav aria-label="Pages" className={`app-nav${open ? ' is-open' : ''}`} id="app-nav" ref={navRef}>
-        <ul className="app-links">
-          <li><NavLink to="/" end className="app-link c-surface">Overview</NavLink></li>
-          {PAGES.map((p) => (
+    <nav aria-label="Pages" className="side-nav">
+      <ul className="side-links">
+        {PAGES.map((p) => {
+          const yours = p.acts !== null && p.acts === role
+          return (
             <li key={p.to}>
-              <NavLink to={p.to} className={({ isActive }) => `app-link c-${p.chapter}${isActive ? ' is-active' : ''}`}>{p.label}</NavLink>
+              <NavLink to={p.to} className={({ isActive }) => `side-link c-${p.chapter}${isActive ? ' is-active' : ''}`}>
+                <Icon name={p.icon} />
+                <span className="side-text">
+                  <span className="side-label">{p.label}</span>
+                  <span className={`side-hint${yours ? ` is-yours seat-${p.acts}` : ''}`}>{yours ? (p.acts === 'bank' ? 'Your desk' : 'You act here') : p.hint}</span>
+                </span>
+              </NavLink>
             </li>
-          ))}
-          <li><GlossaryButton className="app-link terms-link" /></li>
-        </ul>
-      </nav>
-      <div className="app-tools">
-        <IdentityControl />
-        <ModeIndicator />
-        <button type="button" className="menu-button" ref={menuRef} aria-expanded={open} aria-controls="app-nav" onClick={() => setOpen((o) => !o)}>
-          {open ? 'Close' : 'Menu'}
-        </button>
+          )
+        })}
+      </ul>
+    </nav>
+  )
+}
+
+function SafeLine() {
+  const { deployment } = useAegis()
+  const safe = deployment.safe
+  return (
+    <div className="side-safe">
+      <span className="side-caption">Treasury Safe</span>
+      {safe && safe !== zeroAddress ? <Hash value={safe} kind="address" label="treasury Safe address" /> : <span className="muted">No treasury yet</span>}
+    </div>
+  )
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const wide = useWide()
+  const [open, setOpen] = useState(false)
+  const { pathname } = useLocation()
+  const sideRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLButtonElement>(null)
+  const drawer = open && !wide
+
+  useEffect(() => { setOpen(false) }, [pathname, wide])
+
+  useEffect(() => {
+    const side = sideRef.current
+    const menu = menuRef.current
+    if (!drawer || !side) return
+    const items = () => Array.from(side.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.getClientRects().length > 0)
+    side.querySelector<HTMLElement>('.side-close')?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      // a dialog opened from the drawer (Terms) handles its own keys
+      if (document.querySelector('dialog[open]')) return
+      if (e.key === 'Escape') { e.preventDefault(); setOpen(false); return }
+      if (e.key !== 'Tab') return
+      const list = items()
+      if (!list.length) return
+      const first = list[0]
+      const last = list[list.length - 1]
+      const active = document.activeElement
+      if (e.shiftKey && (active === first || !side.contains(active))) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && (active === last || !side.contains(active))) { e.preventDefault(); first.focus() }
+    }
+    const root = document.documentElement
+    const overflow = root.style.overflow
+    root.style.overflow = 'hidden'
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      root.style.overflow = overflow
+      const active = document.activeElement
+      if (!active || active === document.body || side.contains(active)) menu?.focus()
+    }
+  }, [drawer])
+
+  return (
+    <div className="app">
+      <a className="skip" href="#main">Skip to content</a>
+      <header className="app-head">
+        <div className="app-top">
+          <NavLink to="/" className="wordmark" aria-label="AEGIS Treasury, home">AEGIS<span className="wordmark-long"> Treasury</span></NavLink>
+          <div className="app-tools">
+            {wide ? null : <><IdentityControl /><ModeIndicator /></>}
+            <button type="button" className="menu-button" ref={menuRef} aria-expanded={drawer} aria-controls="app-side" onClick={() => setOpen(true)}>
+              <Icon name="menu" /><span>Menu</span>
+            </button>
+          </div>
+        </div>
+        <div className={`side${drawer ? ' is-open' : ''}`} id="app-side" ref={sideRef} role={drawer ? 'dialog' : undefined} aria-modal={drawer || undefined} aria-label={drawer ? 'Menu' : undefined}>
+          <div className="side-inner">
+            <div className="side-head">
+              <NavLink to="/" className="wordmark" aria-label="AEGIS Treasury, home">AEGIS Treasury</NavLink>
+              {wide ? null : (
+                <button type="button" className="side-close" onClick={() => setOpen(false)}><Icon name="close" /><span>Close</span></button>
+              )}
+            </div>
+            <SideNav />
+            <div className="side-foot">
+              {wide ? (
+                <div className="side-session">
+                  <span className="side-caption">Seat and data</span>
+                  <IdentityControl />
+                  <ModeIndicator />
+                </div>
+              ) : null}
+              <SafeLine />
+              <ul className="side-tools">
+                <li><GlossaryButton className="side-tool" label={<><Icon name="terms" /><span>Terms</span></>} /></li>
+                <li><Link to="/" className="side-tool"><Icon name="overview" /><span>Overview</span></Link></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div className="side-scrim" hidden={!drawer} onClick={() => setOpen(false)} />
+      </header>
+      <div className="app-main" inert={drawer}>
+        {children}
       </div>
-    </header>
+      <Notices />
+    </div>
   )
 }
 

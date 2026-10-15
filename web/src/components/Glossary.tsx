@@ -44,7 +44,7 @@ export function GlossaryList() {
   )
 }
 
-export function GlossaryButton({ className, label = 'Terms' }: { className?: string; label?: string }) {
+export function GlossaryButton({ className, label = 'Terms' }: { className?: string; label?: ReactNode }) {
   const [open, setOpen] = useState(false)
   const id = useId()
   return (

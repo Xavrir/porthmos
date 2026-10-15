@@ -1,0 +1,25 @@
+[project]
+name = "aegis-service"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "eth-abi>=6.0.0",
+    "eth-account>=0.14.0",
+    "eth-utils>=6.0.0",
+    "fastapi>=0.143.1",
+    "hexbytes>=2.0.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.14.1",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs anvil and deployments/31337.json (run with -m integration)"]
+addopts = "-q"

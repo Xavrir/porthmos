@@ -1,0 +1,134 @@
+[
+  {
+    "page": "landing",
+    "width": 1440,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/landing-1440.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay mode",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Know when\nnot to act",
+    "problems": []
+  },
+  {
+    "page": "landing",
+    "width": 375,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/landing-375.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Know when\nnot to act",
+    "problems": []
+  },
+  {
+    "page": "treasury",
+    "width": 1440,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/treasury-1440.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay mode",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Treasury",
+    "problems": []
+  },
+  {
+    "page": "treasury",
+    "width": 375,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/treasury-375.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Treasury",
+    "problems": []
+  },
+  {
+    "page": "copilot",
+    "width": 1440,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/copilot-1440.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay mode",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Copilot",
+    "problems": []
+  },
+  {
+    "page": "copilot",
+    "width": 375,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/copilot-375.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Copilot",
+    "problems": []
+  },
+  {
+    "page": "risk",
+    "width": 1440,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/risk-1440.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay mode",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Risk",
+    "problems": []
+  },
+  {
+    "page": "risk",
+    "width": 375,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/risk-375.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Risk",
+    "problems": []
+  },
+  {
+    "page": "audit",
+    "width": 1440,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/audit-1440.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay mode",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Audit",
+    "problems": []
+  },
+  {
+    "page": "audit",
+    "width": 375,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/audit-375.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Audit",
+    "problems": []
+  },
+  {
+    "page": "bank",
+    "width": 1440,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/bank-1440.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay mode",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Bank risk desk",
+    "problems": []
+  },
+  {
+    "page": "bank",
+    "width": 375,
+    "file": "/home/xavrir/fintechathon-2026/web/screenshots/bank-375.jpg",
+    "title": "AEGIS Treasury",
+    "mode": "Replay",
+    "overflow": 0,
+    "hidden": 0,
+    "h1": "Bank risk desk",
+    "problems": []
+  }
+]

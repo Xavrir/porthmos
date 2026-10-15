@@ -1,0 +1,6 @@
+dist/
+.taste-skill/inspect/
+!public/deployments/*.json
+.vercel
+.env*
+!.env.production

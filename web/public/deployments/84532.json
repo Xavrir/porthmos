@@ -1,0 +1,10 @@
+{
+  "chainId": 84532,
+  "usdc": "0x5C02E17b299d7BC9d5Af31128306a8E05e62BE63", "priceFeed": "0x3e9eB7a3B431a3df26135B54C7dcC61149F1fda6", "vaultA": "0xBEf3507AF91BB2cac0c18fa65Bf68D45f1B44F3d", "vaultB": "0x7CAB5C889D4925834837dd5562Dd644Fd63d1D4a",
+  "registry": "0xE6E9A49870C16F544F1adFB79003E4Df59055F2a", "module": "0x786863E82d233eb60555dfeEFEe06068d8EcB318", "safe": "0x2E1c2be3dD6BAa59344EdC6ee6A93D68e2295a0F",
+  "safeSingleton": "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762", "safeProxyFactory": "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+  "roles": { "owner": "0x01c38dfC1Eb6D925E5e302910E1C83CED96c1663", "bank": "0x08FC2B2FfDec2d52B6Bc41f45d791Cf37933e594", "authorizer": "0x7682b4855cc2a68D2c6b4594072ba504AE321d1d", "exitKey": "0x40C5E17C85b03C38faC331a94477D77F3b3e5839", "executor": "0xfd299800e629Ab2D708fF399C79DbEd06569528D", "keeper": "0x7d22e1c8D1B8B9FFe872F6312605f889cc73C8ed" },
+  "params": { "autoCap": "1000000000", "dailyCap": "5000000000", "bankLimit": "3000000000",
+              "reserveFloor": "4500000000", "maxBandWidth": "2000000", "maxOracleAge": 180 },
+  "abis": "contracts/out (forge artifacts)"
+}

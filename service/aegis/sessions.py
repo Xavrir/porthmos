@@ -1,0 +1,78 @@
+"""Sessions: an owner session is bound to exactly one Safe; a bank session is read-only across its Safes."""
+
+from __future__ import annotations
+
+import secrets
+import time
+from datetime import UTC, datetime
+
+from eth_account import Account
+from eth_account.messages import encode_defunct
+from eth_utils import is_address, to_checksum_address
+
+from aegis.services import Services
+from aegis.workflow import Session, WorkflowError
+
+SESSION_TTL = 12 * 3600
+SIG_MAX_AGE = 600
+
+
+def session_message(role: str, address: str, chain_id: int, issued_at: str) -> str:
+    return f"AEGIS session\nrole: {role}\naddress: {address}\nchainId: {chain_id}\nissuedAt: {issued_at}"
+
+
+class SessionManager:
+    def __init__(self, services: Services):
+        self.s = services
+
+    def create(self, role: str, address: str, signature: str | None = None, issued_at: str | None = None) -> dict:
+        if role not in ("owner", "bank"):
+            raise WorkflowError(400, "BadRole", "role must be owner or bank")
+        if not isinstance(address, str) or not is_address(address):
+            raise WorkflowError(400, "BadAddress")
+        address = to_checksum_address(address)
+        if self.s.settings.require_session_sig or signature:
+            self._verify_signature(role, address, signature, issued_at)
+        safe = None
+        if role == "owner":
+            safe = next((x for x in self.s.safes
+                         if self.s.chain.policy(x, []).owner.lower() == address.lower()), None)
+            if safe is None:
+                raise WorkflowError(403, "NotAnOwner", "address is not the registered owner of any known Safe")
+        else:
+            if not any(self.s.chain.policy(x, []).bank.lower() == address.lower() for x in self.s.safes):
+                raise WorkflowError(403, "NotABank", "address is not the registered bank of any known Safe")
+        token = secrets.token_urlsafe(32)
+        now = time.time()
+        self.s.db.execute("INSERT INTO sessions(token, role, address, safe, created_at, expires_at) VALUES "
+                          "(?, ?, ?, ?, ?, ?)", (token, role, address, safe, now, now + SESSION_TTL))
+        return {"token": token, "role": role, "address": address, "safe": safe, "expiresAt": int(now + SESSION_TTL),
+                "readOnly": role == "bank"}
+
+    def _verify_signature(self, role: str, address: str, signature: str | None, issued_at: str | None) -> None:
+        if not signature or not issued_at:
+            raise WorkflowError(401, "SignatureRequired",
+                                "sign the session message with personal_sign and send signature and issuedAt")
+        try:
+            ts = datetime.fromisoformat(issued_at.replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+        except ValueError:
+            raise WorkflowError(400, "BadIssuedAt") from None
+        if abs(time.time() - ts.timestamp()) > SIG_MAX_AGE:
+            raise WorkflowError(401, "StaleSignature")
+        msg = encode_defunct(text=session_message(role, address, self.s.settings.chain_id, issued_at))
+        try:
+            signer = Account.recover_message(msg, signature=signature)
+        except Exception:
+            raise WorkflowError(401, "BadSignature") from None
+        if signer.lower() != address.lower():
+            raise WorkflowError(401, "BadSignature")
+
+    def get(self, token: str | None) -> Session | None:
+        if not token:
+            return None
+        row = self.s.db.one("SELECT * FROM sessions WHERE token=?", (token,))
+        if row is None or row["expires_at"] < time.time():
+            return None
+        return Session(row["token"], row["role"], row["address"], row["safe"])

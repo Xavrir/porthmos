@@ -1,0 +1,274 @@
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useConnect, useConnection, useConnectors, useDisconnect } from 'wagmi'
+import { DEFAULT_LIVE_URL, useAegis } from '../lib/source'
+import { useIdentity, type Seat } from '../lib/identity'
+import { chainName } from '../lib/wallet'
+import { shortHex } from '../lib/format'
+import { RECORDED_SCENARIOS, SCHEDULED_SCENARIOS, scheduledAfter } from '../lib/proof'
+import { GlossaryButton } from './Glossary'
+import type { Role } from '../lib/types'
+
+export const PAGES = [
+  { to: '/treasury', label: 'Treasury', chapter: 'surface' },
+  { to: '/copilot', label: 'Copilot', chapter: 'blue' },
+  { to: '/risk', label: 'Risk', chapter: 'red' },
+  { to: '/audit', label: 'Audit', chapter: 'black' },
+  { to: '/bank', label: 'Bank desk', chapter: 'navy' },
+] as const
+
+export const SEATS: { seat: Seat; name: string; what: string }[] = [
+  { seat: 'owner', name: 'Business owner', what: 'Ask the agent, approve or deny its deposits, and set the reserve.' },
+  { seat: 'bank', name: 'Bank risk officer', what: 'See every client, freeze deposits and approve escalations. Cannot move funds.' },
+  { seat: 'viewer', name: 'Just look (read-only)', what: 'Browse the treasury, risk and audit trail. Nothing to sign.' },
+]
+
+export function usePageTitle(title: string | null) {
+  useEffect(() => {
+    document.title = title ? `${title} · AEGIS` : 'AEGIS Treasury'
+  }, [title])
+}
+
+function usePopover() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); (ref.current?.querySelector('button') as HTMLButtonElement | null)?.focus() } }
+    document.addEventListener('pointerdown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('pointerdown', onDoc); document.removeEventListener('keydown', onKey) }
+  }, [open])
+  return { open, setOpen, ref }
+}
+
+export function roleName(r: Role | null) {
+  return r === 'owner' ? 'Owner' : r === 'bank' ? 'Bank officer' : 'Read-only'
+}
+
+function seatTarget(r: Role) {
+  return r === 'owner' ? 'owner' : 'bank officer'
+}
+
+export function ModeIndicator() {
+  const { mode, phase, reason, switchMode, streamStatus, chainId, apiBase, connect, forgetApi, demoChanged, resetDemo } = useAegis()
+  const { open, setOpen, ref } = usePopover()
+  const [url, setUrl] = useState(apiBase || DEFAULT_LIVE_URL)
+  const id = useId()
+  const urlId = useId()
+  const after = scheduledAfter()
+  const label = phase === 'probing' ? 'Connecting…' : mode === 'replay' ? 'Replay' : 'Live'
+  const detail = phase === 'probing' ? '' : mode === 'replay' ? ' (recorded run)' : `, ${chainName(chainId)}`
+  return (
+    <div className={`mode mode-${phase === 'probing' ? 'probing' : mode}`} ref={ref}>
+      <button type="button" className="mode-button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+        <span className="mode-mark" aria-hidden="true" />
+        <span>{label}<span className="xl-only">{detail}</span></span>
+      </button>
+      {open ? (
+        <div className="mode-panel" id={id} role="dialog" aria-label="Data source">
+          {mode === 'replay' ? (
+            <>
+              <p><strong>Replay: a recorded run.</strong> It plays inside your browser: a 10,000 USDC treasury, a 4,500 reserve, two vaults, past attacks and a waiting approval. Contract and role addresses are the Base Sepolia deployment.</p>
+              <p>On Base Sepolia now: {RECORDED_SCENARIOS.join(', ')} (linked to Basescan). {SCHEDULED_SCENARIOS.length ? `Scheduled: ${SCHEDULED_SCENARIOS.join(', ')}${after ? ` after ${after}` : ''}. ` : ''}Other hashes and all signatures are illustrative.</p>
+              <div className="demo-state">
+                <p>Demo state: <strong>{demoChanged ? 'changed by you' : 'recorded base run'}</strong>. It is kept until you close this tab.</p>
+                {demoChanged ? <button type="button" className="button small quiet" onClick={() => { resetDemo(); setOpen(false) }}>Reset demo</button> : null}
+              </div>
+              {reason ? <p className="muted">{reason}.</p> : null}
+              <form className="connect" onSubmit={(e) => { e.preventDefault(); connect(url); setOpen(false) }}>
+                <label htmlFor={urlId}>AEGIS service address</label>
+                <input id={urlId} className="field" type="url" inputMode="url" required value={url} onChange={(e) => setUrl(e.target.value)} />
+                <button type="submit" className="button small">Connect live service</button>
+              </form>
+              <p className="muted">If it does not answer, the site stays in Replay. The service must allow this page’s origin (CORS) and the X-Aegis-Session header.</p>
+            </>
+          ) : (
+            <>
+              <p><strong>Live.</strong> Reading the AEGIS service at {apiBase || 'this site’s /api'} on {chainName(chainId)}. Event stream: {streamStatus}.</p>
+              {reason ? <p className="muted">{reason}.</p> : null}
+              <div className="row-actions">
+                <button type="button" className="button small quiet" onClick={() => { switchMode('replay'); setOpen(false) }}>Switch to replay</button>
+                {apiBase ? <button type="button" className="button small quiet" onClick={() => { forgetApi(); setOpen(false) }}>Forget this address</button> : null}
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function useSeatLabel(): { prefix: string; name: string; note: string } {
+  const { identity, seat, signedIn, walletRole } = useIdentity()
+  if (identity.kind === 'replay') return { prefix: 'Viewing as', name: roleName(identity.role), note: '' }
+  if (identity.kind === 'demo') return signedIn ? { prefix: 'Signed in as', name: roleName(identity.role), note: ' (local test key)' } : { prefix: 'Signing in', name: roleName(identity.role), note: '' }
+  if (identity.kind === 'wallet') {
+    if (signedIn) return { prefix: 'Signed in as', name: roleName(identity.role), note: '' }
+    if (walletRole.status === 'loading') return { prefix: 'Wallet', name: 'Checking role…', note: '' }
+    return { prefix: 'Wallet', name: identity.role ? 'Sign in' : 'Read-only', note: '' }
+  }
+  if (seat === 'viewer') return { prefix: 'Viewing as', name: 'Read-only', note: '' }
+  return { prefix: '', name: 'Choose a seat', note: '' }
+}
+
+export function WalletSignIn({ onDone }: { onDone?: () => void }) {
+  const { identity, signIn, signOut, signedIn, session, sessionError, walletRole } = useIdentity()
+  const conn = useConnection()
+  const connectors = useConnectors()
+  const { mutate: connect, isPending, error: connectError } = useConnect()
+  const { mutate: disconnect } = useDisconnect()
+  const injected = connectors.find((c) => c.type === 'injected') ?? connectors[0]
+  const [busy, setBusy] = useState(false)
+
+  if (!conn.address) {
+    return injected ? (
+      <div className="wallet">
+        <button type="button" className="button small secondary" disabled={isPending} onClick={() => connect({ connector: injected })}>
+          {isPending ? 'Waiting for the wallet…' : 'Connect wallet'}
+        </button>
+        {connectError ? <p className="error-note" role="alert">{connectError.message.split('\n')[0]}</p> : null}
+      </div>
+    ) : <p className="muted">No browser wallet found. You can still look around read-only.</p>
+  }
+  const role = identity.kind === 'wallet' ? identity.role : null
+  return (
+    <div className="wallet">
+      <p>Wallet <code>{shortHex(conn.address)}</code> on {chainName(conn.chainId)}.{' '}
+        {walletRole.status === 'loading' ? 'Reading its role from the PolicyRegistry…' : role ? (walletRole.status === 'error' ? `The registry could not be read; the deployment file lists it as the ${seatTarget(role)}. The service checks the registry when you sign in.` : `The PolicyRegistry lists it as the ${seatTarget(role)} of this Safe.`) : 'This wallet holds no AEGIS role, so you can look around read-only.'}
+      </p>
+      {role && !signedIn ? (
+        <button type="button" className="button small" disabled={busy || session === 'pending'} onClick={async () => { setBusy(true); try { await signIn(); onDone?.() } finally { setBusy(false) } }}>
+          {busy || session === 'pending' ? 'Waiting for the signature…' : `Sign in as ${seatTarget(role)}`}
+        </button>
+      ) : null}
+      {signedIn ? <button type="button" className="button small quiet" onClick={signOut}>Sign out</button> : null}
+      <button type="button" className="button small quiet" onClick={() => { signOut(); disconnect() }}>Disconnect wallet</button>
+      {role && !signedIn ? <p className="muted">Signing in signs a one-line message (AEGIS session, role, address, chain, time). It costs nothing and moves nothing.</p> : null}
+      {sessionError ? <p className="error-note" role="alert">{sessionError}</p> : null}
+    </div>
+  )
+}
+
+export function IdentityControl() {
+  const { identity, seat, demoAvailable, chooseDemo, chooseSeat, session, signedIn } = useIdentity()
+  const { mode } = useAegis()
+  const { open, setOpen, ref } = usePopover()
+  const id = useId()
+  const label = useSeatLabel()
+
+  return (
+    <div className="identity" ref={ref}>
+      <button type="button" className="identity-button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+        {label.prefix ? <span className="wide-only identity-prefix">{label.prefix}:</span> : null}
+        <span className="identity-name"><span className="wide-only">{label.name}{label.note}</span><span className="narrow-only">{label.name === 'Bank officer' ? 'Bank' : label.name === 'Choose a seat' ? 'Seat' : label.name === 'Checking role…' ? 'Wallet' : label.name}</span></span>
+        <span className="identity-caret" aria-hidden="true">▾</span>
+      </button>
+      {open ? (
+        <div className="identity-panel" id={id} role="dialog" aria-label="Seat">
+          {mode === 'replay' ? (
+            <fieldset className="seat-set">
+              <legend>View the recorded run as</legend>
+              <div className="seat-options" role="radiogroup" aria-label="Seat">
+                {SEATS.map((s) => (
+                  <button key={s.seat} type="button" role="radio" aria-checked={seat === s.seat} className="seat-option" onClick={() => { chooseSeat(s.seat); setOpen(false) }}>
+                    <span className="seat-option-name">{s.name}</span>
+                    <span className="seat-option-what">{s.what}</span>
+                  </button>
+                ))}
+              </div>
+              {identity.kind === 'replay' && identity.address ? <p className="muted">Address shown for this seat: <code>{shortHex(identity.address, 6, 4)}</code> (the Base Sepolia {seatTarget(identity.role!)}). Replay holds no keys; approvals use the recorded signature or are marked simulated.</p> : null}
+            </fieldset>
+          ) : (
+            <>
+              <fieldset className="seat-set">
+                <legend>{signedIn ? `Signed in as ${roleName(identity.kind === 'none' ? null : identity.role).toLowerCase()}` : 'Sign in with your wallet'}</legend>
+                {identity.kind === 'demo' ? <p>Using the local test key for the {seatTarget(identity.role)}, <code>{shortHex(identity.address, 6, 4)}</code>.</p> : <WalletSignIn />}
+              </fieldset>
+              {demoAvailable ? (
+                <fieldset className="seat-set">
+                  <legend>Local test keys</legend>
+                  <p className="muted">Chain 31337 only. Public Anvil test accounts 1 (owner) and 2 (bank). Never use them elsewhere.</p>
+                  <div className="segmented" role="radiogroup" aria-label="Local test key">
+                    {(['owner', 'bank'] as Role[]).map((r) => (
+                      <button key={r} type="button" role="radio" aria-checked={identity.kind === 'demo' && identity.role === r} onClick={() => chooseDemo(r)}>{roleName(r)}</button>
+                    ))}
+                    <button type="button" role="radio" aria-checked={identity.kind !== 'demo'} onClick={() => chooseDemo(null)}>Off</button>
+                  </div>
+                </fieldset>
+              ) : null}
+              {identity.kind === 'none' ? <button type="button" className="button small quiet" onClick={() => { chooseSeat('viewer'); setOpen(false) }}>Just look (read-only)</button> : null}
+              <p className="session-line muted" aria-live="polite">Session: {session === 'ready' ? (signedIn ? 'signed' : 'open') : session === 'pending' ? 'opening…' : session === 'error' ? 'refused' : 'none'}</p>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+export function SwitchSeat({ to, children, className = 'button small', then }: { to: Role; children?: ReactNode; className?: string; then?: string }) {
+  const { mode } = useAegis()
+  const { chooseSeat, chooseDemo, demoAvailable, chooser } = useIdentity()
+  const navigate = useNavigate()
+  const label = children ?? (mode === 'replay' ? `Switch to ${seatTarget(to)}` : demoAvailable ? `Use the local ${seatTarget(to)} test key` : `Sign in as the ${seatTarget(to)}`)
+  const act = () => {
+    if (mode === 'replay') chooseSeat(to)
+    else if (demoAvailable) chooseDemo(to)
+    else { chooser.show('switch'); return }
+    if (then) navigate(then)
+  }
+  return <button type="button" className={`${className}${to === 'bank' ? ' navy' : ''}`} onClick={act}>{label}</button>
+}
+
+export function AppHeader() {
+  const [open, setOpen] = useState(false)
+  const loc = useLocation()
+  const navRef = useRef<HTMLElement>(null)
+  const menuRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => { setOpen(false) }, [loc.pathname])
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); menuRef.current?.focus() } }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open])
+  return (
+    <header className="app-header">
+      <NavLink to="/" className="wordmark" aria-label="AEGIS Treasury, home">AEGIS<span className="wordmark-long"> Treasury</span></NavLink>
+      <nav aria-label="Pages" className={`app-nav${open ? ' is-open' : ''}`} id="app-nav" ref={navRef}>
+        <ul className="app-links">
+          <li><NavLink to="/" end className="app-link c-surface">Overview</NavLink></li>
+          {PAGES.map((p) => (
+            <li key={p.to}>
+              <NavLink to={p.to} className={({ isActive }) => `app-link c-${p.chapter}${isActive ? ' is-active' : ''}`}>{p.label}</NavLink>
+            </li>
+          ))}
+          <li><GlossaryButton className="app-link terms-link" /></li>
+        </ul>
+      </nav>
+      <div className="app-tools">
+        <IdentityControl />
+        <ModeIndicator />
+        <button type="button" className="menu-button" ref={menuRef} aria-expanded={open} aria-controls="app-nav" onClick={() => setOpen((o) => !o)}>
+          {open ? 'Close' : 'Menu'}
+        </button>
+      </div>
+    </header>
+  )
+}
+
+export function Notices() {
+  const { notices, dismissNotice } = useAegis()
+  return (
+    <div className="notices" aria-live="polite" aria-atomic="false">
+      {notices.map((n) => n.event.type === 'notice' ? (
+        <div key={n.id} className={`notice n-${n.event.data.level}`}>
+          <p>{n.event.data.text}</p>
+          <button type="button" onClick={() => dismissNotice(n.id)} aria-label="Dismiss notice">Close</button>
+        </div>
+      ) : null)}
+    </div>
+  )
+}

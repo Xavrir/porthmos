@@ -1,0 +1,76 @@
+import { useQuery } from '@tanstack/react-query'
+import type { Address } from 'viem'
+import { useAegis } from './source'
+import { useIdentity } from './identity'
+import type { RequestRecord } from './types'
+import type { ReplayApi } from '../replay/engine'
+
+function useBase() {
+  const { api, mode, phase, sessionEpoch } = useAegis()
+  return { api, mode, ready: phase === 'ready', sessionEpoch }
+}
+
+export function useTreasury() {
+  const { api, mode, ready } = useBase()
+  return useQuery({ queryKey: ['treasury', mode], queryFn: () => api.treasury(), enabled: ready, refetchInterval: mode === 'live' ? 15000 : false })
+}
+
+export function useOracle() {
+  const { api, mode, ready } = useBase()
+  return useQuery({ queryKey: ['oracle', mode], queryFn: () => api.oracle(), enabled: ready, refetchInterval: 10000 })
+}
+
+export function useRisk() {
+  const { api, mode, ready } = useBase()
+  return useQuery({ queryKey: ['risk', mode], queryFn: () => api.risk(), enabled: ready, refetchInterval: mode === 'live' ? 15000 : false })
+}
+
+export function useObligations() {
+  const { api, mode, ready } = useBase()
+  return useQuery({ queryKey: ['obligations', mode], queryFn: () => api.obligations(), enabled: ready })
+}
+
+export function usePendingApprovals() {
+  const { api, mode, ready, sessionEpoch } = useBase()
+  const { session } = useIdentity()
+  return useQuery({ queryKey: ['approvals', mode, sessionEpoch], queryFn: () => api.pendingApprovals(), enabled: ready && session === 'ready', refetchInterval: mode === 'live' ? 10000 : false })
+}
+
+export function useLedger(safe?: Address) {
+  const { api, mode, ready } = useBase()
+  return useQuery({ queryKey: ['ledger', mode, safe ?? 'own'], queryFn: () => api.ledger(safe), enabled: ready })
+}
+
+export function useChainEvents(safe?: Address) {
+  const { api, mode, ready } = useBase()
+  return useQuery({ queryKey: ['events', mode, safe ?? 'own'], queryFn: () => api.events(safe), enabled: ready })
+}
+
+export function useBankClients() {
+  const { api, mode, ready, sessionEpoch } = useBase()
+  const { role, session } = useIdentity()
+  return useQuery({ queryKey: ['bank-clients', mode, sessionEpoch], queryFn: () => api.bankClients(), enabled: ready && role === 'bank' && session === 'ready', retry: false })
+}
+
+export function useRequest(id: string | null) {
+  const { api, mode, ready } = useBase()
+  return useQuery({ queryKey: ['request', mode, id], queryFn: () => api.request(id!), enabled: ready && !!id, refetchInterval: mode === 'live' && id ? 3000 : false })
+}
+
+export function useRequestHistory() {
+  const { api, mode, ready } = useBase()
+  return useQuery({
+    queryKey: ['requests', mode],
+    queryFn: async (): Promise<RequestRecord[]> => (mode === 'replay' ? (api as ReplayApi).listRequests() : []),
+    enabled: ready,
+  })
+}
+
+export function useReconciliation(safe: Address | null) {
+  const { api, mode, ready } = useBase()
+  return useQuery({
+    queryKey: ['reconciliation', mode, safe],
+    queryFn: () => api.reconciliation!(safe!),
+    enabled: ready && !!safe && !!api.reconciliation,
+  })
+}

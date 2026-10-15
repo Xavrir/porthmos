@@ -80,7 +80,7 @@ Model awal yang disarankan adalah **buyer-paid**: importir membayar, pemasok men
 
 **Catatan Indonesia:** Bank Indonesia menyatakan kripto bukan alat pembayaran yang sah. Pengawasan aset kripto oleh OJK tidak membuat stablecoin sah sebagai alat pembayaran. Karena itu nilai perdagangan Indonesia tidak boleh dihitung langsung sebagai volume transaksi stablecoin AEGIS.
 
-## 4. Problem–solution mapping (baru, v1.2)
+## 4. Problem-solution mapping (baru, v1.2)
 
 | Masalah bisnis | Solusi AEGIS | Status |
 |---|---|---|
@@ -301,7 +301,7 @@ Mendekati impas operasional pada 2030, potensi laba operasional sekitar US$334.0
 | Regulasi stablecoin dan pembayaran | Model settlement tertentu tidak bisa beroperasi | Fiat-first integration, mitra berizin, legal review per negara |
 | Bukti IoT/oracle salah | Pembayaran dilepas berdasarkan informasi keliru | Trusted issuers, sumber bukti ganda, dispute period |
 | Smart contract exploit | Aset pelanggan hilang atau terkunci | Audit, batas transaksi, emergency pause, non-custodial controls |
-| Sengketa buyer–supplier | Pembayaran tertunda, kepercayaan turun | Ketentuan kontrak, manual arbitration, aturan refund dan appeal |
+| Sengketa buyer dan supplier | Pembayaran tertunda, kepercayaan turun | Ketentuan kontrak, manual arbitration, aturan refund dan appeal |
 | Adopsi blockchain rendah | Perusahaan enggan pakai wallet dan stablecoin | UX Web2, integrasi ERP dan payment provider, blockchain disembunyikan |
 | Biaya compliance tinggi | Margin lebih rendah dari proyeksi | Partner-led compliance, tier pricing, margin per koridor |
 | Pelanggan sulit diperoleh | CAC naik, ekspansi lambat | Channel partnership, fokus satu industri dulu |

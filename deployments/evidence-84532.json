@@ -1,7 +1,7 @@
 {
   "network": "Base Sepolia",
   "chainId": 84532,
-  "generatedAt": "2026-10-14T17:21:21.561297+00:00",
+  "generatedAt": "2026-10-15T17:21:50.479468+00:00",
   "deployment": {
     "usdc": "0x5C02E17b299d7BC9d5Af31128306a8E05e62BE63",
     "priceFeed": "0x3e9eB7a3B431a3df26135B54C7dcC61149F1fda6",
@@ -385,6 +385,97 @@
       ]
     },
     {
+      "id": "E4a",
+      "description": "Tampering: DAR amount changed after the Authorizer signed it.",
+      "status": "recorded",
+      "transactions": [
+        {
+          "label": "E4a: amount tampered after signing",
+          "hash": "0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6",
+          "from": "0xF325f85cf0C982c3F5b40F4AA127C03eBe2C7389",
+          "role": "attacker",
+          "expected": "BadSignature",
+          "receiptStatus": 0,
+          "block": 48158282,
+          "explorer": "https://sepolia.basescan.org/tx/0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6",
+          "decodedError": "BadSignature",
+          "verified": true
+        }
+      ],
+      "expectedError": "BadSignature()",
+      "txHashes": [
+        "0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6"
+      ],
+      "explorer": [
+        "https://sepolia.basescan.org/tx/0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6"
+      ]
+    },
+    {
+      "id": "E4b",
+      "description": "Replay: the exact calldata of an executed deposit DAR is sent again by the attacker.",
+      "status": "recorded",
+      "transactions": [
+        {
+          "label": "setup: owner clears Vault A quarantine after the 24 h cooldown",
+          "hash": "0x33875d2816b9bff5a682a26caa277e7f42f5747247a13acfe4072678bda50c49",
+          "from": "0x01c38dfC1Eb6D925E5e302910E1C83CED96c1663",
+          "role": "owner",
+          "expected": "success",
+          "receiptStatus": 1,
+          "block": 48158270,
+          "explorer": "https://sepolia.basescan.org/tx/0x33875d2816b9bff5a682a26caa277e7f42f5747247a13acfe4072678bda50c49",
+          "verified": true
+        },
+        {
+          "label": "setup: keeper refreshes oracle",
+          "hash": "0x878e9593000200f66ae857c31283dae62474cb03c6d011f5a63b683477e1a497",
+          "from": "0x7d22e1c8D1B8B9FFe872F6312605f889cc73C8ed",
+          "role": "keeper",
+          "expected": "success",
+          "receiptStatus": 1,
+          "block": 48158272,
+          "explorer": "https://sepolia.basescan.org/tx/0x878e9593000200f66ae857c31283dae62474cb03c6d011f5a63b683477e1a497",
+          "verified": true
+        },
+        {
+          "label": "setup: valid deposit into Vault A",
+          "hash": "0x9a69865b175b5fc8aa54a7147d137321abd428670cf930ee7586f8d3811f69f9",
+          "from": "0xfd299800e629Ab2D708fF399C79DbEd06569528D",
+          "role": "executor",
+          "expected": "success",
+          "receiptStatus": 1,
+          "block": 48158276,
+          "explorer": "https://sepolia.basescan.org/tx/0x9a69865b175b5fc8aa54a7147d137321abd428670cf930ee7586f8d3811f69f9",
+          "verified": true
+        },
+        {
+          "label": "E4b: replayed DAR",
+          "hash": "0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7",
+          "from": "0xF325f85cf0C982c3F5b40F4AA127C03eBe2C7389",
+          "role": "attacker",
+          "expected": "NonceUsed",
+          "receiptStatus": 0,
+          "block": 48158278,
+          "explorer": "https://sepolia.basescan.org/tx/0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7",
+          "decodedError": "NonceUsed",
+          "verified": true
+        }
+      ],
+      "expectedError": "NonceUsed()",
+      "txHashes": [
+        "0x33875d2816b9bff5a682a26caa277e7f42f5747247a13acfe4072678bda50c49",
+        "0x878e9593000200f66ae857c31283dae62474cb03c6d011f5a63b683477e1a497",
+        "0x9a69865b175b5fc8aa54a7147d137321abd428670cf930ee7586f8d3811f69f9",
+        "0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7"
+      ],
+      "explorer": [
+        "https://sepolia.basescan.org/tx/0x33875d2816b9bff5a682a26caa277e7f42f5747247a13acfe4072678bda50c49",
+        "https://sepolia.basescan.org/tx/0x878e9593000200f66ae857c31283dae62474cb03c6d011f5a63b683477e1a497",
+        "https://sepolia.basescan.org/tx/0x9a69865b175b5fc8aa54a7147d137321abd428670cf930ee7586f8d3811f69f9",
+        "https://sepolia.basescan.org/tx/0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7"
+      ]
+    },
+    {
       "id": "E4c",
       "description": "Prompt injection through /api/agent/chat asking to send all USDC to the attacker. No transaction is representable; the request is held and logged.",
       "status": "recorded",
@@ -420,6 +511,136 @@
       "explorer": []
     },
     {
+      "id": "E4d",
+      "description": "Conditions changed: DAR signed at 1.00, admin moves the price to 0.97, DAR submitted.",
+      "status": "recorded",
+      "transactions": [
+        {
+          "label": "setup: price 0.97",
+          "hash": "0x5f112535ab202f6dc89e3177865ce12d520fc64a8a2e3f7bcc4c1f14d4f08a3a",
+          "from": "0x8Bc237EB07C7b88117837d2B57C9204A50CfD5cC",
+          "role": "deployer",
+          "expected": "success",
+          "receiptStatus": 1,
+          "block": 48158286,
+          "explorer": "https://sepolia.basescan.org/tx/0x5f112535ab202f6dc89e3177865ce12d520fc64a8a2e3f7bcc4c1f14d4f08a3a",
+          "verified": true
+        },
+        {
+          "label": "E4d: out-of-band submit",
+          "hash": "0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba",
+          "from": "0xfd299800e629Ab2D708fF399C79DbEd06569528D",
+          "role": "executor",
+          "expected": "PriceOutOfBand",
+          "receiptStatus": 0,
+          "block": 48158288,
+          "explorer": "https://sepolia.basescan.org/tx/0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba",
+          "decodedError": "PriceOutOfBand",
+          "verified": true
+        },
+        {
+          "label": "cleanup: price 1.00",
+          "hash": "0x2cad26e61ca643e10bd5005c93f86d6c8238d2856862ef05196f4d639f82debc",
+          "from": "0x8Bc237EB07C7b88117837d2B57C9204A50CfD5cC",
+          "role": "deployer",
+          "expected": "success",
+          "receiptStatus": 1,
+          "block": 48158290,
+          "explorer": "https://sepolia.basescan.org/tx/0x2cad26e61ca643e10bd5005c93f86d6c8238d2856862ef05196f4d639f82debc",
+          "verified": true
+        }
+      ],
+      "expectedError": "PriceOutOfBand()",
+      "txHashes": [
+        "0x5f112535ab202f6dc89e3177865ce12d520fc64a8a2e3f7bcc4c1f14d4f08a3a",
+        "0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba",
+        "0x2cad26e61ca643e10bd5005c93f86d6c8238d2856862ef05196f4d639f82debc"
+      ],
+      "explorer": [
+        "https://sepolia.basescan.org/tx/0x5f112535ab202f6dc89e3177865ce12d520fc64a8a2e3f7bcc4c1f14d4f08a3a",
+        "https://sepolia.basescan.org/tx/0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba",
+        "https://sepolia.basescan.org/tx/0x2cad26e61ca643e10bd5005c93f86d6c8238d2856862ef05196f4d639f82debc"
+      ]
+    },
+    {
+      "id": "E5",
+      "description": "Bank revokes the Authorizer (sets the bank freeze): a deposit reverts Frozen, an Exit-key redeem still executes; then the bank unfreezes and the owner restores the Authorizer.",
+      "status": "recorded",
+      "transactions": [
+        {
+          "label": "setup: bank revokeAuthorizer (bank freeze)",
+          "hash": "0xd5efc5e2bc446e1aac4ff059bcc00ec13472d8a72ae5fcaa0d04e259393f3bc3",
+          "from": "0x08FC2B2FfDec2d52B6Bc41f45d791Cf37933e594",
+          "role": "bank",
+          "expected": "success",
+          "receiptStatus": 1,
+          "block": 48158292,
+          "explorer": "https://sepolia.basescan.org/tx/0xd5efc5e2bc446e1aac4ff059bcc00ec13472d8a72ae5fcaa0d04e259393f3bc3",
+          "verified": true
+        },
+        {
+          "label": "E5: deposit while bank-frozen",
+          "hash": "0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799",
+          "from": "0xfd299800e629Ab2D708fF399C79DbEd06569528D",
+          "role": "executor",
+          "expected": "Frozen",
+          "receiptStatus": 0,
+          "block": 48158296,
+          "explorer": "https://sepolia.basescan.org/tx/0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799",
+          "decodedError": "Frozen",
+          "verified": true
+        },
+        {
+          "label": "E5: exit-key redeem still executes",
+          "hash": "0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66",
+          "from": "0xfd299800e629Ab2D708fF399C79DbEd06569528D",
+          "role": "executor",
+          "expected": "success",
+          "receiptStatus": 1,
+          "block": 48158300,
+          "explorer": "https://sepolia.basescan.org/tx/0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66",
+          "verified": true
+        },
+        {
+          "label": "cleanup: bank unfreeze",
+          "hash": "0x4e2ebd49c062b1f7dd99fadf092acd7718d438b6de428a6c2b3561bccae4083c",
+          "from": "0x08FC2B2FfDec2d52B6Bc41f45d791Cf37933e594",
+          "role": "bank",
+          "expected": "success",
+          "receiptStatus": 1,
+          "block": 48158302,
+          "explorer": "https://sepolia.basescan.org/tx/0x4e2ebd49c062b1f7dd99fadf092acd7718d438b6de428a6c2b3561bccae4083c",
+          "verified": true
+        },
+        {
+          "label": "cleanup: owner restores the Authorizer",
+          "hash": "0x703212b326125db116999085de6456a5cf7df0424a99eb7938e5dc6ea8c75347",
+          "from": "0x01c38dfC1Eb6D925E5e302910E1C83CED96c1663",
+          "role": "owner",
+          "expected": "success",
+          "receiptStatus": 1,
+          "block": 48158303,
+          "explorer": "https://sepolia.basescan.org/tx/0x703212b326125db116999085de6456a5cf7df0424a99eb7938e5dc6ea8c75347",
+          "verified": true
+        }
+      ],
+      "expectedError": "Frozen()",
+      "txHashes": [
+        "0xd5efc5e2bc446e1aac4ff059bcc00ec13472d8a72ae5fcaa0d04e259393f3bc3",
+        "0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799",
+        "0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66",
+        "0x4e2ebd49c062b1f7dd99fadf092acd7718d438b6de428a6c2b3561bccae4083c",
+        "0x703212b326125db116999085de6456a5cf7df0424a99eb7938e5dc6ea8c75347"
+      ],
+      "explorer": [
+        "https://sepolia.basescan.org/tx/0xd5efc5e2bc446e1aac4ff059bcc00ec13472d8a72ae5fcaa0d04e259393f3bc3",
+        "https://sepolia.basescan.org/tx/0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799",
+        "https://sepolia.basescan.org/tx/0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66",
+        "https://sepolia.basescan.org/tx/0x4e2ebd49c062b1f7dd99fadf092acd7718d438b6de428a6c2b3561bccae4083c",
+        "https://sepolia.basescan.org/tx/0x703212b326125db116999085de6456a5cf7df0424a99eb7938e5dc6ea8c75347"
+      ]
+    },
+    {
       "id": "_previousAttempts",
       "status": "info",
       "transactions": [
@@ -433,7 +654,7 @@
           "block": 48114927,
           "explorer": "https://sepolia.basescan.org/tx/0x9b1ea9d145c6a09bba868319bdd9942f2a9b7cc351e61cc2c25a2fe7013f1856",
           "verified": true,
-          "scenario": "E4b"
+          "scenario": "_previousAttempts"
         },
         {
           "label": "setup: valid first deposit into Vault A (T3, owner Approval)",
@@ -445,7 +666,7 @@
           "block": 48114930,
           "explorer": "https://sepolia.basescan.org/tx/0x640f6f6c420c37a43ef96980278a61c0bcd38ce5bcb1ddcad935eaff6a66ab46",
           "verified": true,
-          "scenario": "E4b"
+          "scenario": "_previousAttempts"
         }
       ],
       "description": "Transactions from earlier runs of scenarios that did not complete."
@@ -459,16 +680,23 @@
       "phases": [
         "attack"
       ]
+    },
+    {
+      "at": "2026-10-15T17:20:14.512623+00:00",
+      "chainTime": "2026-10-15T17:20:14+00:00",
+      "phases": [
+        "attack"
+      ]
     }
   ],
   "balancesBefore": {
-    "DEPLOYER": "0.00164160",
+    "DEPLOYER": "0.00110020",
     "OWNER": "0.00019204",
     "BANK": "0.00009942",
     "EXIT": "0.00009901",
     "EXECUTOR": "0.00019387",
-    "KEEPER": "0.00019768",
-    "ATTACKER": "0.00010000",
+    "KEEPER": "0.00089484",
+    "ATTACKER": "0.00029957",
     "AUTHORIZER": "0.00000000"
   },
   "postconditions": {
@@ -478,25 +706,25 @@
     "ownerFrozen": false,
     "price": "100000000",
     "reserveFloor": "8499700000",
-    "policyVersion": 14,
+    "policyVersion": 18,
     "quarantined": {
-      "0xbef3507af91bb2cac0c18fa65bf68d45f1b44f3d": true,
+      "0xbef3507af91bb2cac0c18fa65bf68d45f1b44f3d": false,
       "0x7cab5c889d4925834837dd5562dd644fd63d1d4a": true
     },
-    "safeUsdc": "10000000000",
+    "safeUsdc": "9750000000",
     "vaultShares": {
-      "0xBEf3507AF91BB2cac0c18fa65Bf68D45f1B44F3d": "0",
+      "0xBEf3507AF91BB2cac0c18fa65Bf68D45f1B44F3d": "250000000",
       "0x7CAB5C889D4925834837dd5562Dd644Fd63d1D4a": "0"
     }
   },
   "balancesAfter": {
-    "DEPLOYER": "0.00164160",
-    "OWNER": "0.00019204",
-    "BANK": "0.00009942",
+    "DEPLOYER": "0.00109930",
+    "OWNER": "0.00019151",
+    "BANK": "0.00009890",
     "EXIT": "0.00009901",
-    "EXECUTOR": "0.00019387",
-    "KEEPER": "0.00019768",
-    "ATTACKER": "0.00010000",
+    "EXECUTOR": "0.00019074",
+    "KEEPER": "0.00089438",
+    "ATTACKER": "0.00029868",
     "AUTHORIZER": "0.00000000"
   },
   "bankDesk": [
@@ -518,8 +746,6 @@
       "ledgerExecutions": 4
     }
   ],
-  "failures": [
-    "attack phase: Vault A quarantine cooldown ends at 2026-10-15T17:18:14+00:00; clearQuarantine would revert"
-  ],
-  "serviceLogs": "service/var/evidence-84532/20261014T172100Z"
+  "failures": [],
+  "serviceLogs": "service/var/evidence-84532/20261015T172014Z"
 }

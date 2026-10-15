@@ -90,11 +90,11 @@ We planned Zodiac Roles first. In the end a small custom Safe module was simpler
 
 ## On-chain evidence
 
-All contracts are deployed on Base Sepolia. Recorded with real transaction hashes: E1 normal allocation, E2 depeg with quarantine and Exit Agent redeem, E3 new invoice that updates the reserve floor on-chain, and E4c prompt injection blocked with no transaction possible. The four refusal proofs, E4a changed amount, E4b replay, E4d price out of band, and E5 bank freeze, are recorded on the night of 15 to 16 October after a 24 hour on-chain cooldown. The website links every proof to Basescan.
+All contracts are deployed on Base Sepolia, and all eight scenarios are recorded with real transaction hashes. E1 normal allocation. E2 depeg, where the Exit Agent quarantines the vault and redeems. E3 a new invoice that updates the reserve floor on-chain, then the agent rebalances. E4a amount changed after signing, refused with BadSignature. E4b replayed authorization, refused with NonceUsed. E4c prompt injection, which cannot even become a transaction. E4d price moved out of the signed band, refused with PriceOutOfBand. E5 bank freeze: the agent's deposit is refused with Frozen, and the exit redeem still goes through. The refused attacks are mined, so anyone can open them on Basescan and see the revert. The website links every proof.
 
 ## Is it a real app or a demo
 
-Right now the public site at aegis-treasury-eta.vercel.app shows live chain data and replays the recorded proofs. The full loop already runs end to end on a laptop. We are turning it into a multi-user app: any visitor creates their own treasury on Base Sepolia in about a minute, with an owner key and a bank key generated in the browser, gets test ETH and 100,000 test USDC, and uses it for real. The backend runs on our own server, and the contracts did not need any change because every rule is already stored per treasury.
+It is a real app. Anyone can open aegis-treasury-eta.vercel.app, click Create your treasury, and get their own treasury on Base Sepolia in about a minute: an owner key and a bank key are generated in the browser, our faucet sends test ETH, and the treasury gets 100,000 test USDC. About 13 real transactions set it up. Then they can run the agent, approve plans, freeze it from the bank seat, and try attacks that the contract refuses on-chain. The backend runs on our own server. The contracts did not need any change, because every rule is already stored per treasury. It is testnet only: the contracts are not audited and the vaults are mocks.
 
 ## Is it just an LLM wrapper
 

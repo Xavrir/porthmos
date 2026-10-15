@@ -484,14 +484,14 @@ Rejected transactions must be broadcast to produce a hash. viem estimates gas be
 
 | # | Scenario | Tx hash |
 |---|---|---|
-| E1 | Normal allocation: reserve kept, surplus deposited (first deposit, owner Approval) | TBD |
-| E2 | Risk shock: depeg injected, vault quarantined, Exit Agent redeems (reduces vault risk, not asset risk) | TBD |
-| E3 | Obligation shock: invoice approved, floor updated on-chain, agent rebalances to cover | TBD |
-| E4a | Attack: DAR with amount changed after signing (reverted `BadSignature`) | TBD |
-| E4b | Attack: replayed DAR (reverted `NonceUsed`) | TBD |
-| E4c | Attack: prompt injection requesting an external transfer | No transaction representable; ledger reference TBD |
-| E4d | Conditions changed: deposit signed, price moved out of band, submitted (reverted `PriceOutOfBand`) | TBD |
-| E5 | Bank freezes and revokes; agent deposit reverts `Frozen`; Exit Agent redeem still executes | TBD |
+| E1 | Normal allocation: reserve kept, surplus deposited (first deposit, owner Approval) | [0x94b96907…](https://sepolia.basescan.org/tx/0x94b9690755fae93712ebb11dcf7a8d9c0095019493184e62b3e869943a68f68f) |
+| E2 | Risk shock: depeg injected, vault quarantined, Exit Agent redeems (reduces vault risk, not asset risk) | [0x7023601d…](https://sepolia.basescan.org/tx/0x7023601da934f3471bf0bca2f2ba1ddbc8b4dbedd5d923a27206be98b97044da), [0x4c312b16…](https://sepolia.basescan.org/tx/0x4c312b1649b19743acf61b60016ba43751d1a56d1b76acbf9dceeb565e0b7428), [0x8f73300b…](https://sepolia.basescan.org/tx/0x8f73300bc28a76ee7a4ea74b601f98d8a4986039506ae6e80e7e6def570547a8), [0xef0405bb…](https://sepolia.basescan.org/tx/0xef0405bb86f711cb020d42b2c8e394fbf1c90b14c31e9291bfdb570e1e07a1be) |
+| E3 | Obligation shock: invoice approved, floor updated on-chain, agent rebalances to cover | [0x0de6d291…](https://sepolia.basescan.org/tx/0x0de6d291f83eb68492ca697a1c109fc4690c45de4ed8b25a213f15859645fd93), [0xab44d6da…](https://sepolia.basescan.org/tx/0xab44d6dac64e4c33f52ef118dc032991cb9cc182ee9c4976e2269adafe227fce) |
+| E4a | Attack: DAR with amount changed after signing (reverted `BadSignature`) | [0xdac68e93…](https://sepolia.basescan.org/tx/0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6) |
+| E4b | Attack: replayed DAR (reverted `NonceUsed`) | [0x431c79c3…](https://sepolia.basescan.org/tx/0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7) |
+| E4c | Attack: prompt injection requesting an external transfer | No transaction can express it (receiver is fixed to the Safe); refusal recorded in the ledger |
+| E4d | Conditions changed: deposit signed, price moved out of band, submitted (reverted `PriceOutOfBand`) | [0x53939b60…](https://sepolia.basescan.org/tx/0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba) |
+| E5 | Bank freezes and revokes; agent deposit reverts `Frozen`; Exit Agent redeem still executes | [0x2c033ba9…](https://sepolia.basescan.org/tx/0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799), [0xdf111f38…](https://sepolia.basescan.org/tx/0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66) |
 
 ### Delivery plan and cut line
 

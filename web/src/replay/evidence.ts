@@ -9,9 +9,8 @@ export type EvidenceMeta = { network: string; chainId: number; generatedAt: stri
 export const EVIDENCE_META: EvidenceMeta = {
   "network": "Base Sepolia",
   "chainId": 84532,
-  "generatedAt": "2026-10-14T17:21:21.561297+00:00",
-  "deployBlock": 48114516,
-  "scheduledAfter": "2026-10-15T17:18:14.000Z"
+  "generatedAt": "2026-10-15T17:21:50.479468+00:00",
+  "deployBlock": 48114516
 }
 
 export const EVIDENCE_SLOTS: Partial<Record<string, EvidenceSlot>> = {
@@ -72,6 +71,56 @@ export const EVIDENCE_SLOTS: Partial<Record<string, EvidenceSlot>> = {
     "hash": "0xab44d6dac64e4c33f52ef118dc032991cb9cc182ee9c4976e2269adafe227fce",
     "block": 48114990,
     "amount": 1099.82
+  },
+  "e4a": {
+    "scenario": "E4a",
+    "note": "E4a: amount tampered after signing",
+    "hash": "0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6",
+    "block": 48158282,
+    "reverted": true,
+    "error": "BadSignature"
+  },
+  "e4b": {
+    "scenario": "E4b",
+    "note": "E4b: replayed DAR",
+    "hash": "0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7",
+    "block": 48158278,
+    "reverted": true,
+    "error": "NonceUsed"
+  },
+  "e4d": {
+    "scenario": "E4d",
+    "note": "E4d: out-of-band submit",
+    "hash": "0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba",
+    "block": 48158288,
+    "reverted": true,
+    "error": "PriceOutOfBand"
+  },
+  "e5-freeze": {
+    "scenario": "E5",
+    "note": "setup: bank revokeAuthorizer (bank freeze)",
+    "hash": "0xd5efc5e2bc446e1aac4ff059bcc00ec13472d8a72ae5fcaa0d04e259393f3bc3",
+    "block": 48158292
+  },
+  "e5-deposit": {
+    "scenario": "E5",
+    "note": "E5: deposit while bank-frozen",
+    "hash": "0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799",
+    "block": 48158296,
+    "reverted": true,
+    "error": "Frozen"
+  },
+  "e5-exit": {
+    "scenario": "E5",
+    "note": "E5: exit-key redeem still executes",
+    "hash": "0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66",
+    "block": 48158300
+  },
+  "e5-unfreeze": {
+    "scenario": "E5",
+    "note": "cleanup: bank unfreeze",
+    "hash": "0x4e2ebd49c062b1f7dd99fadf092acd7718d438b6de428a6c2b3561bccae4083c",
+    "block": 48158302
   }
 }
 
@@ -185,18 +234,67 @@ export const EVIDENCE_SCENARIOS: EvidenceScenario[] = [
   },
   {
     "id": "E4a",
-    "status": "pending",
-    "description": "A decision record with its amount changed after signing, expected to revert BadSignature",
+    "status": "recorded",
+    "description": "Tampering: DAR amount changed after the Authorizer signed it.",
     "expectedError": "BadSignature",
-    "txs": [],
+    "txs": [
+      {
+        "label": "E4a: amount tampered after signing",
+        "hash": "0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6",
+        "block": 48158282,
+        "role": "attacker",
+        "expected": "BadSignature",
+        "verified": true,
+        "reverted": true,
+        "error": "BadSignature"
+      }
+    ],
     "ledgerRows": 0
   },
   {
     "id": "E4b",
-    "status": "pending",
-    "description": "An executed decision record sent a second time, expected to revert NonceUsed",
+    "status": "recorded",
+    "description": "Replay: the exact calldata of an executed deposit DAR is sent again by the attacker.",
     "expectedError": "NonceUsed",
-    "txs": [],
+    "txs": [
+      {
+        "label": "setup: owner clears Vault A quarantine after the 24 h cooldown",
+        "hash": "0x33875d2816b9bff5a682a26caa277e7f42f5747247a13acfe4072678bda50c49",
+        "block": 48158270,
+        "role": "owner",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      },
+      {
+        "label": "setup: keeper refreshes oracle",
+        "hash": "0x878e9593000200f66ae857c31283dae62474cb03c6d011f5a63b683477e1a497",
+        "block": 48158272,
+        "role": "keeper",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      },
+      {
+        "label": "setup: valid deposit into Vault A",
+        "hash": "0x9a69865b175b5fc8aa54a7147d137321abd428670cf930ee7586f8d3811f69f9",
+        "block": 48158276,
+        "role": "executor",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      },
+      {
+        "label": "E4b: replayed DAR",
+        "hash": "0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7",
+        "block": 48158278,
+        "role": "attacker",
+        "expected": "NonceUsed",
+        "verified": true,
+        "reverted": true,
+        "error": "NonceUsed"
+      }
+    ],
     "ledgerRows": 0
   },
   {
@@ -210,18 +308,94 @@ export const EVIDENCE_SCENARIOS: EvidenceScenario[] = [
   },
   {
     "id": "E4d",
-    "status": "pending",
-    "description": "The price moved out of the signed band before execution, expected to revert PriceOutOfBand",
+    "status": "recorded",
+    "description": "Conditions changed: DAR signed at 1.00, admin moves the price to 0.97, DAR submitted.",
     "expectedError": "PriceOutOfBand",
-    "txs": [],
+    "txs": [
+      {
+        "label": "setup: price 0.97",
+        "hash": "0x5f112535ab202f6dc89e3177865ce12d520fc64a8a2e3f7bcc4c1f14d4f08a3a",
+        "block": 48158286,
+        "role": "deployer",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      },
+      {
+        "label": "E4d: out-of-band submit",
+        "hash": "0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba",
+        "block": 48158288,
+        "role": "executor",
+        "expected": "PriceOutOfBand",
+        "verified": true,
+        "reverted": true,
+        "error": "PriceOutOfBand"
+      },
+      {
+        "label": "cleanup: price 1.00",
+        "hash": "0x2cad26e61ca643e10bd5005c93f86d6c8238d2856862ef05196f4d639f82debc",
+        "block": 48158290,
+        "role": "deployer",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      }
+    ],
     "ledgerRows": 0
   },
   {
     "id": "E5",
-    "status": "pending",
-    "description": "Bank freeze: a deposit expected to revert Frozen while an exit still executes",
+    "status": "recorded",
+    "description": "Bank revokes the Authorizer (sets the bank freeze): a deposit reverts Frozen, an Exit-key redeem still executes; then the bank unfreezes and the owner restores the Authorizer.",
     "expectedError": "Frozen",
-    "txs": [],
+    "txs": [
+      {
+        "label": "setup: bank revokeAuthorizer (bank freeze)",
+        "hash": "0xd5efc5e2bc446e1aac4ff059bcc00ec13472d8a72ae5fcaa0d04e259393f3bc3",
+        "block": 48158292,
+        "role": "bank",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      },
+      {
+        "label": "E5: deposit while bank-frozen",
+        "hash": "0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799",
+        "block": 48158296,
+        "role": "executor",
+        "expected": "Frozen",
+        "verified": true,
+        "reverted": true,
+        "error": "Frozen"
+      },
+      {
+        "label": "E5: exit-key redeem still executes",
+        "hash": "0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66",
+        "block": 48158300,
+        "role": "executor",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      },
+      {
+        "label": "cleanup: bank unfreeze",
+        "hash": "0x4e2ebd49c062b1f7dd99fadf092acd7718d438b6de428a6c2b3561bccae4083c",
+        "block": 48158302,
+        "role": "bank",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      },
+      {
+        "label": "cleanup: owner restores the Authorizer",
+        "hash": "0x703212b326125db116999085de6456a5cf7df0424a99eb7938e5dc6ea8c75347",
+        "block": 48158303,
+        "role": "owner",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      }
+    ],
     "ledgerRows": 0
   }
 ]

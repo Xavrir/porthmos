@@ -340,7 +340,7 @@ Sudah dibangun dan berjalan di Base Sepolia:
 - **Kontrak:** AegisModule (Safe module) dan PolicyRegistry, 47 Foundry test termasuk fuzz dan invariant.
 - **Backend:** service Python 5 proses (API, Authorizer, Exit Agent, Executor, Keeper), 111 unit test dan 8 integration test, di-host di server sendiri.
 - **Web app multi-tenant:** setiap pengunjung bisa membuat treasury sendiri di Base Sepolia dalam sekitar 1 menit, lalu memakai agent, approval, Bank desk, dan demo serangan yang ditolak on-chain. Live di https://aegis-treasury-eta.vercel.app
-- **Evidence on-chain:** E1 alokasi normal, E2 depeg dan Exit Agent, E3 obligation baru yang memperbarui reserve floor on-chain, E4c prompt injection. E4a, E4b, E4d, dan E5 direkam setelah cooldown 24 jam pada malam 15 ke 16 Oktober.
+- **Evidence on-chain:** E1 alokasi normal, E2 depeg dan Exit Agent, E3 obligation baru yang memperbarui reserve floor on-chain, E4a BadSignature, E4b NonceUsed, E4c prompt injection, E4d PriceOutOfBand, dan E5 bank freeze (Frozen, exit tetap jalan). Kedelapan skenario sudah direkam dengan transaction hash asli.
 
 Belum dibangun: modul TradeFlow (milestone escrow, `RELEASE_MILESTONE`, evidence verification agent, ZK proof), integrasi TradeTrust/eBL, dan deployment FISCO BCOS.
 

@@ -1,282 +1,379 @@
-# AEGIS Treasury: Master Project Context (v1.1, gabungan)
+# AEGIS Treasury: Master Project Context (v1.2, gabungan)
 
 **FinTechathon 2026 · International AI Track · Topic F**
 
 ## AEGIS Treasury
 
-**Risk-Aware Autonomous Treasury with Verifiable On-Chain Execution and Bank Oversight**
+**AI-Powered Trade Treasury & Conditional Settlement, with Verifiable On-Chain Execution and Bank Oversight**
 
-*An AI Treasury Agent That Knows When to Earn, When to Protect, and When Not to Act.*
+*Manage Funds Intelligently. Pay Only When Proven. Protect Every Transaction.*
 
-Versi ini menggabungkan Master Project Context v1.0 dengan hasil riset tambahan tim. Bagian yang merupakan tambahan ditandai dengan **(baru)**.
+Versi ini menggabungkan Master Context v1.1 dengan dua dokumen baru tim: **AEGIS Treasury 2.0 (Autonomous & Verifiable Supply Chain Finance)** dan **Market & Business Feasibility Analysis (Oktober 2026)**. Bagian yang baru di versi ini ditandai **(baru, v1.2)**. Bagian yang sudah ada sejak v1.1 ditandai **(v1.1)** bila perlu.
+
+Status implementasi ditulis jujur di setiap bagian: **[sudah dibangun]** berarti sudah berjalan dan teruji di repo, **[usulan]** berarti belum dibangun.
 
 ## 1. Executive summary
 
-AEGIS Treasury adalah platform AI Agent untuk mengelola aset treasury berbasis stablecoin dan tokenized deposit secara cerdas, adaptif, transparan, dan terkendali.
+AEGIS Treasury adalah platform AI Agent untuk perusahaan yang mengelola dana stablecoin atau tokenized deposit. AEGIS menjaga dana yang dibutuhkan untuk kewajiban pembayaran, menempatkan sisa dana secara terkendali, dan **(baru, v1.2)** mengeksekusi pembayaran antarbisnis hanya ketika syarat transaksinya terbukti.
 
-AEGIS membantu pengguna menentukan berapa dana yang harus disimpan sebagai cadangan likuid, berapa dana yang boleh dialokasikan ke vault deposito berjangka, kapan perlu menyeimbangkan kembali portofolio, dan kapan eksposur harus dikurangi karena risiko meningkat.
+**(baru, v1.2)** Posisi produk berkembang dari "AI yang mengelola dana perusahaan" menjadi **AI Financial Agent yang mengelola likuiditas sekaligus mengotomatisasi pembayaran B2B berdasarkan bukti pemenuhan kontrak**. Use case pertama adalah **TradeFlow**: pembayaran importir ke eksportir per milestone pengiriman.
 
-Berbeda dari dashboard DeFi biasa, AEGIS dapat menyusun rencana dan menjalankan transaksi melalui smart wallet. Berbeda pula dari AI trading bot yang diberi akses langsung ke wallet, setiap tindakannya harus melewati verifikasi kebijakan yang independen dari LLM.
-
-**(baru)** AEGIS kini memiliki dua pengguna utama: pelaku usaha yang mengelola treasury, dan bank yang mengawasi seluruh AI Agent nasabahnya melalui Bank Risk Desk.
+Kedua ide ini menyatu secara alami. Di TradeFlow, setiap pembayaran milestone ke pemasok adalah **kewajiban** (obligation). Reserve engine AEGIS yang sudah dibangun sudah memperlakukan kewajiban sebagai dana yang wajib tetap likuid dan tidak boleh diinvestasikan. Jadi escrow pemasok adalah kasus khusus dari obligation-aware reserve, bukan sistem baru yang terpisah.
 
 Konsep utamanya:
 
-> AEGIS does not simply maximize returns. It protects financial obligations, manages risk, and executes only verifiably authorized decisions, under the oversight of the bank.
+> AEGIS helps a company's money move at the right time, to the right party, and only when the transaction's conditions can be proven, while keeping liquidity and security under control.
 
-### Lima nilai utama AEGIS
+### Nilai utama AEGIS
 
-**Liquidity First**
-Melindungi dana yang dibutuhkan untuk pembayaran dan operasional sebelum mengalokasikan dana.
+**Liquidity First** (v1.1)
+Melindungi dana untuk pembayaran dan operasional sebelum mengalokasikan dana lain.
 
-**Intelligent Decisions**
-Menganalisis risiko, peluang, dan skenario sebelum menyusun keputusan finansial.
+**Pay Only When Proven (baru, v1.2)**
+Dana milestone dilepas ke pemasok hanya setelah bukti pengiriman, kedatangan, atau penerimaan diverifikasi.
 
-**Verifiable Execution**
-Transaksi harus memiliki bukti otorisasi, hasil simulasi, dan validasi kebijakan yang sah.
+**Verifiable Execution** (v1.1)
+Setiap transaksi punya bukti otorisasi, hasil simulasi, dan validasi kebijakan.
 
-**Adaptive Protection**
-Strategi dievaluasi kembali ketika kondisi risiko berubah, termasuk memilih tidak melakukan transaksi.
+**Adaptive Protection** (v1.1)
+Strategi dievaluasi ulang ketika risiko berubah, termasuk memilih tidak bertindak. Pembayaran yang belum dilepas ditahan jika bukti tidak valid.
 
-**Institutional Oversight (baru)**
-Bank dapat menetapkan kebijakan, memantau, menyetujui eskalasi, dan menghentikan AI Agent kapan saja.
-
-AEGIS ditujukan terutama untuk **UMKM dan bisnis digital yang memegang stablecoin atau tokenized deposit untuk operasional lintas negara** dan memiliki kewajiban pembayaran nyata, bukan investor yang sekadar mencari APY tertinggi. **(baru)** Penyesuaian dari target awal (startup Web3 dan DAO kecil) ini dilakukan agar lebih sesuai dengan karakter juri WeBank: pemenang FinTechathon 2022 sampai 2025 tidak ada yang berbasis DeFi, dan sebagian besar menggunakan teknologi sponsor seperti FATE dan FISCO BCOS.
-
-Untuk kompetisi, produk ini didemonstrasikan melalui testnet dan lingkungan simulasi yang terkontrol. Visi jangka panjangnya adalah sistem treasury non-custodial yang dapat diintegrasikan ke infrastruktur perbankan digital setelah melewati audit keamanan dan pemeriksaan regulasi.
+**Institutional Oversight** (v1.1)
+Bank menetapkan kebijakan, memantau, menyetujui eskalasi, dan dapat membekukan agent.
 
 ## 2. Masalah yang ingin diselesaikan
 
-**Problem 1: Idle Capital vs Liquidity Needs**
-Dana stablecoin yang menganggur memiliki biaya peluang, tetapi menempatkan terlalu banyak dana dapat mengurangi kemampuan memenuhi kewajiban operasional seperti gaji dan pembayaran vendor.
+**Problem 1: Idle Capital vs Liquidity Needs** (v1.1)
+Dana stablecoin yang menganggur punya biaya peluang, tetapi menempatkan terlalu banyak dana bisa membuat perusahaan gagal membayar gaji dan vendor.
 
-**Problem 2: Dynamic and Interconnected Risks**
-Vault, stablecoin, smart contract, oracle, dan likuiditas mempunyai risiko yang terus berubah. Imbal hasil tinggi tidak otomatis berarti strategi aman.
+**Problem 2: Pembayaran B2B tidak efisien (baru, v1.2)**
+Pembeli dan pemasok menunggu pemeriksaan dokumen, konfirmasi pengiriman, dan persetujuan pembayaran secara manual.
 
-**Problem 3: Autonomous Execution Without Reliable Authorization**
-Agent dapat menghasilkan transaksi yang keliru, dimanipulasi melalui prompt injection, atau bertindak berdasarkan informasi yang sudah kedaluwarsa. **(baru)** Kerugian nyata sudah terjadi: Freysa (sekitar USD 47 ribu, November 2024), Lobstar Wilde (sekitar USD 440 ribu akibat kesalahan satuan, Februari 2026), serta Grok dan Bankr (wallet dikuras melalui prompt berkode Morse, Mei 2026).
+**Problem 3: Kurangnya kepercayaan antar pihak (baru, v1.2)**
+Pembeli takut membayar sebelum barang diterima. Pemasok takut tidak dibayar setelah kewajibannya selesai.
 
-**Problem 4: Lack of Financial Decision Accountability**
-Mengetahui bahwa suatu transaksi berhasil dilakukan tidak sama dengan mengetahui mengapa transaksi tersebut diizinkan, atas mandat siapa, dan berdasarkan kondisi risiko seperti apa.
+**Problem 4: Autonomous Execution Without Reliable Authorization** (v1.1)
+Agent bisa membuat transaksi yang keliru, dimanipulasi lewat prompt injection, atau bertindak dengan data kedaluwarsa. Kerugian nyata sudah terjadi: Freysa (sekitar USD 47 ribu, November 2024), Lobstar Wilde (sekitar USD 440 ribu akibat kesalahan satuan, Februari 2026), Grok dan Bankr (Mei 2026).
 
-**Problem 5: No Institutional Visibility (baru)**
-Bank sebagai penyedia layanan keuangan belum memiliki visibilitas maupun kendali atas tindakan AI Agent terhadap dana nasabah. Kebutuhan ini mulai terlihat di industri: pada 9 Oktober 2026, HSBC dan Ant Digital menguji pembayaran AI Agent menggunakan tokenized deposit, dengan pemeriksaan risiko dijalankan oleh pihak bank.
+**Problem 5: Keamanan, privasi, dan akuntabilitas (gabungan)**
+Data bisnis dan transaksi bernilai besar harus diverifikasi tanpa membuka informasi sensitif secara berlebihan. Mengetahui transaksi berhasil tidak sama dengan mengetahui mengapa transaksi itu diizinkan dan atas mandat siapa.
 
-Research gap yang akan kita kejar:
+**Problem 6: No Institutional Visibility** (v1.1)
+Bank belum punya visibilitas maupun kendali atas tindakan AI Agent terhadap dana nasabah. Pada 9 Oktober 2026, HSBC dan Ant Digital menguji pembayaran AI Agent dengan tokenized deposit, dengan risk check oleh bank.
 
-> How can an autonomous financial agent optimize treasury liquidity and risk-adjusted allocation while ensuring that every action remains authorized under the financial conditions that justified it, and remains overseeable by the bank?
+Pertanyaan inti:
 
-## 3. Temuan benchmarking yang sangat penting
+> Bagaimana jika uang bisnis hanya boleh bergerak ketika pekerjaannya benar-benar terbukti selesai, dan setiap tindakan agent tetap terikat pada kondisi finansial yang membenarkannya?
 
-Sebagian besar fungsi dasar AI Treasury Agent ternyata sudah ada di pasar.
+## 3. Siapa pengguna AEGIS? (baru, v1.2)
 
-### Benchmark paling dekat: Aumo
+| Peran | Persona | Kebutuhan |
+|---|---|---|
+| **Primary buyer** | Finance / Treasury Manager perusahaan importir (pasar awal: trading company di Singapura) | Kepastian pembayaran, visibilitas kewajiban kas, kontrol transaksi tanpa mengecek semua milestone manual |
+| **Secondary user** | Supplier / Exporter | Kepastian dana pembeli sudah dicadangkan dan akan dilepas sesuai milestone yang disepakati |
+| **Pengawas** | Bank risk officer (v1.1) | Kebijakan per nasabah, risk score, approval eskalasi, freeze dan revoke |
+| **Distribution partner** | Freight forwarder, platform dokumen perdagangan elektronik (eBL), bank, penyedia pembayaran berizin | Integrasi AEGIS ke alur perdagangan yang sudah dipakai pelanggan |
 
-Aumo (live di X Layer, kode berlisensi MIT di GitHub) sudah menawarkan autonomous stablecoin treasury, risk-adjusted yield selection, alokasi modal otomatis, smart-contract guardrails, monitoring risiko, dan decision receipts yang dapat ditelusuri on-chain. LLM pada Aumo juga hanya dapat membuat rencana lebih konservatif.
+Model awal yang disarankan adalah **buyer-paid**: importir membayar, pemasok mendapat portal gratis untuk melihat milestone, menyerahkan bukti, dan memantau status pembayaran.
 
-Ini berarti risk scoring, auto-rebalancing, allowlist, caps, dan decision receipts tidak cukup unik jika berdiri sendiri.
+**Mengapa Singapura dulu?** Statistik resmi Singapura mencatat 57.715 establishments di sektor wholesale trade pada 2024 (belum tentu perusahaan unik atau semuanya importir/eksportir). Singapura juga punya TradeTrust untuk dokumen perdagangan elektronik yang dapat diverifikasi, dan kerangka regulasi stablecoin dari MAS.
 
-### (baru) Peserta lain di kompetisi ini
+**Catatan Indonesia:** Bank Indonesia menyatakan kripto bukan alat pembayaran yang sah. Pengawasan aset kripto oleh OJK tidak membuat stablecoin sah sebagai alat pembayaran. Karena itu nilai perdagangan Indonesia tidak boleh dihitung langsung sebagai volume transaksi stablecoin AEGIS.
 
-Dari repositori publik, peserta Topic F lain yang terlihat sejauh ini membangun wallet untuk pembayaran: tagihan mahasiswa (Leash), escrow kontraktor UMKM (agentic-wallet), belanja dengan mandat (xizo13/webank), dan pembayaran API melalui x402 (edxzh/agent-wallet). Belum ada yang berfokus pada pengelolaan aset.
+## 4. Problem–solution mapping (baru, v1.2)
 
-### Penajaman konsep
+| Masalah bisnis | Solusi AEGIS | Status |
+|---|---|---|
+| Dana menganggur atau tidak terencana | AI Treasury Management dengan obligation-aware reserve | [sudah dibangun] |
+| Pemasok tidak yakin akan dibayar | Smart Escrow: dana milestone dikunci sebagai obligation | [usulan], memakai reserve floor yang sudah ada |
+| Pembeli takut membayar sebelum barang sesuai | Proof-Based Conditional Payment per milestone | [usulan] |
+| Dokumen dan identitas bisnis sensitif | Zero-Knowledge verification untuk syarat tertentu | [usulan, modul tambahan] |
+| Pembayaran bertahap rumit dan manual | Programmable milestone release, opsi payment streaming | [usulan] |
+| Transaksi berisiko atau mencurigakan | AI risk monitoring, Exit Agent, state-bound authorization, bank freeze | [sudah dibangun] |
+| Agent bisa dimanipulasi | Structural containment: hanya aksi bertipe yang bisa dieksekusi | [sudah dibangun] |
 
-**Dari:** AI-powered autonomous stablecoin yield optimizer.
+## 5. Contoh use case: TradeFlow, pengiriman barang internasional (baru, v1.2)
 
-**Menjadi:** Obligation-aware treasury agent with state-bound transaction authorization, verifiable decision evidence, and bank oversight.
+Perusahaan Indonesia membeli komponen industri senilai 100.000 USDC dari pemasok luar negeri.
 
-Empat pembeda yang harus dirancang secara eksplisit:
+1. **Buyer funds escrow.** 100.000 USDC dikunci di smart contract. Di AEGIS, dana ini otomatis tercatat sebagai obligation, sehingga tidak bisa diinvestasikan ke vault.
+2. **AI agents monitor milestones.** Agent membaca bukti pengiriman, data sensor, dan status dokumen.
+3. **Cryptographic verification.** Bukti diverifikasi dari penerbit tepercaya (misalnya dokumen TradeTrust atau eBL), dengan ZK proof jika sesuai.
+4. **Smart contract releases payment.** Pembayaran dilepas bertahap sesuai milestone yang sah.
+5. **Treasury & audit updated.** Saldo, kewajiban, transaksi, dan bukti tercatat di decision ledger dan terlihat di Bank Risk Desk.
 
-1. **Obligation-aware treasury:** mengelola cadangan berdasarkan jadwal kewajiban pembayaran nyata.
-2. **State-bound authorization:** otorisasi mengikat intent, calldata, versi keputusan risiko, dan kondisi finansial; tindakan ditahan ketika prasyarat tidak lagi terpenuhi.
-3. **Decision accountability:** setiap tindakan dapat ditelusuri dari mandat pengguna hingga transaksi akhir, termasuk alasan penolakan.
-4. **Bank oversight (baru):** bank menetapkan kebijakan per nasabah, menyetujui eskalasi, dan memiliki kill switch atas setiap agent.
+| Milestone | Payment | Syarat |
+|---|---|---|
+| Barang diserahkan ke pengangkut | 20.000 USDC | Bukti pengiriman valid |
+| Barang sampai tujuan | 40.000 USDC | Bukti kedatangan dan kondisi pengiriman valid |
+| Pemeriksaan kualitas selesai | 40.000 USDC | Bukti penerimaan disetujui |
+| **Total** | **100.000 USDC** | |
 
-## 4. Master document
+Jika sensor mencatat suhu di luar batas, AEGIS menahan pembayaran yang belum dilepas dan meminta pemeriksaan tambahan.
 
-Dokumen yang menjadi sumber bersama tim:
+**Batasan yang harus dijaga:**
 
-- **AEGIS Treasury: Master Context v1.0** (Stanley): DOCX dan MD di Notion tim.
-- **AEGIS Treasury: Master Context v1.1** (dokumen ini): versi gabungan dengan Bank Risk Desk, penyesuaian target pengguna, dan ruang lingkup enam hari.
-- **IDEA-merged-en.md:** versi bahasa Inggris untuk technical documentation dan pitch deck.
+- Blockchain dan ZK proof memverifikasi bukti digital, tetapi tidak menjamin sensor atau penerbit bukti berkata benar. Identitas dan integritas sumber bukti tetap harus diperiksa.
+- Dana yang sudah dikunci untuk pemasok **tidak boleh** diputar ke DeFi demi yield tanpa persetujuan dan ketentuan escrow yang eksplisit. Yield optimization hanya memakai dana yang benar-benar bebas.
+- Kill switch yang realistis adalah membekukan transaksi berikutnya dan melindungi aset yang masih dikendalikan kontrak, bukan memindahkan aset ke cold wallet dalam milidetik.
+- ZK-KYC sebaiknya modul tambahan: kredensial dari penerbit tepercaya tidak otomatis menyelesaikan seluruh pemeriksaan AML.
 
-## 5. Benchmark kompetitor yang harus menjadi acuan tim
+**Implikasi desain untuk kontrak (baru, v1.2):** saat ini AegisModule hanya mengizinkan DEPOSIT dan REDEEM dengan receiver dikunci ke Safe, sehingga transfer ke pihak luar tidak mungkin. TradeFlow butuh pembayaran keluar ke pemasok. Supaya structural containment tetap kuat, pembayaran keluar harus menjadi aksi bertipe baru (misalnya `RELEASE_MILESTONE`) yang hanya boleh ke alamat pemasok yang didaftarkan owner per kontrak dagang, dengan jumlah per milestone yang sudah dikunci, dan hanya setelah bukti milestone diverifikasi. Agent tetap tidak bisa membuat penerima atau jumlah baru.
+
+## 6. Analogi paling sederhana (baru, v1.2)
+
+AEGIS adalah gabungan manajer keuangan, rekening bersama, dan petugas pemeriksa otomatis.
+
+- **AI Treasury Agent** adalah manajer keuangan yang memastikan dana tersedia dan dipakai efisien.
+- **AI Verification Agent** adalah petugas yang mengumpulkan dan memeriksa bukti pekerjaan.
+- **ZK proof** seperti surat keterangan digital yang membuktikan suatu syarat terpenuhi tanpa membuka semua informasi.
+- **Smart contract** adalah rekening bersama otomatis yang hanya melepas uang sesuai syarat yang ditetapkan.
+- **Security guard** menolak transaksi tanpa izin dan bisa menghentikan tindakan tertentu saat ada risiko.
+- **Bank Risk Desk** adalah pengawas yang melihat semua agent nasabah dan bisa membekukannya.
+
+Pembeli tidak perlu percaya keputusan AI secara buta, dan pemasok tidak hanya bergantung pada janji pembeli.
+
+## 7. Benchmarking
+
+### Benchmark treasury agent (v1.1)
 
 | Benchmark | Kekuatan yang sudah ada | Arah upgrade AEGIS |
 |---|---|---|
-| Aumo | Autonomous yield allocation, risk scoring, guardrails, decision receipts | Kewajiban kas yang eksplisit, otorisasi terikat kondisi, pengawasan bank |
-| Giza ARMA (berhenti beroperasi Februari 2026) | Continuous AI DeFi optimization, session keys | Financial-obligation planning, evidence-based authorization |
-| kpk vaults di Morpho (baru) | Rebalancing Agent dan Exit Agent deterministik dengan permission terbatas | Lapisan penjelasan AI, kewajiban, dan Bank Risk Desk |
-| Theoriq AlphaVault (baru) | "Policy cage": AI hanya mengusulkan di dalam batas on-chain | Batas ditetapkan dan diawasi oleh bank |
-| Yearn Finance | Automated yield strategies, allocator, rebalancing | Treasury management yang berpusat pada kebutuhan pengguna |
-| Morpho | Vault curation, exposure caps, allocator dan sentinel | Lapisan agent untuk keputusan lintas mandat dan verifikasi sebelum eksekusi |
-| DeFi Saver | Automated position management, stop-loss | Kewajiban treasury, konteks keputusan, dan bukti otorisasi |
-| Coinbase Agentic Wallets | Autonomous wallets, spending limits | Financial intelligence dan risk-bound action planning |
-| Safe Smart Accounts | Multisig, modules, guards, programmable permissions | Dipakai langsung sebagai execution layer (baru) |
-| PACE (paper, Agustus 2026) | Typed intent, signed PDR, policy and transaction binding | Risk-context validation, obligation-aware decisions, pembuktian eksperimen |
-| HSBC x Ant Digital (baru, Oktober 2026) | Pembayaran AI Agent dengan tokenized deposit, risk check oleh bank | Dari pembayaran ke pengelolaan treasury |
+| Aumo | Autonomous yield allocation, risk scoring, guardrails, decision receipts | Kewajiban kas eksplisit, otorisasi terikat kondisi, pengawasan bank |
+| Giza ARMA (berhenti Februari 2026) | Continuous AI DeFi optimization, session keys | Obligation planning, evidence-based authorization |
+| kpk vaults di Morpho | Rebalancing dan Exit Agent deterministik | Lapisan penjelasan AI, kewajiban, Bank Risk Desk |
+| Theoriq AlphaVault | "Policy cage": AI hanya mengusulkan di dalam batas on-chain | Batas ditetapkan dan diawasi bank |
+| Coinbase Agentic Wallets, Safe | Spending limits, modules, guards | Financial intelligence dan risk-bound action planning |
+| PACE (paper, Agustus 2026) | Typed intent, policy and transaction binding | Risk-context dan obligation binding, terbukti di sistem yang berjalan |
+| HSBC x Ant Digital (Oktober 2026) | Pembayaran AI Agent dengan tokenized deposit | Dari pembayaran ke pengelolaan treasury |
 
-Kapabilitas pada tabel didasarkan pada dokumentasi produk dan penelitian terkait. Kolom upgrade merupakan usulan diferensiasi AEGIS, bukan klaim bahwa seluruh produk lain pasti tidak memiliki fitur tersebut.
+### Benchmark trade escrow dan settlement (baru, v1.2)
 
-Saya ingin menekankan satu hal: jangan menjadikan multi-agent, AI reasoning, atau risk scoring sebagai satu-satunya klaim inovasi. Pembeda yang paling layak dikejar adalah bagaimana financial obligations, dynamic risk, transaction authorization, dan bank oversight digabungkan dalam satu mekanisme yang secara kuantitatif lebih baik dan lebih aman pada skenario yang dapat diuji.
+| Kompetitor | Kemampuan yang sudah ada | Peluang diferensiasi AEGIS |
+|---|---|---|
+| Tazapay | Escrow perdagangan internasional; dana dilepas setelah persetujuan pembeli atau verifikasi kewajiban | AI treasury, multi-milestone risk analysis, private evidence verification |
+| Escrow.com | Perlindungan pembeli/penjual dengan biaya bertingkat (sekitar 1,9% untuk US$50.000 sampai 200.000) | Otomatisasi dokumen, workflow treasury B2B, integrasi bukti |
+| TradeTrust (IMDA) | Dokumen perdagangan digital terverifikasi, termasuk eBL | Memakai dokumen terverifikasi untuk keputusan pembayaran dan pengelolaan dana |
+| Surecomp RIVO | Kolaborasi importir, eksportir, bank, dan proses trade finance | Conditional execution otomatis dan financial-agent authorization |
+| Circle Payments Network | Infrastruktur pembayaran lintas negara berbasis stablecoin untuk institusi | Layer aplikasi yang memutuskan kapan pembayaran boleh dilakukan |
+| WaveBL | Digitalisasi dan transfer dokumen pengapalan | Menghubungkan dokumen ke treasury, risk control, dan settlement conditions |
 
-## 6. Struktur sistem final yang saya rekomendasikan
+**Opportunity gap:** banyak solusi hanya menangani satu dari tiga fungsi: **verify documents**, **manage funds**, atau **execute payment**. AEGIS menyatukan ketiganya dalam satu AI-governed workflow. Ini usulan positioning, belum terbukti tidak ada kompetitor yang menawarkan kombinasi serupa. Untuk menang secara komersial, AEGIS harus unggul terukur di waktu proses, biaya total, kualitas verifikasi, atau fleksibilitas approval. Kombinasi AI, ZK, dan blockchain saja belum cukup.
+
+### Peserta Topic F lain di kompetisi ini (diperbarui, v1.2)
+
+Dari 9 repositori publik Topic F yang ditemukan pada 15 Oktober 2026, yang paling kuat adalah **TreasuryPilot** (pembayaran invoice SME dengan approval EIP-712, Safe module, multi-tenant, 253 commit, tapi baru 1 transaction hash). **sucsage/agentic-wallet** punya bukti on-chain terbanyak (43 tx hash di Base Sepolia, milestone escrow untuk kontraktor UMKM). **ReceivableOS** sudah deploy di FISCO BCOS. Catatan penting: agentic-wallet sudah membangun milestone escrow, jadi TradeFlow harus menonjolkan gabungan treasury reserve, bukti terverifikasi, dan bank oversight, bukan escrow saja.
+
+## 8. Struktur sistem
 
 **AEGIS End-to-End Architecture**
 
-**User Mandate + Treasury Obligations**
-Risk limits · Reserve requirements · Due payments · Approvals
+**User Mandate + Obligations + Trade Contracts (baru, v1.2)**
+Risk limits · Reserve requirements · Due payments · Milestone schedule per pemasok
 
-**Bank Policy (baru)**
-Approved vaults · Limits per nasabah · Reserve rules · Kill switch
+**Bank Policy**
+Approved vaults · Limits per nasabah · Freeze · Revoke
 
-**Financial Engine**
-Reserves · Deployable balance · Allocation
+**Financial Engine** [sudah dibangun]
+Reserve (termasuk dana escrow milestone) · Deployable balance · Allocation
 
-**Risk Intelligence**
+**Risk Intelligence** [sudah dibangun]
 Peg · Liquidity · Oracle staleness · Concentration
 
-**AI Treasury Agent**
+**Evidence Verification Agent (baru, v1.2)** [usulan]
+Dokumen TradeTrust/eBL · Data sensor · Tanda tangan penerbit tepercaya · ZK proof opsional
+
+**AI Treasury Agent** [sudah dibangun]
 Understand context · Compare scenarios · Propose actions (hanya boleh lebih konservatif)
 
-**Independent Security Verification**
-Deterministic policies · Simulation · Signed state-bound authorization
+**Independent Security Verification** [sudah dibangun]
+Deterministic policies · Simulation · Signed state-bound authorization (DAR, EIP-712)
 
-**Smart Wallet / On-Chain Guard**
-Safe + allowance module + Zodiac Roles + guard contract
+**On-Chain Enforcement** [sudah dibangun]
+Safe + AegisModule + PolicyRegistry. Aksi bertipe DEPOSIT/REDEEM dengan receiver dikunci ke Safe. `RELEASE_MILESTONE` ke pemasok terdaftar [usulan].
 
-**Execute**
-Authorized transaction
+**Exit Agent** [sudah dibangun]
+Redeem otomatis saat depeg, liquidity stress, atau oracle staleness
 
-**Reject**
-Unsafe or invalid action
+**Verifiable Decision Ledger + Bank Risk Desk** [sudah dibangun]
 
-**Exit Agent (baru)**
-Penarikan otomatis ke cadangan saat depeg, liquidity stress, atau oracle staleness
+Perubahan dari v1.1: rencana awal memakai Zodiac Roles. Implementasi akhir memakai Safe module custom (AegisModule) karena butuh pemeriksaan berbasis kondisi (policy version, price band, reserve floor) yang tidak dimiliki role allowlist generik. Evidence utama di Base Sepolia. FISCO BCOS tetap opsi untuk kesesuaian dengan teknologi WeBank.
 
-**Verifiable Decision Ledger + Bank Risk Desk**
-Evidence · Policy hash · Approval · Transaction receipt · Pemantauan bank
+## 9. Dua mode produk (baru, v1.2)
 
-Arsitektur target yang diusulkan, bukan sistem yang sudah di-deploy atau diaudit. Model AI tidak seharusnya menjadi otoritas terakhir untuk perhitungan finansial maupun izin memindahkan dana.
+Supaya nilai AEGIS tidak bergantung pada legalitas pembayaran stablecoin di setiap negara:
 
-**(baru)** Untuk mempercepat implementasi, smart wallet menggunakan Safe beserta allowance module dan Zodiac Roles yang sudah tersedia di testnet. Kontrak custom hanya dibuat untuk guard yang memvalidasi state-bound authorization. Evidence utama berada di Base Sepolia, dengan opsi deployment ke FISCO BCOS untuk menunjukkan kesesuaian dengan teknologi WeBank.
+- **AEGIS Trade Intelligence Mode:** verifikasi dokumen, AI monitoring, treasury planning, dan conditional approval yang terhubung ke pembayaran bank atau PSP berizin.
+- **AEGIS On-Chain Settlement Mode:** eksekusi lewat smart contract untuk pihak dan yurisdiksi yang secara hukum memungkinkan, setelah perizinan, AML/KYC, dan persyaratan transaksi terpenuhi.
 
-## 7. Fitur inti yang harus benar-benar terlihat dalam produk
+ZK proof bisa mengurangi data yang perlu dibuka, tetapi tidak menggantikan kewajiban AML/KYC, pemantauan transaksi, atau pelaporan.
 
-**Treasury Intelligence**
-Treasury dashboard, obligations calendar, reserve planning, deployable balance, protocol risk radar, allocation simulation, dan AI chat untuk menjelaskan keputusan.
+## 10. Market sizing: TAM, SAM, SOM (baru, v1.2)
 
-**Autonomous Decision & Execution**
-Mandate builder, constrained strategy planning, automatic rebalancing, risk-triggered protective actions melalui Exit Agent, transaction simulation, approval tiers, dan smart-wallet execution.
+Tiga angka yang tidak boleh tertukar: **trade value** (nilai barang), **payment volume** (pembayaran yang diproses platform), dan **AEGIS revenue** (pendapatan dari software dan biaya layanan). Transaksi US$100.000 lewat AEGIS adalah volume pembayaran, bukan pendapatan.
 
-**Security, Evidence & Governance**
-Deterministic policy engine, state-bound authorization records, nonce and expiry protection, on-chain guard, audit ledger, explanation provenance, emergency pause, dan adversarial stress testing.
+Konteks pasar: perdagangan barang dunia US$26,26 triliun pada 2025 (WTO). Perdagangan barang Indonesia US$524,77 miliar pada 2025 (ekspor US$282,91 miliar, impor US$241,86 miliar, BPS). ADB memperkirakan trade finance gap global US$2,5 triliun pada 2025. Angka ini menunjukkan kebutuhan, bukan pasar escrow yang otomatis bisa diambil AEGIS.
 
-**Bank Risk Desk (baru)**
-Daftar nasabah dan agent, risk score per agent, policy per nasabah, antrean approval eskalasi, audit log, dan kill switch.
+**Funnel Singapore-first:**
 
-Fitur yang perlu ditunda dari MVP adalah multi-chain treasury, strategi DeFi yang kompleks, protokol dengan leverage, pengelolaan dana riil pihak ketiga, serta integrasi bisnis yang memerlukan lisensi atau persetujuan khusus.
+| Tahap | Jumlah | Dasar |
+|---|---|---|
+| Wholesale establishments | 57.715 | Data resmi Singapura 2024 |
+| Punya kebutuhan relevan | 11.543 | Asumsi 20%: perdagangan lintas negara dengan conditional payments |
+| Cocok secara operasional dan regulasi | 5.772 | Asumsi 50%: kesiapan digital, integrasi, metode pembayaran |
+| Target pelanggan akhir tahun ke-5 | 400 | Sekitar 6,9% dari SAM |
 
-## 8. Contoh skenario yang menjadi pusat demo
+Asumsi pendapatan per pelanggan: software US$6.000/tahun + usage fee 0,12% dari volume eligible US$500.000/tahun = **US$6.600/tahun**.
 
-**AEGIS Treasury Stress Scenario** (simulated)
+| Ukuran | Nilai/tahun | Arti |
+|---|---|---|
+| TAM | US$380,9 juta | 57.715 × US$6.600. Batas atas hipotetis kategori wholesale Singapura, bukan TAM global |
+| SAM | US$38,1 juta | 5.772 × US$6.600. Kelompok yang secara hipotesis butuh dan bisa dilayani |
+| SOM | US$2,64 juta | 400 × US$6.600. Target run-rate akhir tahun ke-5 |
 
-- Total Treasury: **10.000 USDC**
-- Required Reserve: **4.500 USDC**
+SAM dan SOM adalah scenario-based estimates sampai validasi pelanggan selesai. Ini jauh lebih bisa dipertanggungjawabkan daripada menulis "TAM US$26 triliun".
 
-Kondisi simulasi:
+## 11. Business model dan pricing (baru, v1.2)
 
-1. **Normal:** peluang alokasi tersedia.
-2. **Risk Shock:** depeg atau likuiditas vault menurun, Exit Agent menarik dana ke cadangan.
-3. **Obligation Shock:** tagihan baru jatuh tempo, agent melakukan rebalancing agar kewajiban tetap tertutup.
-4. **Security Attack:** calldata diubah, record di-replay atau kedaluwarsa, serta prompt injection. Seluruhnya ditolak on-chain.
-5. **Bank Intervention (baru):** risk officer menekan kill switch dan role agent dicabut.
+Model: **B2B SaaS + usage-based revenue + enterprise integration**. AEGIS menyediakan software, financial intelligence, verifikasi, dan orkestrasi pembayaran. Pemindahan dana, penyimpanan aset, konversi mata uang, atau escrow yang butuh izin dilakukan lewat struktur atau mitra berizin.
 
-**Allocation Planning:** AEGIS menyisihkan 4.500 USDC untuk kewajiban dan buffer, kemudian mengevaluasi maksimal 5.500 USDC sebagai modal yang berpotensi dialokasikan. Alokasi aktual bisa lebih rendah sesuai batas risiko.
+| Plan | Harga hipotesis | Target |
+|---|---|---|
+| Starter | US$149/bulan | Eksportir kecil yang baru mencoba conditional payments |
+| Growth | US$499/bulan | Importir/eksportir dengan transaksi berulang |
+| Enterprise | Mulai US$1.499/bulan | Banyak pemasok, approval, dan integrasi |
+| Usage fee | 0,12% dari volume eligible | Pembayaran terverifikasi yang benar-benar difasilitasi |
 
-Contoh angka dan respons adalah desain demonstrasi, bukan hasil performa sistem atau protokol nyata. Seluruh skenario harus menghasilkan transaction hash asli sebagai execution evidence.
+Harga ini rancangan, bukan hasil survei willingness-to-pay. Biaya mitra pembayaran, escrow, FX, gas, KYC, dan layanan eksternal dipisahkan dan diinformasikan transparan. Pelanggan dengan volume US$500.000/tahun membayar US$6.600 (setara 1,32% dari volume), tapi itu bukan harga settlement all-in. Jangan klaim lebih murah dari escrow tradisional sebelum ada quotation mitra.
 
-Demo yang kuat harus memperlihatkan lebih dari transaksi berhasil. Juri perlu melihat kondisi ketika AEGIS berhasil menolak tindakan yang tidak lagi sah, beserta bukti teknis penolakannya.
+**Business Model Canvas ringkas:**
 
-## 9. Bagaimana kita membuktikan AEGIS lebih kuat?
+| Elemen | Rancangan |
+|---|---|
+| Customer Segments | Importir, eksportir, trading companies, procurement-intensive businesses |
+| Value Proposition | Faster verification, conditional settlement, treasury visibility, accountable execution |
+| Channels | Direct B2B sales, logistics providers, trade platforms, payment partners |
+| Customer Relationships | SaaS dashboard, onboarding, enterprise support |
+| Revenue Streams | Subscriptions, usage-based fees, integrations |
+| Key Activities | AI monitoring, document verification, treasury analytics, policy enforcement |
+| Key Resources | AI models, smart contracts, oracle integrations, security infrastructure |
+| Key Partners | Licensed payment providers, banks, eBL platforms, IoT providers, compliance vendors |
+| Cost Structure | Engineering, AI/cloud, audits, legal, sales, integrations, support |
 
-| Dimensi | Metrik utama |
+## 12. Proyeksi keuangan 5 tahun (baru, v1.2)
+
+Asumsi base case: SaaS US$6.000/pelanggan/tahun, volume eligible US$500.000, usage fee 0,12%, gross margin 75%, churn 25%/tahun, target 400 pelanggan akhir 2031. Semua asumsi model, bukan performa yang sudah terbukti.
+
+Angka dalam US$ ribu, kecuali jumlah pelanggan:
+
+| Metrik | 2027 | 2028 | 2029 | 2030 | 2031 |
+|---|---|---|---|---|---|
+| Pelanggan akhir tahun | 16 | 50 | 120 | 240 | 400 |
+| Rata-rata pelanggan aktif | 8 | 33 | 85 | 180 | 320 |
+| Revenue | 52,8 | 217,8 | 561,0 | 1.188,0 | 2.112,0 |
+| Gross Profit | 39,6 | 163,4 | 420,8 | 891,0 | 1.584,0 |
+| Operating Expenses | 300,0 | 420,0 | 650,0 | 900,0 | 1.250,0 |
+| Operating Profit / Loss | (260,4) | (256,7) | (229,3) | (9,0) | 334,0 |
+
+Mendekati impas operasional pada 2030, potensi laba operasional sekitar US$334.000 pada 2031. Akumulasi kerugian lima tahun sekitar US$421.300; kerugian kumulatif terdalam sekitar US$755.300 pada akhir 2030. Kebutuhan pendanaan awal untuk perencanaan: **US$1 sampai 1,5 juta**, termasuk cadangan risiko dan modal kerja. Belum termasuk pajak dan capex.
+
+**Sensitivitas tahun ke-5:**
+
+| Skenario | Pelanggan | Annualized revenue |
+|---|---|---|
+| Conservative | 150 | US$750 ribu |
+| Base | 400 | US$2,64 juta |
+| Upside | 750 | US$7,59 juta |
+
+**Unit economics (base case):** revenue/pelanggan US$6.600, gross profit US$4.950, CAC US$3.000, CAC payback sekitar 7,3 bulan, simple gross-profit LTV US$19.800, LTV/CAC 6,6×. Angka ini bergantung pada dua asumsi yang belum terbukti: CAC bisa serendah US$3.000, dan pelanggan bertahan serta membayar sekitar US$6.600/tahun. Kemitraan dengan logistics provider, trade platform, atau institusi pembayaran adalah kunci menekan CAC.
+
+## 13. Go-to-market (baru, v1.2)
+
+1. **Validate (customer discovery):** wawancara 15 sampai 30 importir, eksportir, freight forwarder, dan penyedia trade finance. Gali nilai transaksi, frekuensi pengiriman, waktu verifikasi, sengketa, sistem yang dipakai, dan kesediaan membayar.
+2. **Pilot (AEGIS TradeFlow):** 3 sampai 5 perusahaan, satu jenis transaksi (misalnya impor komponen elektronik atau produk cold-chain), dengan settlement lewat jalur yang layak secara regulasi.
+3. **Commercialize:** konversi pilot jadi pelanggan berbayar. Integrasi ERP, trade documents, payment providers, dan dashboard treasury.
+4. **Scale:** distribusi lewat freight forwarder, platform eBL, bank, dan penyedia pembayaran. DCSA mendorong eBL menuju 2030 dan TradeTrust sudah membangun interoperabilitas dokumen, jadi AEGIS sebaiknya mengintegrasikan standar yang ada, bukan membangun ekosistem dokumen sendiri.
+
+## 14. Risiko regulasi dan bisnis (baru, v1.2)
+
+| Risiko | Dampak | Mitigasi |
+|---|---|---|
+| Regulasi stablecoin dan pembayaran | Model settlement tertentu tidak bisa beroperasi | Fiat-first integration, mitra berizin, legal review per negara |
+| Bukti IoT/oracle salah | Pembayaran dilepas berdasarkan informasi keliru | Trusted issuers, sumber bukti ganda, dispute period |
+| Smart contract exploit | Aset pelanggan hilang atau terkunci | Audit, batas transaksi, emergency pause, non-custodial controls |
+| Sengketa buyer–supplier | Pembayaran tertunda, kepercayaan turun | Ketentuan kontrak, manual arbitration, aturan refund dan appeal |
+| Adopsi blockchain rendah | Perusahaan enggan pakai wallet dan stablecoin | UX Web2, integrasi ERP dan payment provider, blockchain disembunyikan |
+| Biaya compliance tinggi | Margin lebih rendah dari proyeksi | Partner-led compliance, tier pricing, margin per koridor |
+| Pelanggan sulit diperoleh | CAC naik, ekspansi lambat | Channel partnership, fokus satu industri dulu |
+
+## 15. Bagaimana membuktikan AEGIS lebih kuat?
+
+**Metrik teknis (v1.1):**
+
+| Dimensi | Metrik |
 |---|---|
 | Financial effectiveness | Net return after cost, liquidity shortfall, obligation coverage |
 | Risk management | Drawdown, exposure concentration, risk-response time |
 | Authorization security | Unauthorized execution rate, replay rejection, stale authorization rejection |
-| Adversarial robustness (baru) | Hasil attack suite AgentDojo dan CrAIBench |
+| Adversarial robustness | Hasil attack suite AgentDojo dan CrAIBench |
 | Reliability | Successful authorized execution, false rejection, simulation failures |
-| Explainability | Evidence completeness, decision traceability, factual consistency |
-| Efficiency | Gas overhead, decision latency, unnecessary rebalancing |
+| Explainability | Evidence completeness, decision traceability |
 
-Eksperimen sebaiknya membandingkan AEGIS dengan baseline idle cash, naive APY maximization, static allocation, serta konfigurasi authorization yang tidak mempunyai risk-context validation.
+**KPI bisnis untuk pilot (baru, v1.2):**
 
-## 10. Versi ringkas untuk briefing tim
+| Business impact | KPI | Target pilot yang diusulkan |
+|---|---|---|
+| Faster verification | Waktu rata-rata validasi milestone | Turun ≥50% dari baseline manual |
+| Faster payment processing | Waktu dari bukti valid sampai pembayaran disetujui | Turun ≥40% |
+| Lower admin workload | Jam kerja staf per transaksi | Turun ≥30% |
+| Liquidity visibility | Kewajiban tercatat dan punya rencana cadangan | ≥95% |
+| Secure transactions | Transaksi tidak sah yang lolos kontrol | 0 dalam cakupan pengujian |
+| Audit transparency | Transaksi dengan complete decision trail | 100% |
+| Customer adoption | Pilot menjadi pelanggan berbayar | ≥30% |
 
-**AEGIS Treasury: Project Master Brief**
+Semua target adalah usulan eksperimen, bukan dampak yang sudah dicapai. Hasil pilot dibandingkan dengan baseline yang sama dan menyebut jumlah transaksi yang diuji.
 
-**Project Title:** AEGIS Treasury: Risk-Aware Autonomous Treasury with Verifiable On-Chain Execution and Bank Oversight
+## 16. Status implementasi saat ini (baru, v1.2)
 
-**Competition:** FinTechathon 2026, International AI Track, Topic F: Agent Wallet
+Sudah dibangun dan berjalan di Base Sepolia:
 
-**Tagline:** Know When to Earn, When to Protect, and When Not to Act.
+- **Kontrak:** AegisModule (Safe module) dan PolicyRegistry, 47 Foundry test termasuk fuzz dan invariant.
+- **Backend:** service Python 5 proses (API, Authorizer, Exit Agent, Executor, Keeper), 111 unit test dan 8 integration test, di-host di server sendiri.
+- **Web app multi-tenant:** setiap pengunjung bisa membuat treasury sendiri di Base Sepolia dalam sekitar 1 menit, lalu memakai agent, approval, Bank desk, dan demo serangan yang ditolak on-chain. Live di https://aegis-treasury-eta.vercel.app
+- **Evidence on-chain:** E1 alokasi normal, E2 depeg dan Exit Agent, E3 obligation baru yang memperbarui reserve floor on-chain, E4c prompt injection. E4a, E4b, E4d, dan E5 direkam setelah cooldown 24 jam pada malam 15 ke 16 Oktober.
 
-**Project Overview**
-AEGIS Treasury adalah platform AI Agent non-custodial yang membantu pelaku usaha mempertahankan likuiditas, mengoptimalkan penggunaan dana yang tersedia, mengelola risiko secara adaptif, dan melaksanakan tindakan finansial dengan otorisasi yang dapat diverifikasi, di bawah pengawasan bank.
+Belum dibangun: modul TradeFlow (milestone escrow, `RELEASE_MILESTONE`, evidence verification agent, ZK proof), integrasi TradeTrust/eBL, dan deployment FISCO BCOS.
 
-**Problem Statement**
-Pengelolaan treasury stablecoin dan tokenized deposit menghadapi empat tantangan utama: keseimbangan antara likuiditas dan imbal hasil, perubahan risiko secara dinamis, risiko memberikan kewenangan transaksi kepada AI Agent, serta belum adanya visibilitas bank atas tindakan AI Agent.
+## 17. Rekomendasi untuk FinTechathon (baru, v1.2)
 
-**Target Users**
-UMKM dan bisnis digital yang menggunakan stablecoin atau tokenized deposit untuk operasional, serta bank yang menyediakan layanan tersebut.
+Narasi pitch: **AEGIS Treasury, TradeFlow module.**
 
-**Proposed Solution**
-1. Financial Intelligence: memahami posisi aset, kebutuhan kas, kewajiban pembayaran, risiko, dan dana yang dapat dialokasikan.
-2. Autonomous Treasury Decisions: membandingkan strategi, melakukan simulasi, mengidentifikasi perubahan risiko, serta mengusulkan rebalancing atau tindakan perlindungan.
-3. Verifiable On-Chain Execution: memastikan setiap tindakan memenuhi policy, batas risiko, otorisasi, dan hasil simulasi yang independen dari LLM.
-4. Bank Oversight: bank menetapkan kebijakan, menyetujui eskalasi, dan dapat menghentikan agent.
+- **Problem:** importir dan eksportir menghadapi pembayaran lintas negara yang rumit, verifikasi milestone yang lambat, serta risiko pembayaran terlambat atau salah.
+- **Solution:** AI Agent yang mengelola kewajiban treasury, memverifikasi bukti pemenuhan kontrak, lalu mengotorisasi pembayaran otomatis ketika syarat terpenuhi.
+- **Technical differentiation:** obligation-aware reserve yang ditegakkan on-chain, risk-context-bound authorization, structural containment, evidence verification, dan bank oversight.
+- **Target customers:** mid-sized trading companies, importir, eksportir, supply-chain businesses.
+- **Business model:** B2B SaaS + usage fees + integrations.
 
-**Key Features**
-Treasury Overview Dashboard · Mandate Builder · Obligations & Liquidity Planning · AI Treasury Copilot · Protocol Risk Radar · Allocation Planner · Autonomous Rebalancing · Exit Agent · Transaction Simulation · Deterministic Policy Engine · State-Bound Authorization Records · On-Chain Guard · Decision & Audit Ledger · Stress Lab · Bank Risk Desk
+**Skenario demo yang disarankan:** satu kontrak pengiriman dengan tiga milestone. AI membaca status pengiriman, memverifikasi bukti, menentukan jumlah yang boleh dilepas, lalu membayar di testnet. Skenario kedua: pembayaran ditahan ketika data suhu tidak valid atau bukti dimanipulasi. Ini tetap relevan dengan Topic F karena AI Agent benar-benar mengelola dan mengeksekusi transaksi blockchain.
 
-**Technical Differentiation**
-Obligation-aware treasury optimization, risk-context-bound transaction authorization, verifiable decision accountability, dan institutional oversight. PACE digunakan sebagai referensi policy-attested execution; Aumo, Giza, kpk, Morpho, dan Coinbase Agentic Wallets menjadi benchmark produk terkait.
+**Saran prioritas dengan sisa waktu sampai 20 Oktober:** pertahankan treasury yang sudah berjalan sebagai inti dan bukti utama (40% nilai dari transaction hash). Tambahkan TradeFlow sebagai modul pertama dengan cakupan kecil: satu kontrak dagang, tiga milestone, bukti dari penerbit tepercaya yang ditandatangani (EIP-712), dan satu skenario penolakan. ZK proof dan sensor IoT ditampilkan sebagai roadmap, bukan klaim yang sudah dibangun.
 
-**AI Architecture**
-LLM menangani interpretasi permintaan, perencanaan, dan penjelasan, serta hanya dapat membuat rencana lebih konservatif. Deterministic financial engine menghitung cadangan dan alokasi. Policy engine menguji kelayakan tindakan. Smart contract menegakkan otorisasi. LLM tidak diberikan kewenangan langsung untuk menandatangani atau mengirim transaksi.
+## 18. Keputusan yang masih terbuka
 
-**MVP Scope**
-Satu EVM testnet (Base Sepolia), satu stablecoin simulasi, dua vault uji (ERC-4626), mock price feed, Safe + Zodiac Roles + guard contract, satu service Python, satu aplikasi React (halaman pelaku usaha dan Bank Risk Desk). Komponen seperti Redis, BullMQ, NestJS, dan CVXPY ditunda kecuali waktu memungkinkan.
+1. **Nama produk.** Dokumen feasibility menyarankan tetap **AEGIS Treasury** dengan TradeFlow sebagai modul. Tim juga mempertimbangkan **Porthmos** (bahasa Yunani: selat, jalur penyeberangan yang dijaga). Pencarian awal tidak menemukan proyek crypto atau fintech dengan nama itu. "Aegis Protocol V5" sudah dipakai proyek lain di Chainlink Hackathon 2026.
+2. **Cakupan TradeFlow sebelum deadline.** Modul kecil di testnet (saran dokumen ini) atau hanya di pitch deck sebagai roadmap?
+3. **Target pengguna di pitch.** Importir/eksportir menengah di Singapura (dokumen feasibility) dengan UMKM lintas negara sebagai segmen lanjutan.
+4. **FISCO BCOS.** Deployment tambahan untuk kesesuaian dengan teknologi WeBank, jika waktu memungkinkan.
 
-**Validation and Impact**
-Evaluasi mencakup obligation coverage, efektivitas setelah biaya, respons terhadap risiko, keberhasilan transaksi sah, penolakan transaksi tidak sah, hasil attack suite, dan kelengkapan bukti audit. AEGIS tidak menjamin keuntungan, keamanan dana, maupun keberhasilan withdrawal dalam setiap kondisi.
-
-**Long-Term Vision**
-Treasury control plane bagi bisnis digital dan bank, dengan multi-wallet management, institutional policy controls, dan enterprise reporting. Implementasi dengan aset nyata hanya dilakukan setelah audit keamanan dan pemeriksaan regulasi.
-
-**Core Message:** AEGIS makes autonomous finance accountable, not unrestricted.
-
-## Kesimpulan strategis
-
-Saya tetap melihat AEGIS sebagai proyek yang layak diperjuangkan untuk Topic F. Penambahan Bank Risk Desk, penyesuaian target pengguna ke UMKM dan tokenized deposit, serta pemanfaatan Safe, Zodiac Roles, dan desain Exit Agent kpk membuat konsep ini lebih sesuai dengan karakter juri WeBank sekaligus lebih realistis untuk diselesaikan dalam enam hari.
-
-Sebelum implementasi dimulai, tim perlu menyepakati empat hal:
-
-1. **Nama produk.** "Aegis Protocol V5" sudah digunakan oleh proyek agent firewall pada Chainlink Hackathon 2026. Apakah nama AEGIS tetap digunakan?
-2. **Target pengguna.** UMKM dan bisnis digital (rekomendasi dokumen ini) atau startup Web3 dan DAO kecil (versi v1.0)?
-3. **Penggunaan kode Aumo.** Lisensi MIT memperbolehkan penggunaan dengan atribusi, tetapi saya merekomendasikan hanya mempelajari desainnya agar klaim inovasi tetap kuat.
-4. **Penanggung jawab smart contract.** Minimal satu anggota tim harus menguasai Solidity dan viem.
+**Core message:** From intelligent money management to intelligent, verifiable money movement. AEGIS makes autonomous finance accountable, not unrestricted.
 
 ## Referensi
 
 - AEGIS Treasury Master Context v1.0 (Stanley): https://stanley-n-wijaya.notion.site/FinTechathon-2026-3f973555b71f80519d41feb367d69e89
+- Master Context v1.1: `docs/IDEA-merged-v1.1.md`
 - Aumo: https://aumo.finance/ dan https://github.com/cryptoduke01/aumo
 - kpk agent-powered vaults: https://chainwire.org/2025/11/13/kpk-launches-agent-powered-vaults-on-morpho/
 - Theoriq AlphaVault: https://chainwire.org/2025/12/05/theoriq-launches-alphavault-with-ai-powered-active-management/
-- Safe AI agent with spending limit: https://docs.safe.global/home/ai-agent-quickstarts/agent-with-spending-limit
-- Zodiac Roles Modifier: https://github.com/gnosisguild/zodiac-modifier-roles
 - PACE: https://arxiv.org/abs/2608.17220
 - Signing the Transaction but Not the Decision: https://arxiv.org/abs/2609.11757
 - HSBC x Ant Digital: https://www.prnewswire.com/apac/news-releases/ant-digital-technologies-and-hsbc-announce-successful-ai-agent-micropayment-technical-verification-test-302903333.html
@@ -284,3 +381,5 @@ Sebelum implementasi dimulai, tim perlu menyepakati empat hal:
 - Bankr: https://cointelegraph.com/news/bankr-disables-transactions-after-14-wallets-hacked
 - Aegis Protocol V5: https://chain.link/hack-26/projects/aegis-protocol-v5
 - Pemenang FinTechathon sebelumnya: https://fintechathon.g-ican.com/#/past/2025
+- Sumber pasar (dari dokumen feasibility tim): WTO, BPS, Asian Development Bank, Bank Indonesia, OJK, Singapore MTI dan SingStat, IMDA TradeTrust, MAS, Tazapay, Escrow.com, Surecomp, Circle, WaveBL, DCSA
+- Kompetitor Topic F: https://github.com/Nostidus4/TreasuryPilot, https://github.com/sucsage/agentic-wallet, https://github.com/Khawpuneiei/ReceivableOS

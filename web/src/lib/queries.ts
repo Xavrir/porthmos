@@ -5,9 +5,12 @@ import { useIdentity } from './identity'
 import type { RequestRecord } from './types'
 import type { ReplayApi } from '../replay/engine'
 
+// A tenant's endpoints all need its session, so live tenant queries wait for it instead of failing with 401.
 function useBase() {
-  const { api, mode, phase, sessionEpoch } = useAegis()
-  return { api, mode, ready: phase === 'ready', sessionEpoch }
+  const { api, mode, phase, sessionEpoch, tenant } = useAegis()
+  const { sessionReady } = useIdentity()
+  const ready = phase === 'ready' && (mode !== 'live' || !tenant || sessionReady)
+  return { api, mode, ready, sessionEpoch }
 }
 
 export function useTreasury() {
@@ -32,8 +35,8 @@ export function useObligations() {
 
 export function usePendingApprovals() {
   const { api, mode, ready, sessionEpoch } = useBase()
-  const { session } = useIdentity()
-  return useQuery({ queryKey: ['approvals', mode, sessionEpoch], queryFn: () => api.pendingApprovals(), enabled: ready && session === 'ready', refetchInterval: mode === 'live' ? 10000 : false })
+  const { sessionReady } = useIdentity()
+  return useQuery({ queryKey: ['approvals', mode, sessionEpoch], queryFn: () => api.pendingApprovals(), enabled: ready && sessionReady, refetchInterval: mode === 'live' ? 10000 : false })
 }
 
 export function useLedger(safe?: Address) {
@@ -48,8 +51,8 @@ export function useChainEvents(safe?: Address) {
 
 export function useBankClients() {
   const { api, mode, ready, sessionEpoch } = useBase()
-  const { role, session } = useIdentity()
-  return useQuery({ queryKey: ['bank-clients', mode, sessionEpoch], queryFn: () => api.bankClients(), enabled: ready && role === 'bank' && session === 'ready', retry: false })
+  const { role, sessionReady } = useIdentity()
+  return useQuery({ queryKey: ['bank-clients', mode, sessionEpoch], queryFn: () => api.bankClients(), enabled: ready && role === 'bank' && sessionReady, retry: false })
 }
 
 export function useRequest(id: string | null) {
@@ -73,4 +76,9 @@ export function useReconciliation(safe: Address | null) {
     queryFn: () => api.reconciliation!(safe!),
     enabled: ready && !!safe && !!api.reconciliation,
   })
+}
+
+export function useMarket() {
+  const { http, service } = useAegis()
+  return useQuery({ queryKey: ['market', service], queryFn: () => http.market(), enabled: service === 'up', refetchInterval: 30000, retry: false })
 }

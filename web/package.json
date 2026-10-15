@@ -15,7 +15,10 @@
     "typecheck": "tsc -b",
     "lint": "eslint . && tsc -b",
     "preview": "vite preview",
-    "evidence:sync": "node scripts/sync-evidence.mjs"
+    "evidence:sync": "node scripts/sync-evidence.mjs",
+    "test": "vitest run",
+    "mock:chain": "node scripts/mock/chain.mjs",
+    "mock:api": "node scripts/mock/api.mjs"
   },
   "dependencies": {
     "@fontsource/albert-sans": "^5.3.0",
@@ -39,6 +42,7 @@
     "globals": "^17.13.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.2",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "^4.1.11"
   }
 }

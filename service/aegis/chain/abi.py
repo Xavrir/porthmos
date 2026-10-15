@@ -31,6 +31,22 @@ SPEC: dict[str, list[str]] = {
         "function mint(address to,uint256 amount)",
         "function transfer(address to,uint256 amount) returns (bool)",
     ],
+    "Safe": [
+        "function setup(address[] _owners,uint256 _threshold,address to,bytes data,address fallbackHandler,"
+        "address paymentToken,uint256 payment,address paymentReceiver)",
+        "function execTransaction(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,"
+        "uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes signatures) payable "
+        "returns (bool)",
+        "function enableModule(address module)",
+        "function isModuleEnabled(address module) view returns (bool)",
+        "function getThreshold() view returns (uint256)",
+        "function isOwner(address owner) view returns (bool)",
+        "function getOwners() view returns (address[])",
+    ],
+    "SafeProxyFactory": [
+        "function createProxyWithNonce(address _singleton,bytes initializer,uint256 saltNonce) returns (address proxy)",
+        "function proxyCreationCode() pure returns (bytes)",
+    ],
     "MockPriceFeed": [
         "function latestRoundData() view returns (uint80 roundId,int256 answer,uint256 startedAt,uint256 updatedAt,uint80 answeredInRound)",
         "function setPrice(int256 answer)",
@@ -79,6 +95,18 @@ SPEC: dict[str, list[str]] = {
         "function bankUnfreeze(address safe)",
         "function setAuthorizer(address safe,address a)",
         "function clearQuarantine(address safe,address vault)",
+        "function register(address safe,address owner_,address bank_)",
+        "function addVault(address safe,address vault)",
+        "function removeVault(address safe,address vault)",
+        "function setExitKey(address safe,address k)",
+        "function setAutoCap(address safe,uint256 v)",
+        "function setDailyCap(address safe,uint256 v)",
+        "function setMaxBandWidth(address safe,uint256 v)",
+        "function setMaxOracleAge(address safe,uint256 v)",
+        "function setBankLimit(address safe,uint256 v)",
+        "function bankFreeze(address safe)",
+        "function ownerFreeze(address safe)",
+        "function ownerUnfreeze(address safe)",
         "event PolicyChanged(address indexed safe,uint64 version,bytes4 selector)",
         "event Quarantined(address indexed safe,address indexed vault,address by)",
         "error Unauthorized()",

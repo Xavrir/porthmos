@@ -46,11 +46,21 @@ class ExitAgent:
             self.last_block = block
             self.last_run = time.time()
             report["window"] = True
+            deposited = {r["safe"] for r in self.s.db.query(
+                "SELECT DISTINCT safe FROM submissions WHERE op=0 AND status='confirmed'")}
             for safe in self.s.safes:
-                report["actions"].extend(self.run_window(safe))
+                if (safe.lower() in deposited or self.s.tenants.is_reference(safe)) and self._holds_position(safe):
+                    report["actions"].extend(self.run_window(safe))
         report["fallback"] = self.fallback(block)
         self.track()
         return report
+
+    def _holds_position(self, safe: str) -> bool:
+        """A Safe with no vault shares has nothing to exit, and its deposits are already held by the planner and
+        the module's oracle checks. Skipping it keeps a market event from costing two exit-key transactions per
+        tenant. Tenants reach vaults only through module deposits, which the submissions table records, so only
+        those (and the reference Safe, whose history may predate this database) are read from chain."""
+        return any(self.s.chain.shares_of(v.address, safe) for v in self.settings.addresses.vaults)
 
     def run_window(self, safe: str) -> list[dict]:
         chain, params = self.s.chain, self.settings.params

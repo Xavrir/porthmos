@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { encodeFunctionData, parseAbi } from 'viem'
+import { decodeFunctionData, encodeFunctionData, parseAbi, type Hex } from 'viem'
 import { ReserveBar } from '../components/ReserveBar'
 import { Chip, Empty, ErrorNote, Figure, Hash, Loading } from '../components/bits'
 import { SwitchSeat, usePageTitle } from '../components/chrome'
+import { SignConfirm } from '../components/SignConfirm'
+import { TxStatus } from '../components/TxStatus'
 import { GLOSSARY_DEF, Term } from '../components/Glossary'
 import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
@@ -16,8 +18,9 @@ const FLOOR_ABI = parseAbi(['function setReserveFloor(address safe, uint256 floo
 
 export default function Treasury() {
   usePageTitle('Treasury')
-  const { api, mode, chainId, deployment } = useAegis()
-  const { role, address, sendTx } = useIdentity()
+  const { api, mode, chainId, deployment, tenant } = useAegis()
+  const { role, address, sendTx, isLocal, identity } = useIdentity()
+  const [confirmFloor, setConfirmFloor] = useState(false)
   const qc = useQueryClient()
   const t = useTreasury()
   const obs = useObligations()
@@ -49,15 +52,32 @@ export default function Treasury() {
       if (!address) throw new Error('Choose the owner identity first.')
       if (mode === 'replay') { await api.simulateFloorUpdate!(address); return 'recorded in replay' }
       const tr = t.data!
-      const tx = floorTx ?? {
+      const tx = floorTx ?? (await api.floorUpdate?.().catch(() => null)) ?? {
         to: deployment.registry,
         data: encodeFunctionData({ abi: FLOOR_ABI, functionName: 'setReserveFloor', args: [tr.safe, BigInt(tr.reserve.required.raw), tr.reserve.scheduleHash ?? ('0x' + '0'.repeat(64)) as `0x${string}`] }),
         value: '0',
       }
       return sendTx(tx)
     },
-    onSuccess: (h) => { setSent(h); setFloorTx(null); qc.invalidateQueries({ queryKey: ['treasury'] }) },
+    onSuccess: (h) => { setSent(h); setFloorTx(null); setConfirmFloor(false); qc.invalidateQueries({ queryKey: ['treasury'] }) },
+    onError: () => setConfirmFloor(false),
   })
+  const askFloor = () => (isLocal ? setConfirmFloor(true) : signFloor.mutate())
+  const floorAmount = (() => {
+    if (floorTx) {
+      try {
+        const d = decodeFunctionData({ abi: FLOOR_ABI, data: floorTx.data })
+        return `${money(fromUnits(d.args[1] as bigint))}`
+      } catch { /* fall back to the computed reserve */ }
+    }
+    return t.data?.reserve.required.display ?? ''
+  })()
+  const floorConfirm = confirmFloor && identity.kind === 'local' ? (
+    <SignConfirm role="owner" address={identity.address} what="a transaction" confirmLabel="Sign and send" busy={signFloor.isPending}
+      onConfirm={() => signFloor.mutate()} onCancel={() => setConfirmFloor(false)}>
+      <p><code>setReserveFloor</code> on the PolicyRegistry: your Safe must keep <strong className="nums">{floorAmount}</strong> USDC. It costs a little test ETH for gas.</p>
+    </SignConfirm>
+  ) : null
 
   const submit = (e: FormEvent) => { e.preventDefault(); add.mutate() }
   const tr = t.data
@@ -74,7 +94,7 @@ export default function Treasury() {
         <div className="wrap band-grid">
           <div className="band-head">
             <h1>Treasury</h1>
-            <p className="band-lede">Harbour Lane Imports{mode === 'replay' ? ' (sample client)' : ''}. Cash for what the business owes stays in the Safe; only the surplus goes to work.</p>
+            <p className="band-lede">{tenant && mode === 'live' ? 'Your treasury' : 'Harbour Lane Imports'}{mode === 'replay' ? ' (sample client)' : ''}. Cash for what the business owes stays in the Safe; only the surplus goes to work.</p>
             {tr ? <p className="band-meta">Safe <Hash value={tr.safe} kind="address" label="Safe address" /> on {chainName(chainId)}</p> : null}
           </div>
           <div className="band-figures">
@@ -100,15 +120,16 @@ export default function Treasury() {
             <h2 id="sync-title">The floor is out of date</h2>
             <p>The approved schedule needs a reserve of {tr.reserve.required.display}, but the floor on-chain is {tr.reserve.onchainFloor.display}. The planner holds every action with <code>FloorOutOfSync</code> until the owner signs <code>setReserveFloor</code>.</p>
             <div className="row-actions">
-              <button type="button" className="button secondary" disabled={role !== 'owner' || signFloor.isPending} onClick={() => signFloor.mutate()}>
+              <button type="button" className="button secondary" disabled={role !== 'owner' || signFloor.isPending || confirmFloor} onClick={askFloor}>
                 {signFloor.isPending ? 'Signing…' : `Sign floor of ${tr.reserve.required.display}`}
               </button>
               {role !== 'owner' ? <><span>Only the owner can sign this (role matrix).</span><SwitchSeat to="owner" className="button small quiet" /></> : null}
             </div>
+            {!floorTx ? floorConfirm : null}
             <ErrorNote error={signFloor.error} />
           </section>
         ) : null}
-        <div role="status">{sent ? <p className="ok-note">Floor update {sent.startsWith('0x') ? <>sent: <Hash value={sent} /></> : sent}.</p> : null}</div>
+        <div role="status">{sent ? <p className="ok-note">Floor update {sent.startsWith('0x') ? <>sent: {mode === 'live' ? <TxStatus hash={sent as Hex} label="floor update" onMined={() => qc.invalidateQueries({ queryKey: ['treasury'] })} /> : <Hash value={sent} />}</> : sent}.</p> : null}</div>
 
         <div className="cols">
           <section className="block col-wide" aria-labelledby="cal-title">
@@ -153,7 +174,7 @@ export default function Treasury() {
               {floorTx && mode === 'live' ? (
                 <div className="ok-note">
                   <p>The service returned a floor update for the owner wallet to sign: <code>{floorTx.data.slice(0, 18)}…</code> to <Hash value={floorTx.to} kind="address" label="registry" />.</p>
-                  <button type="button" className="button small secondary" disabled={signFloor.isPending} onClick={() => signFloor.mutate()}>Sign and send</button>
+                  {confirmFloor ? floorConfirm : <button type="button" className="button small secondary" disabled={signFloor.isPending || role !== 'owner'} onClick={askFloor}>Sign and send</button>}
                 </div>
               ) : null}
             </form>

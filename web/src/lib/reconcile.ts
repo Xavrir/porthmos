@@ -7,7 +7,7 @@ export function verifyLinks(rows: LedgerRow[]): Map<number, boolean> {
   const ok = new Map<number, boolean>()
   let prev = ZERO
   for (const r of [...rows].sort((a, b) => a.seq - b.seq)) {
-    ok.set(r.seq, !r.prevHash || r.prevHash.toLowerCase() === prev.toLowerCase())
+    ok.set(r.seq, r.linkOk ?? (!r.prevHash || r.prevHash.toLowerCase() === prev.toLowerCase()))
     prev = r.rowHash ?? prev
   }
   return ok

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createWalletClient, http, parseAbi, type Address, type Hex } from 'viem'
+import { createWalletClient, encodeFunctionData, http, parseAbi, type Address, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { foundry } from 'viem/chains'
 import { useConnection } from 'wagmi'
@@ -8,6 +8,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { demoIdentitiesAvailable } from './demo/allowed'
 import { toViemMessage } from './eip712'
 import { REGISTRY_ABI } from './deployment'
+import { bankAddress, ownerAddress } from './keys'
+import { publicClientFor } from './onboard/chain'
+import { localSender } from './onboard/signers'
 import { sessionMessage } from './session'
 import { RPC_URLS, wagmiConfig } from './wallet'
 import { useAegis } from './source'
@@ -21,10 +24,15 @@ export type Identity =
   | { kind: 'replay'; role: Role | null; address: Address | null }
   | { kind: 'demo'; role: Role; address: Address }
   | { kind: 'wallet'; role: Role | null; address: Address }
+  | { kind: 'local'; role: Role; address: Address }
 
 export type SessionState = 'none' | 'pending' | 'ready' | 'error'
 export type WalletRole = { status: 'idle' | 'loading' | 'ready' | 'error'; role: Role | null }
 export type ChooserIntent = 'visit' | 'hero' | 'switch'
+
+export type RegistryFn =
+  | 'bankFreeze' | 'bankUnfreeze' | 'revokeAuthorizer' | 'removeVault'
+  | 'setAutoCap' | 'setDailyCap' | 'setMaxBandWidth' | 'setMaxOracleAge' | 'setReserveFloor'
 
 type IdentityValue = {
   identity: Identity
@@ -40,15 +48,22 @@ type IdentityValue = {
   signIn: () => Promise<void>
   signOut: () => void
   walletRole: WalletRole
-  chooser: { open: boolean; intent: ChooserIntent; show: (intent?: ChooserIntent) => void; hide: () => void }
+  chooser: { open: boolean; intent: ChooserIntent; wanted: Role | null; show: (intent?: ChooserIntent, wanted?: Role | null) => void; hide: () => void }
   sign: (payload: TypedDataPayload) => Promise<Hex>
   sendTx: (tx: TxRequest) => Promise<Hex>
   bankAction: (action: BankAction, safe: Address) => Promise<Hex | null>
+  localAddress: (role: Role) => Address | null
+  confirmed: (role: Role) => boolean
+  signInLocal: (role: Role) => void
+  sendAs: (role: Role, fn: RegistryFn, args: readonly unknown[]) => Promise<Hex>
+  isLocal: boolean
+  sessionReady: boolean
 }
 
 const IdentityContext = createContext<IdentityValue | null>(null)
 const DEMO_KEY = 'aegis.demo-identity'
 const SEAT_KEY = 'aegis.seat'
+const CONFIRM_KEY = 'aegis.local-confirm'
 
 const ROLE_ABI = parseAbi(['function owner(address) view returns (address)', 'function bank(address) view returns (address)'])
 
@@ -74,8 +89,17 @@ function write(key: string, value: string) {
   try { sessionStorage.setItem(key, value) } catch { /* storage blocked: the choice lasts for this page */ }
 }
 
+function readConfirmed(): string[] {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(CONFIRM_KEY) ?? '[]')
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 export function IdentityProvider({ children }: { children: ReactNode }) {
-  const { api, mode, phase, chainId, deployment, bumpSession } = useAegis()
+  const { api, mode, phase, chainId, deployment, bumpSession, wallet, tenant, refresh, rpcUrl } = useAegis()
   const qc = useQueryClient()
   const conn = useConnection()
   const demoAvailable = demoIdentitiesAvailable(chainId)
@@ -86,6 +110,8 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const [signedFor, setSignedFor] = useState<string | null>(null)
   const [chooserOpen, setChooserOpen] = useState(false)
   const [chooserIntent, setChooserIntent] = useState<ChooserIntent>('visit')
+  const [chooserWanted, setChooserWanted] = useState<Role | null>(null)
+  const [confirmedList, setConfirmedList] = useState<string[]>(readConfirmed)
 
   const roles = useQuery({
     queryKey: ['registry-roles', chainId, deployment.registry, deployment.safe],
@@ -111,6 +137,12 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     return { status: roles.isError ? 'error' : 'ready', role }
   }, [conn.address, deployment.roles, mode, roles.data, roles.isError, roles.isLoading])
 
+  const localAddress = useCallback((r: Role): Address | null => {
+    if (!wallet) return null
+    if (r === 'bank') return bankAddress(wallet)
+    return wallet.owner.type === 'burner' ? ownerAddress(wallet) : null
+  }, [wallet])
+
   const identity: Identity = useMemo(() => {
     if (mode === 'replay') {
       if (seat === 'owner' || seat === 'bank') return { kind: 'replay', role: seat, address: seat === 'bank' ? deployment.roles.bank : deployment.roles.owner }
@@ -118,15 +150,45 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
       return { kind: 'none' }
     }
     if (demoAvailable && (demoChoice === 'owner' || demoChoice === 'bank')) return { kind: 'demo', role: demoChoice, address: demoChoice === 'bank' ? deployment.roles.bank : deployment.roles.owner }
+    if (tenant && wallet) {
+      if (seat === 'bank') return { kind: 'local', role: 'bank', address: bankAddress(wallet) }
+      if (seat === 'owner') {
+        if (wallet.owner.type === 'burner') return { kind: 'local', role: 'owner', address: ownerAddress(wallet) }
+        if (conn.address && conn.address.toLowerCase() === tenant.owner.toLowerCase()) return { kind: 'wallet', role: walletRole.role, address: conn.address }
+      }
+      return { kind: 'none' }
+    }
     if (conn.address) return { kind: 'wallet', role: walletRole.role, address: conn.address }
     return { kind: 'none' }
-  }, [conn.address, demoAvailable, demoChoice, deployment.roles, mode, seat, walletRole.role])
+  }, [conn.address, demoAvailable, demoChoice, deployment.roles, mode, seat, tenant, wallet, walletRole.role])
 
   const role = identity.kind === 'none' ? null : identity.role
   const address = identity.kind === 'none' ? null : identity.address
-  const key = `${mode}:${identity.kind}:${role}:${address}`
+  const isConfirmed = identity.kind === 'local' && confirmedList.includes(`${identity.role}:${identity.address.toLowerCase()}`)
+  const key = `${mode}:${identity.kind}:${role}:${address}:${isConfirmed ? 'c' : ''}`
   const keyRef = useRef(key)
   useLayoutEffect(() => { keyRef.current = key }, [key])
+
+  const localAccount = useCallback((r: Role) => {
+    if (!wallet) throw new Error('No keys in this browser. Create your treasury first.')
+    if (r === 'bank') return privateKeyToAccount(wallet.bank.pk)
+    if (wallet.owner.type !== 'burner') throw new Error('Your owner key is your browser wallet.')
+    return privateKeyToAccount(wallet.owner.pk)
+  }, [wallet])
+
+  const senders = useRef(new Map<string, ReturnType<typeof localSender>>())
+  const localTx = useCallback((r: Role, tx: TxRequest): Promise<Hex> => {
+    if (!wallet) throw new Error('No keys in this browser. Create your treasury first.')
+    const pk = r === 'bank' ? wallet.bank.pk : wallet.owner.type === 'burner' ? wallet.owner.pk : null
+    if (!pk) throw new Error('Your owner key is your browser wallet.')
+    const k = `${pk}@${chainId}@${rpcUrl}`
+    let sender = senders.current.get(k)
+    if (!sender) {
+      sender = localSender(pk, { chainId, rpcUrl }, publicClientFor(chainId, rpcUrl))
+      senders.current.set(k, sender)
+    }
+    return sender.send({ to: tx.to, data: tx.data })
+  }, [chainId, rpcUrl, wallet])
 
   const finish = useCallback((p: Promise<{ token: string }>, signed: boolean, forKey: string) => {
     setSession('pending')
@@ -155,23 +217,24 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     api.setSession(null)
     setSignedFor(null)
     setSessionError(null)
-    if (!role || !address || identity.kind === 'wallet') {
+    if (!role || !address || identity.kind === 'wallet' || (identity.kind === 'local' && !isConfirmed)) {
       setSession('none')
       bumpSession()
       return
     }
-    if (identity.kind === 'demo') {
+    if (identity.kind === 'demo' || identity.kind === 'local') {
       const r = role
       const a = address
-      finish(demoAccount(r).then(async (account) => {
+      const account = identity.kind === 'demo' ? demoAccount(r) : Promise.resolve(localAccount(r))
+      finish(account.then(async (acct) => {
         const issuedAt = new Date().toISOString()
-        const signature = await account.signMessage({ message: sessionMessage(r, a, chainId, issuedAt) })
+        const signature = await acct.signMessage({ message: sessionMessage(r, a, chainId, issuedAt) })
         return api.createSession(r, a, { signature, issuedAt })
       }), true, key)
       return
     }
     finish(api.createSession(role, address), false, key)
-    // bumpSession, finish and signedFor are deliberately left out: only a change of who is acting reopens the session
+    // bumpSession, finish, localAccount and signedFor are deliberately left out: only a change of who is acting reopens the session
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, phase, key])
 
@@ -195,9 +258,14 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     api.setSession(null)
     setSignedFor(null)
     setSession('none')
+    if (identity.kind === 'local') {
+      const next = confirmedList.filter((c) => c !== `${identity.role}:${identity.address.toLowerCase()}`)
+      setConfirmedList(next)
+      write(CONFIRM_KEY, JSON.stringify(next))
+    }
     bumpSession()
     qc.invalidateQueries()
-  }, [api, bumpSession, qc])
+  }, [api, bumpSession, confirmedList, identity, qc])
 
   const chooseSeat = useCallback((s: Seat) => {
     setSeat(s)
@@ -211,16 +279,33 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     if (r) chooseSeat(r)
   }, [chooseSeat])
 
+  const confirmed = useCallback((r: Role) => {
+    const a = localAddress(r)
+    return !!a && confirmedList.includes(`${r}:${a.toLowerCase()}`)
+  }, [confirmedList, localAddress])
+
+  const signInLocal = useCallback((r: Role) => {
+    const a = localAddress(r)
+    if (a) {
+      const next = [...new Set([...confirmedList, `${r}:${a.toLowerCase()}`])]
+      setConfirmedList(next)
+      write(CONFIRM_KEY, JSON.stringify(next))
+    }
+    if (demoChoice === 'owner' || demoChoice === 'bank') { setDemoChoice('off'); write(DEMO_KEY, 'off') }
+    chooseSeat(r)
+    if (mode !== 'live') refresh('live')
+  }, [chooseSeat, confirmedList, demoChoice, localAddress, mode, refresh])
+
   const sign = useCallback(async (payload: TypedDataPayload): Promise<Hex> => {
     const args = { domain: payload.domain, types: payload.types, primaryType: payload.primaryType, message: toViemMessage(payload.message) }
-    if (identity.kind === 'demo') {
-      const account = await demoAccount(identity.role)
+    if (identity.kind === 'demo' || identity.kind === 'local') {
+      const account = identity.kind === 'demo' ? await demoAccount(identity.role) : localAccount(identity.role)
       return account.signTypedData(args as unknown as Parameters<typeof account.signTypedData>[0])
     }
     if (identity.kind === 'wallet') return signTypedData(wagmiConfig, args as unknown as Parameters<typeof signTypedData>[1])
     if (identity.kind === 'replay') throw new Error('Replay holds no keys. Use the recorded or simulated approval.')
     throw new Error('Sign in with a wallet to sign.')
-  }, [identity])
+  }, [identity, localAccount])
 
   const sendTx = useCallback(async (tx: TxRequest): Promise<Hex> => {
     if (identity.kind === 'demo') {
@@ -228,9 +313,15 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
       const client = createWalletClient({ account, chain: foundry, transport: http(RPC_URLS[foundry.id]) })
       return client.sendTransaction({ to: tx.to, data: tx.data, value: BigInt(tx.value || '0') })
     }
+    if (identity.kind === 'local') return localTx(identity.role, tx)
     if (identity.kind === 'wallet') return sendTransaction(wagmiConfig, { to: tx.to, data: tx.data, value: BigInt(tx.value || '0') })
     throw new Error('Sign in with a wallet to send this transaction.')
-  }, [identity])
+  }, [identity, localTx])
+
+  const sendAs = useCallback((r: Role, fn: RegistryFn, args: readonly unknown[]): Promise<Hex> => {
+    const data = encodeFunctionData({ abi: REGISTRY_ABI, functionName: fn, args } as never)
+    return localTx(r, { to: deployment.registry, data, value: '0' })
+  }, [deployment.registry, localTx])
 
   const bankAction = useCallback(async (action: BankAction, safe: Address): Promise<Hex | null> => {
     if (!address) throw new Error('Switch to the bank officer first.')
@@ -238,24 +329,29 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
       await api.simulateBankAction?.(action, safe, address)
       return null
     }
+    if (identity.kind === 'local') return sendAs('bank', action, [safe])
     if (identity.kind === 'demo') {
       const account = await demoAccount(identity.role)
       const client = createWalletClient({ account, chain: foundry, transport: http(RPC_URLS[foundry.id]) })
       return client.writeContract({ address: deployment.registry, abi: REGISTRY_ABI, functionName: action, args: [safe] })
     }
     return writeContract(wagmiConfig, { address: deployment.registry, abi: REGISTRY_ABI, functionName: action, args: [safe] })
-  }, [address, api, deployment.registry, identity, mode])
+  }, [address, api, deployment.registry, identity, mode, sendAs])
 
   const chooser = useMemo(() => ({
     open: chooserOpen,
     intent: chooserIntent,
-    show: (intent: ChooserIntent = 'switch') => { setChooserIntent(intent); setChooserOpen(true) },
-    hide: () => setChooserOpen(false),
-  }), [chooserIntent, chooserOpen])
+    wanted: chooserWanted,
+    show: (intent: ChooserIntent = 'switch', wanted: Role | null = null) => { setChooserIntent(intent); setChooserWanted(wanted); setChooserOpen(true) },
+    hide: () => { setChooserOpen(false); setChooserWanted(null) },
+  }), [chooserIntent, chooserOpen, chooserWanted])
 
   const signedIn = session === 'ready' && signedFor === key
+  // Right after a seat change the old session is still 'ready' for one render; only a session opened for this key counts.
+  const sessionReady = session === 'ready' && (signedFor === null ? identity.kind !== 'local' && identity.kind !== 'wallet' : signedFor === key)
   const value: IdentityValue = {
     identity, role, address, seat, demoAvailable, chooseSeat, chooseDemo, session, sessionError, signedIn, signIn, signOut, walletRole, chooser, sign, sendTx, bankAction,
+    localAddress, confirmed, signInLocal, sendAs, isLocal: identity.kind === 'local', sessionReady,
   }
   return <IdentityContext.Provider value={value}>{children}</IdentityContext.Provider>
 }

@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query'
 import { OracleChart, RiskRadar } from '../components/charts'
 import { Chip, ErrorNote, Figure, Hash, Loading } from '../components/bits'
 import { usePageTitle } from '../components/chrome'
+import { BreakIt } from '../components/BreakIt'
 import { useAegis } from '../lib/source'
 import { useOracle, useRisk } from '../lib/queries'
 import { clock, money, num, pct, stamp } from '../lib/format'
@@ -29,7 +30,7 @@ function describe(e: StreamEvent): string | null {
 
 export default function Risk() {
   usePageTitle('Risk')
-  const { api, chainId, feed, mode, health } = useAegis()
+  const { api, chainId, feed, mode, health, tenant } = useAegis()
   const risk = useRisk()
   const oracle = useOracle()
   const run = useMutation({ mutationFn: (n: ScenarioName) => api.scenario(n) })
@@ -98,11 +99,13 @@ export default function Risk() {
           <ErrorNote error={risk.error} />
         </section>
 
+        {mode === 'live' && tenant ? <BreakIt /> : null}
+
         <div className="cols">
           <section className="block col-wide" aria-labelledby="lab-title">
             <div className="block-head">
               <h2 id="lab-title">Stress lab</h2>
-              <p>{mode === 'replay' ? 'Each button plays a recorded scenario inside your browser; watch the system respond through the event stream.' : lab ? 'Local chain 31337 only. Each button calls /api/demo/scenario and you watch the system respond through the event stream.' : 'Scenario controls exist only on the local demo chain (31337).'}</p>
+              <p>{mode === 'replay' ? 'Each button plays a recorded scenario inside your browser; watch the system respond through the event stream.' : lab ? 'Local chain 31337 only. Each button calls /api/demo/scenario and you watch the system respond through the event stream.' : tenant ? 'Market scenarios move the shared price feed and vaults, so only the AEGIS team runs them here. When one runs, a banner shows it to every treasury.' : 'Scenario controls exist only on the local demo chain (31337).'}</p>
             </div>
             {lab ? (
               <div className="scenarios">

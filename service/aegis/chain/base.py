@@ -140,10 +140,10 @@ class ChainClient(ABC):
 
     @abstractmethod
     def submit_deposit(self, key: str, dar: DAR, auth_sig: str, owner_sig: str, bank_sig: str,
-                       approval: Approval) -> str: ...
+                       approval: Approval, gas: int | None = None) -> str: ...
 
     @abstractmethod
-    def submit_redeem(self, key: str, dar: DAR, sig: str) -> str: ...
+    def submit_redeem(self, key: str, dar: DAR, sig: str, gas: int | None = None) -> str: ...
 
     @abstractmethod
     def receipt(self, tx_hash: str) -> Receipt | None: ...
@@ -168,6 +168,37 @@ class ChainClient(ABC):
 
     @abstractmethod
     def admin_increase_time(self, seconds: int) -> None: ...
+
+    @abstractmethod
+    def head_timestamp(self) -> int:
+        """Timestamp of the latest mined block, without the Anvil wall-clock adjustment."""
+
+    @abstractmethod
+    def eth_balance(self, who: str) -> int: ...
+
+    @abstractmethod
+    def code_size(self, who: str) -> int: ...
+
+    @abstractmethod
+    def send_value(self, key: str, to: str, value: int) -> str: ...
+
+    @abstractmethod
+    def mint_usdc(self, key: str, to: str, amount: int) -> str: ...
+
+    @abstractmethod
+    def predict_safe(self, owner: str) -> str: ...
+
+    @abstractmethod
+    def safe_threshold(self, safe: str) -> int: ...
+
+    @abstractmethod
+    def safe_owners(self, safe: str) -> list[str]: ...
+
+    @abstractmethod
+    def safe_module_enabled(self, safe: str, module: str) -> bool: ...
+
+    @abstractmethod
+    def wait_receipt(self, tx_hash: str, timeout: float = 30.0) -> Receipt | None: ...
 
     def address_of(self, key: str) -> str:
         from eth_account import Account

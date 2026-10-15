@@ -1,11 +1,13 @@
-import type { Address } from 'viem'
+import type { Address, Hex } from 'viem'
+import type { ActivateResult, AttackKind, AttackResult, FundResult, MarketState, OnboardConfig, OnboardStatus } from '../onboard/types'
 import type {
   Amount, BankClient, ChainEvent, ChatResponse, Health, LedgerRow, Obligation, ObligationCreated, OracleState,
-  PendingApproval, RequestRecord, RiskReport, Role, ScenarioName, Session, StreamEvent, TreasuryState,
+  PendingApproval, RequestRecord, RiskReport, Role, ScenarioName, Session, StreamEvent, TreasuryState, TxRequest,
 } from '../types'
 import { ApiError, type AegisApi, type ApprovalSubmission, type NewObligation, type SessionProof, type StreamStatus } from './contract'
 import { amount, PRICE_DECIMALS, fromUnits } from '../format'
 import { reconcile } from '../reconcile'
+import { bankClientFrom, eventsFrom, ledgerFrom, pendingFrom, requestFrom, riskVaultFrom } from './normalize'
 import type { ReconciliationRow } from '../types'
 
 function asAmount(v: unknown): Amount {
@@ -33,6 +35,10 @@ export class HttpApi implements AegisApi {
     this.token = token
   }
 
+  hasSession(): boolean {
+    return !!this.token
+  }
+
   private async call<T>(path: string, init: RequestInit = {}, timeoutMs = 15000): Promise<T> {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -40,13 +46,15 @@ export class HttpApi implements AegisApi {
     if (init.body) headers['Content-Type'] = 'application/json'
     if (this.token) headers['X-Aegis-Session'] = this.token
     try {
-      const res = await fetch(`${this.base}${path}`, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) }, signal: ctrl.signal })
+      let res: Response
+      try {
+        res = await fetch(`${this.base}${path}`, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) }, signal: ctrl.signal })
+      } catch (e) {
+        throw new ApiError((e as Error).name === 'AbortError' ? 'The AEGIS service took too long to answer' : 'Could not reach the AEGIS service', 0)
+      }
       const text = await res.text()
       const body = text ? safeJson(text) : undefined
-      if (!res.ok) {
-        const detail = body && typeof body === 'object' && 'detail' in body ? String((body as { detail: unknown }).detail) : res.statusText
-        throw new ApiError(detail || `HTTP ${res.status}`, res.status, body)
-      }
+      if (!res.ok) throw new ApiError(errorText(body) || res.statusText || `HTTP ${res.status}`, res.status, body)
       return body as T
     } finally {
       clearTimeout(timer)
@@ -93,7 +101,7 @@ export class HttpApi implements AegisApi {
 
   async risk(): Promise<RiskReport> {
     const r = await this.call<unknown>('/api/risk')
-    return { vaults: asList(r, 'vaults') }
+    return { vaults: asList<Record<string, unknown>>(r, 'vaults').map(riskVaultFrom) }
   }
 
   async oracle(): Promise<OracleState> {
@@ -107,8 +115,8 @@ export class HttpApi implements AegisApi {
     return this.call('/api/agent/chat', { method: 'POST', body: JSON.stringify({ message }) }, 60000)
   }
 
-  request(id: string): Promise<RequestRecord> {
-    return this.call(`/api/requests/${encodeURIComponent(id)}`)
+  async request(id: string): Promise<RequestRecord> {
+    return requestFrom(await this.call(`/api/requests/${encodeURIComponent(id)}`))
   }
 
   submitApproval(id: string, body: ApprovalSubmission) {
@@ -124,24 +132,53 @@ export class HttpApi implements AegisApi {
   }
 
   async pendingApprovals(): Promise<PendingApproval[]> {
-    return asList<PendingApproval>(await this.call('/api/approvals/pending'), 'approvals')
+    return pendingFrom(await this.call('/api/approvals/pending'))
   }
 
   async ledger(safe?: Address): Promise<LedgerRow[]> {
-    return asList<LedgerRow>(await this.call(`/api/ledger${safe ? `?safe=${safe}` : ''}`), 'rows')
+    return ledgerFrom(await this.call(`/api/ledger${safe ? `?safe=${safe}` : ''}`))
   }
 
   async events(safe?: Address): Promise<ChainEvent[]> {
-    return asList<ChainEvent>(await this.call(`/api/events${safe ? `?safe=${safe}` : ''}`), 'events')
+    return eventsFrom(await this.call(`/api/events${safe ? `?safe=${safe}` : ''}`))
   }
 
   async bankClients(): Promise<BankClient[]> {
-    return asList<BankClient>(await this.call('/api/bank/clients'), 'clients')
+    return asList<Record<string, unknown>>(await this.call('/api/bank/clients'), 'clients').map(bankClientFrom)
   }
 
   async reconciliation(safe: Address): Promise<ReconciliationRow[]> {
     const [rows, events] = await Promise.all([this.ledger(safe), this.events(safe)])
     return reconcile(rows, events)
+  }
+
+  onboardConfig(): Promise<OnboardConfig> {
+    return this.call('/api/onboard/config', {}, 8000)
+  }
+
+  onboardStatus(owner: Address): Promise<OnboardStatus> {
+    return this.call(`/api/onboard/status?owner=${owner}`, {}, 10000)
+  }
+
+  onboardFund(body: { owner: Address; bank: Address; issuedAt: string; signature: Hex }): Promise<FundResult> {
+    return this.call('/api/onboard/fund', { method: 'POST', body: JSON.stringify(body) }, 75000)
+  }
+
+  onboardActivate(body: { safe: Address; owner: Address; issuedAt: string; signature: Hex }): Promise<ActivateResult> {
+    return this.call('/api/onboard/activate', { method: 'POST', body: JSON.stringify(body) }, 75000)
+  }
+
+  async market(): Promise<MarketState> {
+    return marketFrom(await this.call<unknown>('/api/market', {}, 8000))
+  }
+
+  attack(kind: AttackKind): Promise<AttackResult> {
+    return this.call('/api/tenant/attack', { method: 'POST', body: JSON.stringify({ kind }) }, 90000)
+  }
+
+  async floorUpdate(): Promise<TxRequest | null> {
+    const body = await this.call<{ floorUpdate?: TxRequest | null }>('/api/obligations')
+    return body && !Array.isArray(body) && body.floorUpdate?.data ? body.floorUpdate : null
   }
 
   scenario(name: ScenarioName) {
@@ -189,6 +226,48 @@ export class HttpApi implements AegisApi {
       stopped = true
       ctrl?.abort()
     }
+  }
+}
+
+function errorText(body: unknown): string {
+  if (!body || typeof body !== 'object') return typeof body === 'string' && body.length < 200 ? body : ''
+  const b = body as { detail?: unknown; error?: unknown }
+  if (typeof b.detail === 'string' && b.detail) return b.detail
+  if (Array.isArray(b.detail)) return b.detail.map((d) => (d && typeof d === 'object' && 'msg' in d ? String((d as { msg: unknown }).msg) : String(d))).join('; ')
+  return typeof b.error === 'string' ? b.error : ''
+}
+
+const MARKET_LABELS: Record<string, string> = { depeg: 'Depeg', liquidity: 'Liquidity squeeze', stale: 'Stale price feed' }
+const CALM = new Set(['', 'restore', 'none', 'normal', 'ok', 'healthy', 'calm'])
+
+function marketLabel(name: string): string {
+  return MARKET_LABELS[name.toLowerCase()] ?? name.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase())
+}
+
+// v2.1 shape: {price, stale, pegDeviationPct, vaults[{name, liquidityCapped, remainingLiquidity}], active: string[], scenario: {name, at, by} | null}
+export function marketFrom(v: unknown): MarketState {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>
+  const sc = o.scenario
+  const scenarioName = typeof sc === 'string' ? sc : sc && typeof sc === 'object' && typeof (sc as { name?: unknown }).name === 'string' ? (sc as { name: string }).name : null
+  const list = Array.isArray(o.active) ? o.active.filter((x): x is string => typeof x === 'string' && !CALM.has(x.toLowerCase())) : null
+  const active = list ? list.length > 0 : typeof o.active === 'boolean' ? o.active : !CALM.has((scenarioName ?? '').toLowerCase())
+  const names = list?.length ? list : scenarioName && !CALM.has(scenarioName.toLowerCase()) ? [scenarioName] : []
+  const parts: string[] = []
+  const price = typeof o.price === 'number' ? o.price : typeof o.price === 'string' && /^\d+$/.test(o.price) ? Number(o.price) / 1e8 : typeof o.price === 'string' ? Number(o.price) : null
+  if (names.some((n) => n.toLowerCase() === 'depeg') && price !== null && Number.isFinite(price)) parts.push(`The shared price feed reads ${price.toFixed(4)}${typeof o.pegDeviationPct === 'number' ? `, ${Math.abs(o.pegDeviationPct).toFixed(2)}% off the peg` : ''}.`)
+  if (names.some((n) => n.toLowerCase() === 'stale') || o.stale === true) parts.push('The price feed is stale, so deposits are refused. Exits still run.')
+  if (names.some((n) => n.toLowerCase() === 'liquidity') && Array.isArray(o.vaults)) {
+    const capped = (o.vaults as { name?: string; liquidityCapped?: boolean }[]).filter((x) => x.liquidityCapped).map((x) => x.name).filter(Boolean)
+    if (capped.length) parts.push(`${capped.join(' and ')} let only a little leave right now.`)
+  }
+  const text = o.detail ?? o.note ?? o.text ?? o.message
+  const at = sc && typeof sc === 'object' ? (sc as { at?: unknown }).at : o.since
+  return {
+    active,
+    scenario: names[0] ?? scenarioName,
+    label: names.length ? names.map(marketLabel).join(', ') : 'Market event',
+    detail: typeof text === 'string' && text ? text : parts.length ? parts.join(' ') : null,
+    since: typeof at === 'number' ? at : null,
   }
 }
 

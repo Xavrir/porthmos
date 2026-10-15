@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import time
 from contextlib import asynccontextmanager
@@ -13,17 +14,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from aegis.config import PRICE_ONE, UINT256_MAX, USDC, load_key
+from aegis.attacks import Attacks
+from aegis.config import PRICE_ONE
 from aegis.core.pipeline import Snapshot
 from aegis.ledger import reconcile
+from aegis.market import MARKET_SCENARIOS, SCENARIOS, market_state, run_scenario
 from aegis.obligations import floor_update, parse_due
 from aegis.obligations import to_json as obligation_json
-from aegis.procs.keeper import PAUSE_KEY
+from aegis.onboarding import Onboarding
+from aegis.procs.keeper import LAST_POKE_KEY, PAUSE_KEY
 from aegis.runtime import Runtime
 from aegis.units import amount, parse_raw, price
 from aegis.workflow import Session, WorkflowError
-
-SCENARIOS = ("depeg", "liquidity", "stale", "obligation", "restore")
 
 
 class SessionBody(BaseModel):
@@ -60,6 +62,26 @@ class CorrectBody(BaseModel):
 
 class ScenarioBody(BaseModel):
     name: str
+    vault: str | None = None
+    cap: str | int | None = None
+
+
+class FundBody(BaseModel):
+    owner: str
+    bank: str
+    issuedAt: str | None = None
+    signature: str | None = None
+
+
+class ActivateBody(BaseModel):
+    safe: str
+    owner: str
+    issuedAt: str | None = None
+    signature: str | None = None
+
+
+class AttackBody(BaseModel):
+    kind: str
 
 
 class InternalQuarantine(BaseModel):
@@ -75,14 +97,25 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
         yield
         rt.stop()
 
-    app = FastAPI(title="AEGIS Treasury API", version="1.0", lifespan=lifespan)
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
-                       expose_headers=["*"])
+    app = FastAPI(title="AEGIS Treasury API", version="2.0", lifespan=lifespan)
+    app.add_middleware(CORSMiddleware, allow_origins=rt.settings.allowed_origins,
+                       allow_methods=["GET", "POST", "OPTIONS"],
+                       allow_headers=["Content-Type", "X-Aegis-Session", "X-Aegis-Admin"], allow_credentials=False)
     s = rt.services
+    onboarding = Onboarding(s)
+    attacks = Attacks(s, rt.authorizer)
 
     @app.exception_handler(WorkflowError)
     async def wf_error(_: Request, exc: WorkflowError):
-        return JSONResponse({"error": exc.code, "detail": exc.detail}, status_code=exc.status)
+        return JSONResponse({**exc.extra, "error": exc.code, "detail": exc.detail}, status_code=exc.status)
+
+    def client_ip(request: Request) -> str:
+        if rt.settings.trust_proxy:
+            forwarded = request.headers.get("x-forwarded-for", "")
+            if forwarded.strip():
+                # The proxy appends the address it saw last; earlier entries are client-supplied.
+                return forwarded.split(",")[-1].strip()
+        return request.client.host if request.client else "unknown"
 
     def session_dep(request: Request, x_aegis_session: str | None = Header(default=None)) -> Session:
         token = x_aegis_session or request.cookies.get("aegis_session")
@@ -102,7 +135,10 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
         return sess
 
     def bank_safes(sess: Session) -> list[str]:
-        return [x for x in s.safes if s.chain.policy(x, []).bank.lower() == sess.address.lower()]
+        return rt.sessions.bank_safes(sess.address)
+
+    def visible_safes(sess: Session) -> set[str]:
+        return {sess.safe.lower()} if sess.role == "owner" else {x.lower() for x in bank_safes(sess)}
 
     def resolve_safe(sess: Session, requested: str | None) -> str:
         """Owner: always the session Safe; asking for another one is refused. Bank: one of its Safes."""
@@ -152,11 +188,23 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
 
     @app.get("/api/health")
     def health():
+        agent = rt.workflow.agent
+        llm_mode = agent.mode
+        if agent.llm is not None and agent.gate is not None and agent.gate.exhausted():
+            llm_mode = "rate-limited"
+        refs = [r["safe"] for r in s.tenants.served() if r["reference"]]
         out = {"ok": True, "service": "aegis-api", "chainId": rt.settings.chain_id, "chainMode": rt.settings.chain_mode,
-               "agentMode": rt.workflow.agent.mode, "demo": rt.settings.demo_mode, "safes": s.safes,
-               "module": rt.settings.addresses.module, "inProcessWorkers": rt.in_process, "time": int(time.time())}
+               "agentMode": agent.mode, "llmMode": llm_mode, "demo": rt.settings.demo_mode,
+               "referenceSafe": refs[0] if refs else None, "tenantCount": s.tenants.activated_count(),
+               "onboardingOpen": onboarding.is_open(), "module": rt.settings.addresses.module,
+               "inProcessWorkers": rt.in_process, "time": int(time.time())}
+        out["keeper"] = {"paused": bool(s.db.kv_get(PAUSE_KEY, False)), "lastPoke": s.db.kv_get(LAST_POKE_KEY)}
         try:
             out["block"] = rt.chain.block_number()
+            out["blockLagSeconds"] = max(0, out["time"] - rt.chain.head_timestamp())
+            oracle = rt.chain.latest_round()
+            out["keeper"]["oracleUpdatedAt"] = oracle.updated_at
+            out["keeper"]["oracleAgeSeconds"] = max(0, rt.chain.block_timestamp() - oracle.updated_at)
             out["chain"] = "ok"
         except Exception as e:
             out["ok"] = False
@@ -178,11 +226,15 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
     def list_obligations(safe: str | None = None, sess: Session = Depends(session_dep)):
         target = resolve_safe(sess, safe)
         snap = snap_for(target)
-        return {"obligations": [obligation_json(o) for o in s.obligations.list(target)],
-                "reserve": {"required": amount(snap.reserve.required), "buffer": amount(snap.reserve.buffer),
-                            "peakNetOutflow": amount(snap.reserve.peak_net_outflow),
-                            "onchainFloor": amount(snap.state.policy.reserve_floor), "inSync": snap.plan.in_sync,
-                            "scheduleHash": snap.reserve.schedule_hash}}
+        out = {"obligations": [obligation_json(o) for o in s.obligations.list(target)],
+               "reserve": {"required": amount(snap.reserve.required), "buffer": amount(snap.reserve.buffer),
+                           "peakNetOutflow": amount(snap.reserve.peak_net_outflow),
+                           "onchainFloor": amount(snap.state.policy.reserve_floor), "inSync": snap.plan.in_sync,
+                           "scheduleHash": snap.reserve.schedule_hash}}
+        if sess.role == "owner":
+            out["floorUpdate"] = floor_update(rt.chain, target, s.obligations.list(target, False),
+                                              rt.chain.block_timestamp(), rt.settings.params)
+        return out
 
     @app.post("/api/obligations")
     def add_obligation(body: ObligationBody, sess: Session = Depends(owner_dep)):
@@ -231,7 +283,11 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
 
     @app.post("/api/agent/chat")
     def chat(body: ChatBody, sess: Session = Depends(owner_dep)):
-        return rt.workflow.chat(sess, body.message, body.requestId)
+        lim = rt.settings.limits
+        if not s.limiter.hit("chat", sess.safe.lower(), lim.chat_per_tenant, lim.chat_window):
+            raise WorkflowError(429, "RateLimited", f"at most {lim.chat_per_tenant} chat messages per "
+                                                    f"{lim.chat_window // 60} minutes per treasury")
+        return rt.workflow.chat(sess, body.message[:4000], body.requestId)
 
     @app.get("/api/requests/{request_id}")
     def get_request(request_id: str, sess: Session = Depends(session_dep)):
@@ -257,10 +313,12 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
     def ledger(safe: str | None = None, limit: int = Query(200, le=2000), sess: Session = Depends(session_dep)):
         target = resolve_safe(sess, safe) if (sess.role == "owner" or safe) else None
         rows = s.ledger.rows(target, limit=limit)
+        allowed = visible_safes(sess)
         if target is None and sess.role == "bank":
-            allowed = {x.lower() for x in bank_safes(sess)}
             rows = [r for r in rows if r["safe"] in allowed or r["safe"] is None]
-        return {"rows": rows, "integrity": s.ledger.verify()}
+        integrity = s.ledger.verify()
+        broken = [b for b in integrity["broken"] if b["safe"] in allowed or b["safe"] is None]
+        return {"rows": rows, "integrity": {"ok": integrity["ok"], "rows": len(rows), "broken": broken}}
 
     @app.get("/api/events")
     def events(safe: str | None = None, sess: Session = Depends(session_dep)):
@@ -311,13 +369,55 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
             })
         return {"clients": clients}
 
+    @app.get("/api/market")
+    def market():
+        return market_state(rt)
+
     @app.post("/api/demo/scenario")
-    def scenario(body: ScenarioBody, sess: Session = Depends(session_dep)):
-        if not (rt.settings.demo_mode and rt.settings.is_local_chain):
-            raise WorkflowError(403, "DemoDisabled", "scenarios run only on chain 31337 with DEMO_MODE")
+    def scenario(body: ScenarioBody, request: Request, x_aegis_session: str | None = Header(default=None),
+                 x_aegis_admin: str | None = Header(default=None)):
         if body.name not in SCENARIOS:
             raise WorkflowError(400, "UnknownScenario", f"one of {SCENARIOS}")
-        return run_scenario(rt, sess, body.name, resolve_safe(sess, None))
+        token = rt.settings.admin_token
+        admin = bool(token) and hmac.compare_digest((x_aegis_admin or "").encode(), token.encode())
+        sess = rt.sessions.get(x_aegis_session or request.cookies.get("aegis_session"))
+        local_demo = rt.settings.demo_mode and rt.settings.is_local_chain
+        if body.name in MARKET_SCENARIOS:
+            if not admin and not local_demo:
+                raise WorkflowError(403, "AdminRequired", "market scenarios move shared contracts; send X-Aegis-Admin")
+        elif not local_demo:
+            raise WorkflowError(403, "DemoDisabled", "use POST /api/obligations on this chain")
+        if sess is None and not admin:
+            raise WorkflowError(401, "SessionRequired", "POST /api/session first and send X-Aegis-Session")
+        try:
+            cap = parse_raw(body.cap) if body.cap is not None else None
+        except (TypeError, ValueError) as e:
+            raise WorkflowError(400, "BadCap", str(e)) from None
+        safe = resolve_safe(sess, None) if sess else None
+        try:
+            return run_scenario(rt, body.name, safe, sess.role if sess else "admin", body.vault, cap)
+        except RuntimeError as e:
+            raise WorkflowError(503, "AdminKeyMissing", str(e)) from None
+
+    @app.get("/api/onboard/config")
+    def onboard_config():
+        return onboarding.config()
+
+    @app.post("/api/onboard/fund")
+    def onboard_fund(body: FundBody, request: Request):
+        return onboarding.fund(body.owner, body.bank, body.issuedAt, body.signature, client_ip(request))
+
+    @app.get("/api/onboard/status")
+    def onboard_status(owner: str, request: Request):
+        return onboarding.status(owner, client_ip(request))
+
+    @app.post("/api/onboard/activate")
+    def onboard_activate(body: ActivateBody, request: Request):
+        return onboarding.activate(body.safe, body.owner, body.issuedAt, body.signature, client_ip(request))
+
+    @app.post("/api/tenant/attack")
+    def tenant_attack(body: AttackBody, sess: Session = Depends(owner_dep)):
+        return attacks.run(sess.safe, body.kind)
 
     @app.post("/api/demo/fake/apply-floor")
     def fake_apply_floor(sess: Session = Depends(owner_dep)):
@@ -346,9 +446,7 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
         sess = rt.sessions.get(token)
         if sess is None:
             raise WorkflowError(401, "SessionRequired")
-        scope = sess.safe if sess.role == "owner" else None
-        sid, queue = s.bus.subscribe(scope)
-        allowed = {x.lower() for x in bank_safes(sess)} if sess.role == "bank" else None
+        sid, queue = s.bus.subscribe(visible_safes(sess))
 
         async def gen():
             try:
@@ -361,8 +459,6 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
                     except TimeoutError:
                         yield ": keepalive\n\n"
                         continue
-                    if allowed is not None and ev.get("safe") and str(ev["safe"]).lower() not in allowed:
-                        continue
                     yield f"event: {ev.get('type', 'message')}\ndata: {json.dumps(ev, default=str)}\n\n"
             finally:
                 s.bus.unsubscribe(sid)
@@ -371,48 +467,4 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     return app
-
-
-def run_scenario(rt: Runtime, sess: Session, name: str, safe: str) -> dict:
-    s = rt.services
-    chain = rt.chain
-    admin = load_key("admin", rt.settings.chain_id)
-    result: dict = {"scenario": name, "safe": safe}
-    if name == "depeg":
-        result["tx"] = chain.admin_set_price(admin, 98_500_000)
-        result["price"] = price(98_500_000)
-    elif name == "liquidity":
-        snap = s.snapshot(safe)
-        held = [v for v in snap.state.vaults if v.shares] or snap.state.vaults[:1]
-        v = max(held, key=lambda x: x.assets)
-        cap = v.assets // 2
-        result["tx"] = chain.admin_set_liquidity_cap(admin, v.address, cap)
-        result["vault"] = {"address": v.address, "name": v.label, "liquidityCap": amount(cap),
-                           "position": amount(v.assets)}
-    elif name == "stale":
-        s.db.kv_set(PAUSE_KEY, True)
-        limit = s.chain.policy(safe, []).max_oracle_age or rt.settings.params.default_max_oracle_age
-        chain.admin_increase_time(limit + 10)
-        result["keeperPaused"] = True
-        result["advancedSeconds"] = limit + 10
-    elif name == "obligation":
-        now = chain.block_timestamp()
-        ob = s.obligations.add(safe, "Supplier invoice (scenario)", 2000 * USDC, now + 7 * 86400)
-        upd = floor_update(chain, safe, s.obligations.list(safe, False), now, rt.settings.params)
-        s.ledger.append("OBLIGATION_ADDED", safe, {"obligation": obligation_json(ob), "floorUpdate": upd,
-                                                   "scenario": True})
-        result["obligation"] = obligation_json(ob)
-        result["floorUpdate"] = upd
-    elif name == "restore":
-        txs = [chain.admin_set_price(admin, PRICE_ONE)]
-        for v in rt.settings.addresses.vaults:
-            txs.append(chain.admin_set_liquidity_cap(admin, v.address, UINT256_MAX))
-        s.db.kv_set(PAUSE_KEY, False)
-        txs.append(chain.poke(admin))
-        result["txs"] = txs
-        result["note"] = "Quarantine stays until the owner clears it after the 24 h cooldown."
-    s.ledger.append("DEMO_SCENARIO", safe, {"scenario": name, "by": sess.role,
-                                            **{k: v for k, v in result.items() if k not in ("safe",)}})
-    s.bus.publish({"type": "scenario", "safe": safe, "name": name})
-    return result
 

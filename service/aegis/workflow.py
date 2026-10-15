@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import threading
 import time
@@ -72,11 +73,12 @@ CLARIFICATION_WINDOW = 30 * 60
 
 
 class WorkflowError(Exception):
-    def __init__(self, status: int, code: str, detail: str = ""):
+    def __init__(self, status: int, code: str, detail: str = "", extra: dict | None = None):
         super().__init__(f"{code}: {detail}")
         self.status = status
         self.code = code
         self.detail = detail
+        self.extra = extra or {}
 
 
 @dataclass
@@ -85,6 +87,17 @@ class Session:
     role: str
     address: str
     safe: str | None
+
+
+def llm_scope(fn):
+    """Runs a user-facing workflow call as one agent request (one LLM budget check, one fallback notice)."""
+
+    @functools.wraps(fn)
+    def wrapper(self: "Workflow", session: Session, *args, **kwargs):
+        with self.agent.request(session.safe or session.address):
+            return fn(self, session, *args, **kwargs)
+
+    return wrapper
 
 
 class RequestStore:
@@ -232,6 +245,11 @@ class Workflow:
         d = rec["data"]
         out = {"reply": d.get("reply", ""), "requestId": rec["id"], "state": rec["state"],
                "mode": self.agent.mode}
+        notice = self.agent.notice()
+        if notice:
+            out["reply"] = f"{out['reply']}\n{notice}" if out["reply"] else notice
+            out["mode"] = "deterministic"
+            out["llmFallback"] = self.agent.fallback()
         if d.get("actionCard") and rec["state"] not in TERMINAL:
             out["actionCard"] = d["actionCard"]
         elif d.get("actionCard") and d.get("outcome") in ("CONFIRMED", "REVERTED", "SUBMITTED"):
@@ -243,6 +261,7 @@ class Workflow:
         return out
 
 
+    @llm_scope
     def chat(self, session: Session, message: str, request_id: str | None = None) -> dict:
         if session.role != "owner" or not session.safe:
             raise WorkflowError(403, "Forbidden", "chat requires an owner session bound to a Safe")
@@ -586,6 +605,7 @@ class Workflow:
         self._apply_selection(rec, intent, snap, tools, selection)
 
 
+    @llm_scope
     def approve(self, session: Session, request_id: str, signature: str, approval_json: dict) -> dict:
         rec = self.store.get(request_id)
         if rec is None:
@@ -634,6 +654,7 @@ class Workflow:
             self._finalize(rec, I.Intent.from_json(rec["data"]["intent"]))
             return self._response(rec)
 
+    @llm_scope
     def deny(self, session: Session, request_id: str, reason: str) -> dict:
         rec = self.store.get(request_id)
         if rec is None:
@@ -651,6 +672,7 @@ class Workflow:
                          {"action": _action(card), "deniedBy": session.role})
             return self._response(rec)
 
+    @llm_scope
     def correct(self, session: Session, request_id: str, message: str) -> dict:
         rec = self.store.get(request_id)
         if rec is None:

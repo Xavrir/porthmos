@@ -116,7 +116,7 @@ export default function Copilot() {
           <div className="band-figures">
             <Figure label="Waiting for you" value={pending.data ? String(pending.data.length) : '…'} note={pending.data?.[0] ? `${pending.data[0].actionCard.amount.display} into ${pending.data[0].actionCard.vault.name}` : 'No approvals due'} />
             <Figure label="Last state" value={latest ? sentenceCase(latest) : '…'} />
-            <Figure label="Agent" value={health?.llm === 'deterministic' || mode === 'replay' ? 'Deterministic' : (health?.llm ?? 'Model')} note="No safety property depends on the model" />
+            <Figure label="Agent" value={mode === 'replay' || /determin/i.test(health?.llm ?? health?.llmMode ?? health?.agentMode ?? '') ? 'Deterministic' : (health?.llm ?? health?.llmMode ?? health?.agentMode ?? 'Model')} note="No safety property depends on the model" />
           </div>
         </div>
       </section>

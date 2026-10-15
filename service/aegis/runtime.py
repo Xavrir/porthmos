@@ -10,7 +10,7 @@ import httpx
 from eth_account import Account
 
 from aegis.agent.agent import Agent
-from aegis.agent.llm import LlmClient
+from aegis.agent.llm import LlmClient, LlmGate
 from aegis.chain.base import ChainClient
 from aegis.config import ANVIL_KEYS, USDC, Settings, load_key, load_settings
 from aegis.core.reserve import required_reserve
@@ -82,9 +82,11 @@ class Runtime:
         chain = chain or make_chain(settings)
         services = Services.create(settings, chain, db)
         if agent is None:
-            llm = LlmClient(settings.llm_base_url, settings.llm_model, settings.llm_api_key) \
-                if settings.llm_enabled else None
+            llm = LlmClient(settings.llm_base_url, settings.llm_model, settings.llm_api_key,
+                            timeout=settings.llm_timeout) if settings.llm_enabled else None
             agent = Agent(llm)
+        if agent.gate is None:
+            agent.gate = LlmGate(services.limiter, settings.limits.llm_per_hour, settings.limits.llm_per_tenant_hour)
         in_process = settings.in_process_workers
         if authorizer is None:
             if in_process:
@@ -92,7 +94,8 @@ class Runtime:
 
                 authorizer = Authorizer(settings, chain, load_key("authorizer", settings.chain_id),
                                         Database(settings.db_path.replace(".db", "-authorizer.db"))
-                                        if settings.db_path != ":memory:" else Database(":memory:"))
+                                        if settings.db_path != ":memory:" else Database(":memory:"),
+                                        services.tenants)
             else:
                 from aegis.procs.authorizer import HttpAuthorizerClient
 
@@ -122,6 +125,10 @@ class Runtime:
         return False
 
     def tick(self) -> None:
+        with self.workflow.agent.request(None):
+            self._tick()
+
+    def _tick(self) -> None:
         if self.settings.chain_mode == "fake" and self._every("mine", 2):
             self.chain.follow_wall_clock()
         if self.executor is not None:
@@ -152,7 +159,11 @@ class Runtime:
                              "txHash": sub["tx_hash"], "darHash": sub["dar_hash"], "result": sub["result"]})
 
     def refresh_risk(self) -> None:
+        """Only Safes with an open SSE stream: a full snapshot per tenant every 10 s would not scale to 300."""
+        watched = self.services.bus.watched_safes()
         for safe in self.services.safes:
+            if safe.lower() not in watched:
+                continue
             snap = self.services.snapshot(safe)
             self.services.record_triggers(safe, snap.risk, at=snap.state.timestamp)
             for v in snap.state.vaults:

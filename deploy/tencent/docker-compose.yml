@@ -1,0 +1,54 @@
+# AEGIS Treasury API on the Tencent CVM. Run from this directory: docker compose up -d --build
+# The host's existing Caddy terminates TLS for aegis-api.150-109-23-187.sslip.io and proxies to 127.0.0.1:8787.
+name: aegis
+
+services:
+  aegis:
+    build:
+      context: ../..
+      dockerfile: deploy/tencent/Dockerfile
+    image: aegis-treasury:latest
+    init: true
+    restart: unless-stopped
+    env_file: aegis.env
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - aegis-data:/data
+    mem_limit: 512m
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    depends_on:
+      cliproxy:
+        condition: service_started
+        required: false
+    networks: [aegis]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  # OpenAI-compatible proxy for the agent's LLM calls (model claude-haiku-5-5). No published port:
+  # only the aegis container reaches it, at http://cliproxy:8317/v1.
+  cliproxy:
+    image: eceasy/cli-proxy-api:v8.0.29
+    restart: unless-stopped
+    volumes:
+      - ./cliproxy/config.yaml:/CLIProxyAPI/config.yaml:ro
+      - cliproxy-auth:/root/.cli-proxy-api
+    mem_limit: 128m
+    networks: [aegis]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+networks:
+  aegis: {}
+
+volumes:
+  aegis-data: {}
+  cliproxy-auth: {}

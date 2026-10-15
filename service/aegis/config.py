@@ -79,6 +79,10 @@ class Params:
     max_replans: int = 3
 
 
+CANONICAL_FALLBACK_HANDLER = "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99"
+DEFAULT_ORIGINS = "https://aegis-treasury-eta.vercel.app,http://localhost:5173,http://localhost:4173"
+
+
 @dataclass
 class Addresses:
     usdc: str = "0x" + "0" * 40
@@ -89,6 +93,40 @@ class Addresses:
     vaults: list[VaultMeta] = field(default_factory=list)
     roles: dict[str, str] = field(default_factory=dict)
     deploy_block: int = 0
+    safe_singleton: str = ""
+    safe_proxy_factory: str = ""
+    fallback_handler: str = CANONICAL_FALLBACK_HANDLER
+
+
+@dataclass
+class TenantParams:
+    """Onboarding values served by GET /api/onboard/config (docs/MULTI-TENANT.md)."""
+
+    auto_cap: int = 1_000 * USDC
+    daily_cap: int = 5_000 * USDC
+    bank_limit: int = 3_000 * USDC
+    max_band_width: int = 2_000_000
+    max_oracle_age: int = 180
+    auto_cap_max: int = 10_000 * USDC
+    daily_cap_max: int = 50_000 * USDC
+    bank_limit_max: int = 50_000 * USDC
+    max_band_width_max: int = 5_000_000
+    max_oracle_age_max: int = 3600
+    eth_owner: int = 50_000_000_000_000
+    eth_bank: int = 20_000_000_000_000
+    test_usdc: int = 100_000 * USDC
+
+
+@dataclass
+class Limits:
+    onboard_per_ip_day: int = 3
+    max_tenants: int = 300
+    faucet_wei_per_day: int = 3_000_000_000_000_000
+    chat_per_tenant: int = 20
+    chat_window: int = 600
+    llm_per_hour: int = 300
+    llm_per_tenant_hour: int = 60
+    attacks_per_tenant_hour: int = 6
 
 
 @dataclass
@@ -113,6 +151,17 @@ class Settings:
     require_session_sig: bool
     executor_withhold_exits: bool
     in_process_workers: bool
+    tenant: TenantParams = field(default_factory=TenantParams)
+    limits: Limits = field(default_factory=Limits)
+    allowed_origins: list[str] = field(default_factory=lambda: DEFAULT_ORIGINS.split(","))
+    admin_token: str = ""
+    onboarding_open: bool = True
+    public_rpc_url: str = ""
+    explorer: str = ""
+    llm_timeout: float = 20.0
+    trust_proxy: bool = False
+    ip_salt: str = ""
+    tenant_refresh: float = 3.0
 
     @property
     def llm_enabled(self) -> bool:
@@ -130,12 +179,15 @@ class Settings:
 
 
 KEY_ENV = {
-    "authorizer": "AUTHORIZER_KEY",
-    "exitKey": "EXIT_KEY",
-    "executor": "EXECUTOR_KEY",
-    "keeper": "KEEPER_KEY",
-    "admin": "ADMIN_KEY",
+    "authorizer": ("AUTHORIZER_KEY",),
+    "exitKey": ("EXIT_KEY",),
+    "executor": ("EXECUTOR_KEY",),
+    "keeper": ("KEEPER_KEY",),
+    "admin": ("ADMIN_KEY", "DEPLOYER_KEY"),
+    "faucet": ("DEPLOYER_KEY",),
+    "attacker": ("ATTACKER_KEY",),
 }
+ANVIL_FALLBACK = {"faucet": "admin"}
 
 
 def load_key(role: str, chain_id: int) -> str:
@@ -143,12 +195,17 @@ def load_key(role: str, chain_id: int) -> str:
 
     Public Anvil keys are a fallback on chain 31337 only.
     """
-    value = _env(KEY_ENV[role])
-    if value is None and chain_id == 31337:
-        return ANVIL_KEYS[role]
-    if value is None:
-        raise RuntimeError(f"{KEY_ENV[role]} is not set")
-    return value
+    for name in KEY_ENV[role]:
+        value = _env(name)
+        if value is not None:
+            return value
+    if chain_id == 31337:
+        return ANVIL_KEYS[ANVIL_FALLBACK.get(role, role)]
+    raise RuntimeError(f"{' or '.join(KEY_ENV[role])} is not set")
+
+
+def has_key(role: str, chain_id: int) -> bool:
+    return chain_id == 31337 or any(_env(name) for name in KEY_ENV[role])
 
 
 def load_deployments(path: Path) -> dict | None:
@@ -179,7 +236,48 @@ def addresses_from_deployments(dep: dict) -> Addresses:
         vaults=vaults,
         roles=dict(dep.get("roles", {})),
         deploy_block=int(_env("DEPLOY_BLOCK") or dep.get("deployBlock", 0) or 0),
+        safe_singleton=dep.get("safeSingleton", ""),
+        safe_proxy_factory=dep.get("safeProxyFactory", ""),
+        fallback_handler=dep.get("fallbackHandler") or CANONICAL_FALLBACK_HANDLER,
     )
+
+
+def load_tenant_params(local: bool) -> TenantParams:
+    d = TenantParams()
+    return TenantParams(
+        auto_cap=_env_int("TENANT_AUTO_CAP", d.auto_cap),
+        daily_cap=_env_int("TENANT_DAILY_CAP", d.daily_cap),
+        bank_limit=_env_int("TENANT_BANK_LIMIT", d.bank_limit),
+        max_band_width=_env_int("TENANT_MAX_BAND_WIDTH", d.max_band_width),
+        max_oracle_age=_env_int("TENANT_MAX_ORACLE_AGE", d.max_oracle_age),
+        auto_cap_max=_env_int("TENANT_AUTO_CAP_MAX", d.auto_cap_max),
+        daily_cap_max=_env_int("TENANT_DAILY_CAP_MAX", d.daily_cap_max),
+        bank_limit_max=_env_int("TENANT_BANK_LIMIT_MAX", d.bank_limit_max),
+        max_band_width_max=_env_int("TENANT_MAX_BAND_WIDTH_MAX", d.max_band_width_max),
+        max_oracle_age_max=_env_int("TENANT_MAX_ORACLE_AGE_MAX", d.max_oracle_age_max),
+        # Anvil charges gwei-level gas, so the testnet drip sizes would not cover the onboarding transactions there.
+        eth_owner=_env_int("FAUCET_ETH_OWNER", 10**18 if local else d.eth_owner),
+        eth_bank=_env_int("FAUCET_ETH_BANK", 10**17 if local else d.eth_bank),
+        test_usdc=_env_int("TEST_USDC_MINT", d.test_usdc),
+    )
+
+
+def load_limits(local: bool) -> Limits:
+    d = Limits()
+    return Limits(
+        onboard_per_ip_day=_env_int("LIMIT_ONBOARD_PER_IP_DAY", d.onboard_per_ip_day),
+        max_tenants=_env_int("LIMIT_MAX_TENANTS", d.max_tenants),
+        faucet_wei_per_day=_env_int("LIMIT_FAUCET_WEI_PER_DAY", 100 * 10**18 if local else d.faucet_wei_per_day),
+        chat_per_tenant=_env_int("LIMIT_CHAT_PER_TENANT", d.chat_per_tenant),
+        chat_window=_env_int("LIMIT_CHAT_WINDOW", d.chat_window),
+        llm_per_hour=_env_int("LIMIT_LLM_PER_HOUR", d.llm_per_hour),
+        llm_per_tenant_hour=_env_int("LIMIT_LLM_PER_TENANT_HOUR", d.llm_per_tenant_hour),
+        attacks_per_tenant_hour=_env_int("LIMIT_ATTACKS_PER_TENANT_HOUR", d.attacks_per_tenant_hour),
+    )
+
+
+DEFAULT_PUBLIC_RPC = {84532: "https://sepolia.base.org"}
+DEFAULT_EXPLORER = {84532: "https://sepolia.basescan.org"}
 
 
 def load_settings(**overrides) -> Settings:
@@ -212,7 +310,20 @@ def load_settings(**overrides) -> Settings:
         require_session_sig=_env_bool("REQUIRE_SESSION_SIG", not local),
         executor_withhold_exits=_env_bool("EXECUTOR_WITHHOLD_EXITS", False),
         in_process_workers=_env_bool("AEGIS_IN_PROCESS_WORKERS", chain_mode == "fake"),
+        tenant=load_tenant_params(local),
+        limits=load_limits(local),
+        allowed_origins=[o.strip() for o in (_env("ALLOWED_ORIGINS", DEFAULT_ORIGINS) or "").split(",") if o.strip()],
+        admin_token=_env("ADMIN_TOKEN", "") or "",
+        onboarding_open=_env_bool("ONBOARDING_OPEN", True),
+        public_rpc_url=_env("PUBLIC_RPC_URL", DEFAULT_PUBLIC_RPC.get(chain_id)) or "",
+        explorer=_env("EXPLORER_URL", DEFAULT_EXPLORER.get(chain_id, "")) or "",
+        llm_timeout=_env_float("LLM_TIMEOUT", 20.0),
+        trust_proxy=_env_bool("TRUST_PROXY", False),
+        ip_salt=_env("IP_HASH_SALT", "") or "",
+        tenant_refresh=_env_float("TENANT_REFRESH_SECONDS", 3.0),
     )
+    if not settings.public_rpc_url and local:
+        settings.public_rpc_url = settings.rpc_url
     for k, v in overrides.items():
         setattr(settings, k, v)
     return settings

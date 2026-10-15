@@ -46,6 +46,19 @@ CREATE TABLE IF NOT EXISTS alerts (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, safe TEXT, vault TEXT, level TEXT NOT NULL,
   code TEXT NOT NULL, message TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS tenants (
+  safe TEXT PRIMARY KEY, owner TEXT NOT NULL, bank TEXT NOT NULL, created_at REAL NOT NULL, activated_at REAL,
+  mint_tx TEXT, ip_hash TEXT, reference INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS tenants_owner ON tenants(owner);
+CREATE INDEX IF NOT EXISTS tenants_bank ON tenants(bank);
+CREATE TABLE IF NOT EXISTS faucet_drips (
+  address TEXT PRIMARY KEY, amount TEXT NOT NULL, tx_hash TEXT, at REAL NOT NULL, day INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS rate_events (
+  bucket TEXT NOT NULL, key TEXT NOT NULL, at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rate_events_key ON rate_events(bucket, key, at);
 CREATE TABLE IF NOT EXISTS signed_dars (
   dar_hash TEXT PRIMARY KEY, request_id TEXT, safe TEXT NOT NULL, nonce TEXT NOT NULL, signed_at REAL NOT NULL,
   dar TEXT NOT NULL

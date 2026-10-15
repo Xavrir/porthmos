@@ -32,17 +32,41 @@ from aegis.eip712 import (
     to_bytes32,
 )
 from aegis.errors import AuthorizerRefused
+from aegis.tenants import TenantStore
 
 CLOCK_SKEW = 15
+INERT_MIN_AGE = 3600
 
 
 class Authorizer:
-    def __init__(self, settings: Settings, chain: ChainClient, key: str, db: Database):
+    def __init__(self, settings: Settings, chain: ChainClient, key: str, db: Database, tenants: TenantStore):
         self.settings = settings
         self.chain = chain
         self._key = key
         self.address = Account.from_key(key).address
         self.db = db
+        self.tenants = tenants
+
+    def sign_inert(self, payload: dict) -> dict:
+        """Signs a deposit DAR whose expiry is at least an hour in the past, for the per-tenant tampering
+        demonstration. Chain time only moves forward, so the signed DAR can never execute: submitted as signed it
+        reverts Expired, and with any field changed the signer check fails first (BadSignature)."""
+        try:
+            dar = DAR.from_json(payload["dar"])
+        except (KeyError, TypeError, ValueError) as e:
+            raise AuthorizerRefused(f"MalformedRequest: {e}") from None
+        if dar.safe.lower() not in {x.lower() for x in self.tenants.safes()}:
+            raise AuthorizerRefused("UnknownSafe")
+        if dar.op != OP_DEPOSIT:
+            raise AuthorizerRefused("WrongOp")
+        if dar.expiry + INERT_MIN_AGE > self.chain.head_timestamp():
+            raise AuthorizerRefused("NotInert")
+        digest = dar_digest(self.settings.chain_id, self.settings.addresses.module, dar)
+        dar_hash = hex32(digest)
+        self.db.execute("INSERT OR IGNORE INTO signed_dars(dar_hash, request_id, safe, nonce, signed_at, dar) VALUES "
+                        "(?, ?, ?, ?, ?, ?)", (dar_hash, "inert", dar.safe.lower(), str(dar.nonce), time.time(),
+                                               str(payload["dar"])))
+        return {"signature": sign_digest(self._key, digest), "darHash": dar_hash, "signer": self.address}
 
     def sign(self, payload: dict) -> dict:
         try:
@@ -57,7 +81,7 @@ class Authorizer:
         dar = DAR.from_json(payload["dar"])
         approval = Approval.from_json(payload["approval"]) if payload.get("approval") else None
         sigs = payload.get("approvalSignatures") or {}
-        known = {x.lower() for x in s.addresses.safes}
+        known = {x.lower() for x in self.tenants.safes()}
         if dar.safe.lower() not in known or dar.safe.lower() != str(payload.get("safe", "")).lower():
             raise AuthorizerRefused("UnknownSafe")
         claimed = payload.get("serviceResults") or {}
@@ -163,8 +187,14 @@ class HttpAuthorizerClient:
         return self._address
 
     def sign(self, payload: dict) -> dict:
+        return self._post("/sign", payload)
+
+    def sign_inert(self, payload: dict) -> dict:
+        return self._post("/sign-inert", payload)
+
+    def _post(self, path: str, payload: dict) -> dict:
         try:
-            r = httpx.post(f"{self.url}/sign", json=payload, headers={"X-Aegis-Internal": self.token}, timeout=30)
+            r = httpx.post(f"{self.url}{path}", json=payload, headers={"X-Aegis-Internal": self.token}, timeout=30)
         except httpx.HTTPError as e:
             raise AuthorizerRefused(f"AuthorizerUnavailable: {e}") from None
         if r.status_code == 409:
@@ -191,6 +221,14 @@ def create_app(authorizer: Authorizer, token: str) -> FastAPI:
         guard(x_aegis_internal)
         try:
             return authorizer.sign(body)
+        except AuthorizerRefused as e:
+            raise HTTPException(409, str(e)) from None
+
+    @app.post("/sign-inert")
+    def sign_inert(body: dict, x_aegis_internal: str | None = Header(default=None)):
+        guard(x_aegis_internal)
+        try:
+            return authorizer.sign_inert(body)
         except AuthorizerRefused as e:
             raise HTTPException(409, str(e)) from None
 

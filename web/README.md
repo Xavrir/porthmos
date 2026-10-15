@@ -88,6 +88,23 @@ Replay keeps its scenario state for the browser tab: every change (a freeze, an 
 
 The landing hero rail and the chain strip under it share one source: when Base Sepolia answers, the rail shows the chain's values (Safe plus vault positions, reserve floor, freezes, policy version, price) and says "Base Sepolia now"; the Copilot and Audit swatches have no chain equivalent and say "Replay". When the RPC fails, the strip heading reads "Base Sepolia unreachable, showing replay" and every swatch says "Replay".
 
+## Your own treasury (multi-tenant, docs/MULTI-TENANT.md)
+
+`/start` creates a visitor's own treasury. Two burner keys (owner and bank) are made with viem and kept in `localStorage["aegis.wallet.v1"]` in the spec shape; "Download keys" and "Import keys" move them between browsers, and the page says plainly that they are test keys. "Use my own wallet" makes an injected wallet the owner (it switches the wallet to the service chain); the bank is always a burner. Every parameter comes from `GET /api/onboard/config`.
+
+The stepper (`src/lib/onboard/runner.ts`) runs the spec steps in order: fund (owner signs the onboarding message), `createProxyWithNonce` at the predicted address (`saltNonce = keccak256(owner, "aegis-v2")`, CREATE2 over the factory's `proxyCreationCode`), `enableModule` through `execTransaction` with the pre-validated signature, the nine registry calls, the bank's `setBankLimit`, then activation (owner signs the session message). Before each step it reads the chain and skips what is done, so a reload or a retry never sends a step twice; `GET /api/onboard/status` restores the stepper. Receipts are polled with backoff because public RPC nodes lag. An injected wallet that reports atomic EIP-5792 support gets the ten owner calls as one `wallet_sendCalls` batch; otherwise it confirms them one by one ("n of 10").
+
+Mode: when the service answers and this browser holds an activated treasury, the app pages run live for it. Otherwise they replay the reference treasury under a banner that says why (no treasury yet, setup unfinished, service down). The seat chooser offers "Owner seat" and "Bank seat" of your treasury and "Just look (replay)"; without a treasury the seats send you to `/start`. A seat signs the session message with the local key after an in-page confirm that shows the message; approvals, floor updates and bank actions show a "You are signing" confirm too. Bank actions (freeze, unfreeze, revoke, remove a vault, lower a cap) go from the bank key straight to the registry with a transaction link. The Risk page adds "Try to break it" (`POST /api/tenant/attack`, tampered and replay) and a guided freeze path. An active market event (`GET /api/market`) shows a banner on every app page.
+
+Service responses are mapped onto the web types in `src/lib/api/normalize.ts` (request ids and transition history, ledger rows, events, pending approvals, risk, bank clients).
+
+```bash
+npm test                 # vitest: messages, saltNonce, Safe address vector, key file round trip, runner order and resume, service shapes
+npm run mock:chain       # dev only: deploy the contracts to an Anvil on MOCK_RPC (default http://127.0.0.1:8555), unlocked accounts only
+npm run mock:api         # dev only: a stand-in service on :8790 over that chain (MOCK_FAUCET_EMPTY=1, MOCK_CLOSED=1 to test errors)
+AEGIS_API_TARGET=http://localhost:8790 VITE_TARGET_CHAIN_ID=84532 npx vite --port 5180
+```
+
 ## Seats and sign-in
 
 There is no password. The first visit to an app page (and the hero's "Try it as owner or bank") opens a seat chooser: "Business owner", "Bank risk officer", "Just look (read-only)". The header shows the seat and the mode side by side ("Viewing as: Owner ▾" and "Replay"), and a page that needs another seat shows an inline "Switch to …" (Bank desk gate, Copilot chat, the approval panel, owner-only Treasury actions).

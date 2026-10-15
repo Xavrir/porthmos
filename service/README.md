@@ -9,14 +9,15 @@ it talks to is `docs/INTERFACES.md` sections 1.4 to 1.6; the API it serves is se
 
 | Process | Command | Key it loads | Role |
 |---|---|---|---|
-| `api` | `python -m aegis api` (port 8787) | none (`ADMIN_KEY` only for demo scenarios on 31337) | FastAPI, agent, deterministic core, workflow, ledger, SSE |
+| `api` | `python -m aegis api` (port 8787) | `DEPLOYER_KEY` (faucet, test USDC mint), `ADMIN_KEY` (market scenarios; falls back to `DEPLOYER_KEY`), `ATTACKER_KEY` (per-tenant refused attacks) | FastAPI, agent, deterministic core, workflow, ledger, SSE, onboarding |
 | `authorizer` | `python -m aegis authorizer` (127.0.0.1:8788, internal token) | `AUTHORIZER_KEY` | Re-verifies every DAR independently, then signs |
 | `exit_agent` | `python -m aegis exit_agent` | `EXIT_KEY` | Triggers, quarantine, redeem-only DARs, self-submit fallback |
 | `executor` | `python -m aegis executor` | `EXECUTOR_KEY` | Relays signed DARs, pays gas, no authority |
 | `keeper` | `python -m aegis keeper` | `KEEPER_KEY` | `poke()` every 60 s (test infrastructure) |
 
 Each process reads only its own key at the point of use (`config.load_key`), and `scripts/dev.sh` also unsets
-the other keys in each process environment. The LLM path holds no key. The processes share one SQLite file
+the other keys in each process environment. `python -m aegis all` (`aegis/supervisor.py`, used by the container in
+`deploy/tencent/`) starts the five processes the same way, restarts one that exits, and forwards SIGTERM. The LLM path holds no key. The processes share one SQLite file
 (WAL): workflow records, the hash-chained ledger and the submission queue. The Authorizer keeps its own
 `*-authorizer.db` of signed nonces.
 
@@ -41,7 +42,10 @@ blocks (it also has a wall-clock fallback for automine Anvil).
 
 Environment: `RPC_URL`, `CHAIN_ID`, `DEPLOYMENTS_PATH`, `CONTRACTS_OUT`, `AEGIS_DB`, `INTERNAL_TOKEN`,
 `DEMO_MODE`, `REQUIRE_SESSION_SIG`, `API_PORT`, `AUTHORIZER_URL`, `API_INTERNAL_URL`, `LLM_BASE_URL`,
-`LLM_API_KEY`, `LLM_MODEL`, `EXECUTOR_WITHHOLD_EXITS` (A9 demo), `VAULT_A_APY`, `VAULT_B_APY`.
+`LLM_API_KEY`, `LLM_MODEL`, `LLM_TIMEOUT`, `EXECUTOR_WITHHOLD_EXITS` (A9 demo), `VAULT_A_APY`, `VAULT_B_APY`.
+Multi-tenant (docs/MULTI-TENANT.md): `ALLOWED_ORIGINS`, `ADMIN_TOKEN`, `ONBOARDING_OPEN`, `PUBLIC_RPC_URL`,
+`EXPLORER_URL`, `TRUST_PROXY`, `IP_HASH_SALT`, `TENANT_*`, `FAUCET_ETH_*`, `TEST_USDC_MINT`, `LIMIT_*`,
+`AEGIS_LOG_DIR`, `API_ACCESS_LOG`. Every variable is documented in `deploy/tencent/aegis.env.example`.
 
 ABIs: loaded from `contracts/out/<Name>.sol/<Name>.json` when present; any entry missing there falls back to the
 hand-written minimal ABI in `aegis/chain/abi.py`.
@@ -75,6 +79,12 @@ attack phase with `ARGS="--phases attack --clear-quarantine"` once the 24 h cool
 | `aegis/procs/` | Authorizer, Exit Agent, Executor, Keeper |
 | `aegis/chain/rpc.py`, `aegis/chain/fake.py` | JSON-RPC client; in-memory chain mirroring the module rules for tests |
 | `aegis/eip712.py` | Approval and DAR typed data, digests, signing (domain `AegisModule` / `1`) |
+| `aegis/tenants.py` | Tenant table (reference Safe = tenant zero), cached reload shared by all processes |
+| `aegis/onboarding.py` | `/api/onboard/*`: config, faucet drip, resumable status, on-chain verification, one-time mint |
+| `aegis/attacks.py`, `aegis/market.py` | Per-tenant refused attacks; shared market state and scenarios |
+| `aegis/limits.py` | Sliding-window rate limits in SQLite |
+| `aegis/chain/safe.py` | Safe v1.4.1 setup, salt and CREATE2 address prediction for onboarding |
+| `aegis/supervisor.py` | `python -m aegis all` process supervisor |
 
 ## API
 
@@ -160,6 +170,7 @@ the Authorizer asked to sign, and the signed DAR gets one final `eth_call` befor
 | A8 | `tests/test_workflow.py::test_partial_exit_then_rest_a8`, `tests/integration/test_anvil.py` |
 | A9 | `tests/test_workflow.py::test_executor_withholds_exit_self_submit_a9`, `tests/integration/test_anvil.py` |
 | A10 | `tests/test_workflow.py::test_ledger_edit_shows_mismatch_a10` |
+| Multi-tenant | `tests/test_multitenant.py` (onboarding checks, mint once, isolation incl. SSE, limits, LLM fallback, market), `tests/integration/test_multitenant_anvil.py` (two tenants end to end on Anvil) |
 
 Unit tests run against `aegis/chain/fake.py`. `tests/integration/` (marker `integration`) runs against Anvil with
 the deployed contracts: T3 and T2 deposits, replayed and tampered DARs, partial exit with self-submit, depeg exit,

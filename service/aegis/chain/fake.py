@@ -121,6 +121,8 @@ class FakeChain(ChainClient):
         self.feed_address = to_checksum_address("0x" + "d4" * 20)
         self.keeper = addr_of("keeper")
         self.admin = addr_of("admin")
+        self.eth: dict[str, int] = {}
+        self.safe_accounts: dict[str, dict] = {}
 
     def add_vault(self, address: str, name: str) -> FakeVault:
         v = FakeVault(to_checksum_address(address), name)
@@ -194,6 +196,8 @@ class FakeChain(ChainClient):
             max_band_width=2_000_000, max_oracle_age=180, allowed={va.address.lower(), vb.address.lower()},
         )
         chain.mint(safe, safe_usdc)
+        chain.safe_accounts[safe.lower()] = {"owners": [addr_of("owner")], "threshold": 1,
+                                             "modules": {chain.module_address.lower()}}
         seed = to_checksum_address("0x" + "5e" * 20)
         for v in (va, vb):
             chain.mint(seed, 50_000 * USDC)
@@ -452,7 +456,7 @@ class FakeChain(ChainClient):
             self.logs.append(e)
         return tx
 
-    def submit_deposit(self, key, dar, auth_sig, owner_sig, bank_sig, approval) -> str:
+    def submit_deposit(self, key, dar, auth_sig, owner_sig, bank_sig, approval, gas=None) -> str:
         with self.lock:
             tx = self._txhash()
             try:
@@ -470,7 +474,7 @@ class FakeChain(ChainClient):
             event = self._executed(dar, tx, dar.amount, shares, tier)
             return self._finish(tx, 1, [event], None)
 
-    def submit_redeem(self, key, dar, sig) -> str:
+    def submit_redeem(self, key, dar, sig, gas=None) -> str:
         with self.lock:
             tx = self._txhash()
             try:
@@ -560,3 +564,55 @@ class FakeChain(ChainClient):
         with self.lock:
             self.now += seconds
             self.mine()
+
+    def head_timestamp(self) -> int:
+        return self.now
+
+    def eth_balance(self, who: str) -> int:
+        return self.eth.get(who.lower(), 0)
+
+    def code_size(self, who: str) -> int:
+        w = who.lower()
+        known = {self.module_address.lower(), self.registry_address.lower(), self.usdc_address.lower(),
+                 self.feed_address.lower()}
+        return 1 if (w in self.safe_accounts or w in self.vaults or w in known) else 0
+
+    def send_value(self, key: str, to: str, value: int) -> str:
+        with self.lock:
+            sender = self.address_of(key).lower()
+            self.eth[sender] = self.eth.get(sender, 0) - value
+            self.eth[to.lower()] = self.eth.get(to.lower(), 0) + value
+            return self._finish(self._txhash(), 1, [], None)
+
+    def mint_usdc(self, key: str, to: str, amount: int) -> str:
+        with self.lock:
+            if self.chain_id != 31337 and self.address_of(key).lower() != self.admin.lower():
+                return self._finish(self._txhash(), 0, [], "Unauthorized")
+            self.mint(to, amount)
+            return self._finish(self._txhash(), 1, [], None)
+
+    def predict_safe(self, owner: str) -> str:
+        from aegis.chain.safe import predict_address
+
+        factory, singleton = "0x" + "fa" * 20, "0x" + "5f" * 20
+        return predict_address(factory, singleton, owner, "0x" + "fb" * 20, b"fake-proxy")
+
+    def deploy_safe(self, owner: str, enable_module: bool = True) -> str:
+        """Stands in for the owner's createProxyWithNonce and enableModule transactions."""
+        safe = self.predict_safe(owner)
+        modules = {self.module_address.lower()} if enable_module else set()
+        self.safe_accounts[safe.lower()] = {"owners": [to_checksum_address(owner)], "threshold": 1,
+                                            "modules": modules}
+        return safe
+
+    def safe_threshold(self, safe: str) -> int:
+        return self.safe_accounts[safe.lower()]["threshold"]
+
+    def safe_owners(self, safe: str) -> list[str]:
+        return list(self.safe_accounts[safe.lower()]["owners"])
+
+    def safe_module_enabled(self, safe: str, module: str) -> bool:
+        return module.lower() in self.safe_accounts[safe.lower()]["modules"]
+
+    def wait_receipt(self, tx_hash: str, timeout: float = 30.0) -> Receipt | None:
+        return self.receipts.get(tx_hash)

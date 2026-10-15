@@ -7,10 +7,14 @@ Simulator; it holds no key and never produces calldata. Deterministic mode needs
 from __future__ import annotations
 
 import json
+import logging
+import threading
+import time
+from contextlib import contextmanager
 from datetime import UTC, datetime
 
 from aegis.agent import intent as I
-from aegis.agent.llm import LlmClient, LlmError
+from aegis.agent.llm import LlmClient, LlmError, LlmGate
 from aegis.agent.tools import TOOL_SCHEMAS
 from aegis.core.planner import HOLD_ID, Plan
 from aegis.eip712 import OP_DEPOSIT, OP_REDEEM
@@ -47,6 +51,16 @@ HOLD_TEXT = {
 }
 
 
+LLM_NOTICES = {
+    "error": "(The language model did not answer in time, so this reply was produced in deterministic mode.)",
+    "limit": "(The language model usage limit is reached, so this reply was produced in deterministic mode.)",
+}
+
+log = logging.getLogger("aegis.agent")
+
+LLM_COOLDOWN = 30.0
+
+
 def _usd(raw: int | str) -> str:
     return display_usdc(int(raw))
 
@@ -56,31 +70,76 @@ def _date(ts: int | None) -> str:
 
 
 class Agent:
-    def __init__(self, llm: LlmClient | None = None):
+    def __init__(self, llm: LlmClient | None = None, gate: LlmGate | None = None):
         self.llm = llm
+        self.gate = gate
+        self._ctx = threading.local()
+        self._down_until = 0.0
 
     @property
     def mode(self) -> str:
         return "llm" if self.llm else "deterministic"
 
+    @contextmanager
+    def request(self, tenant: str | None):
+        """One user request. After the first model failure or refusal by the gate, the rest of the request stays
+        deterministic, so a dead endpoint costs at most one timeout."""
+        prev = getattr(self._ctx, "state", None)
+        self._ctx.state = {"tenant": tenant, "fallback": None}
+        try:
+            yield self._ctx.state
+        finally:
+            self._ctx.state = prev
+
+    def fallback(self) -> str | None:
+        state = getattr(self._ctx, "state", None)
+        return state["fallback"] if state else None
+
+    def notice(self) -> str | None:
+        reason = self.fallback()
+        return LLM_NOTICES[reason] if reason else None
+
+    def _complete_json(self, messages: list[dict]) -> dict | None:
+        if self.llm is None:
+            return None
+        state = getattr(self._ctx, "state", None)
+        if state and state["fallback"]:
+            return None
+        if time.monotonic() < self._down_until:
+            # After a failure, skip the model briefly instead of making every request wait for the timeout.
+            if state:
+                state["fallback"] = "error"
+            return None
+        if self.gate is not None and not self.gate.allow(state["tenant"] if state else None):
+            if state:
+                state["fallback"] = "limit"
+            return None
+        try:
+            return self.llm.complete_json(messages)
+        except LlmError as e:
+            log.warning("LLM call failed, deterministic fallback for %.0f s: %s", LLM_COOLDOWN, e)
+            self._down_until = time.monotonic() + LLM_COOLDOWN
+            if state:
+                state["fallback"] = "error"
+            return None
+
     def parse_intent(self, message: str, now: int, vault_labels: list[str]) -> I.Intent:
         rule = I.parse(message, now, vault_labels)
         if self.llm is None:
             return rule
-        try:
-            data = self.llm.complete_json([
-                {"role": "system", "content": SYSTEM},
-                {"role": "user", "content": json.dumps({
-                    "task": "Classify the owner's request.",
-                    "kinds": sorted(I.KINDS),
-                    "vaults": vault_labels,
-                    "today": _date(now),
-                    "schema": {"kind": "string", "amount_usdc": "decimal string or null", "vault": "string or null",
-                               "due_date": "YYYY-MM-DD or null", "label": "string or null", "months": "int or null"},
-                    "DATA": {"source": "owner chat message", "quoted": message},
-                })},
-            ])
-        except LlmError:
+        data = self._complete_json([
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": json.dumps({
+                "task": "Classify the owner's request.",
+                "kinds": sorted(I.KINDS),
+                "vaults": vault_labels,
+                "today": _date(now),
+                "schema": {"kind": "string", "amount_usdc": "decimal string or null", "vault": "string or null",
+                           "due_date": "YYYY-MM-DD or null", "label": "string or null", "months": "int or null"},
+                "DATA": {"source": "owner chat message", "quoted": message},
+            })},
+        ])
+        if data is None:
             return rule
         kind = data.get("kind") if data.get("kind") in I.KINDS else rule.kind
         if rule.kind == I.TRANSFER_OUT:
@@ -116,22 +175,21 @@ class Agent:
         rule = self._select_rule(intent, plan)
         if self.llm is None or intent.kind not in I.ACTION_KINDS:
             return rule
-        try:
-            data = self.llm.complete_json([
-                {"role": "system", "content": SYSTEM},
-                {"role": "user", "content": json.dumps({
-                    "task": "Choose one plan option for the owner's request by calling propose_action. "
-                            "Prefer the default; pick hold if nothing fits.",
-                    "tools": [t["function"] for t in TOOL_SCHEMAS if t["function"]["name"] == "propose_action"],
-                    "reply_schema": {"tool": "propose_action",
-                                     "arguments": {"option_id": "string", "reductions": {"amount": "raw units or omit"}},
-                                     "rationale": "one sentence"},
-                    "intent": {k: intent.to_json()[k] for k in ("kind", "amount", "vault_hint")},
-                    "DATA": {"owner_message": {"source": "owner chat message", "quoted": intent.text},
-                             **tool_data},
-                }, default=str)},
-            ])
-        except LlmError:
+        data = self._complete_json([
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": json.dumps({
+                "task": "Choose one plan option for the owner's request by calling propose_action. "
+                        "Prefer the default; pick hold if nothing fits.",
+                "tools": [t["function"] for t in TOOL_SCHEMAS if t["function"]["name"] == "propose_action"],
+                "reply_schema": {"tool": "propose_action",
+                                 "arguments": {"option_id": "string", "reductions": {"amount": "raw units or omit"}},
+                                 "rationale": "one sentence"},
+                "intent": {k: intent.to_json()[k] for k in ("kind", "amount", "vault_hint")},
+                "DATA": {"owner_message": {"source": "owner chat message", "quoted": intent.text},
+                         **tool_data},
+            }, default=str)},
+        ])
+        if data is None:
             return rule
         args = data.get("arguments") if isinstance(data.get("arguments"), dict) else {}
         option_id = args.get("option_id")
@@ -190,19 +248,18 @@ class Agent:
         text = template(facts)
         if self.llm is None:
             return text
-        try:
-            data = self.llm.complete_json([
-                {"role": "system", "content": SYSTEM},
-                {"role": "user", "content": json.dumps({
-                    "task": "Explain this outcome to the business owner in at most three plain sentences. "
-                            "Do not add numbers that are not in the facts. Reply as {\"reply\": \"...\"}.",
-                    "DATA": {"source": "AEGIS deterministic record", "facts": facts, "draft": text},
-                }, default=str)},
-            ])
-            reply = str(data.get("reply", "")).strip()
-            return reply[:1200] or text
-        except LlmError:
+        data = self._complete_json([
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": json.dumps({
+                "task": "Explain this outcome to the business owner in at most three plain sentences. "
+                        "Do not add numbers that are not in the facts. Reply as {\"reply\": \"...\"}.",
+                "DATA": {"source": "AEGIS deterministic record", "facts": facts, "draft": text},
+            }, default=str)},
+        ])
+        if data is None:
             return text
+        reply = str(data.get("reply", "")).strip()
+        return reply[:1200] or text
 
 
 def template(f: dict) -> str:

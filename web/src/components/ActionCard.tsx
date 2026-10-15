@@ -4,6 +4,7 @@ import type { Address } from 'viem'
 import { ErrorNote, ErrorTag, TierMark } from './bits'
 import { RecordSheet } from './RecordSheet'
 import { SwitchSeat } from './chrome'
+import { SignConfirm } from './SignConfirm'
 import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
 import { CHECK_NAMES, TIERS } from '../lib/vocabulary'
@@ -44,7 +45,8 @@ export function ActionCardView({ card }: { card: ActionCard }) {
 
 export function ApprovalPanel({ card, role, onDone }: { card: ActionCard; role: Role; onDone?: () => void }) {
   const { api, deployment, chainId, mode: dataMode } = useAegis()
-  const { role: myRole, sign, identity } = useIdentity()
+  const { role: myRole, sign, identity, isLocal } = useIdentity()
+  const [confirming, setConfirming] = useState(false)
   const qc = useQueryClient()
   const [reason, setReason] = useState('')
   const [correction, setCorrection] = useState('')
@@ -63,7 +65,8 @@ export function ApprovalPanel({ card, role, onDone }: { card: ActionCard; role: 
       const signature = replaying ? recordedSig.data?.signature ?? REPLAY_SIMULATED_SIGNATURE : await sign(typed)
       return api.submitApproval(card.requestId, { signature, approval: typed.message })
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['approvals'] }); qc.invalidateQueries({ queryKey: ['request'] }); onDone?.() },
+    onSuccess: () => { setConfirming(false); qc.invalidateQueries({ queryKey: ['approvals'] }); qc.invalidateQueries({ queryKey: ['request'] }); onDone?.() },
+    onError: () => setConfirming(false),
   })
   const deny = useMutation({
     mutationFn: () => api.deny(card.requestId, reason),
@@ -103,8 +106,14 @@ export function ApprovalPanel({ card, role, onDone }: { card: ActionCard; role: 
           {replaying ? (
             <p className="muted">Replay holds no keys. {recordedSig.data ? 'This approval was recorded, so its illustrative signature is submitted and checked by recovery.' : 'This approval was not recorded, so it is submitted as simulated and marked so in the ledger.'}</p>
           ) : null}
-          <div className="decide">
-            <button type="button" className={`button ${role === 'bank' ? 'navy' : ''}`} disabled={busy || !typed} onClick={() => approve.mutate()}>
+          {confirming && isLocal && identity.kind === 'local' ? (
+            <SignConfirm role={role} address={identity.address} what="an EIP-712 Approval" confirmLabel={`Sign and approve as ${role === 'bank' ? 'bank' : 'owner'}`} busy={approve.isPending}
+              onConfirm={() => approve.mutate()} onCancel={() => setConfirming(false)}>
+              <p>A ceiling of <strong className="nums">{card.amount.display}</strong> for {card.vault.name}, valid 24 hours, tied to policy v{String(typed?.message.policyVersion ?? '')}. The full record is below.</p>
+            </SignConfirm>
+          ) : null}
+          <div className="decide" hidden={confirming && isLocal}>
+            <button type="button" className={`button ${role === 'bank' ? 'navy' : ''}`} disabled={busy || !typed} onClick={() => (isLocal ? setConfirming(true) : approve.mutate())}>
               {approve.isPending ? 'Signing…' : replaying ? (recordedSig.data ? 'Approve (recorded signature)' : 'Approve (simulated)') : `Approve and sign as ${role === 'bank' ? 'bank' : 'owner'}`}
             </button>
             <button type="button" className="button quiet" aria-expanded={mode === 'deny'} aria-controls={`deny-${card.requestId}`} onClick={() => setMode(mode === 'deny' ? null : 'deny')}>Deny…</button>

@@ -1,7 +1,8 @@
 import type { Address, Hex } from 'viem'
+import type { AttackKind, AttackResult, MarketState } from '../onboard/types'
 import type {
   BankClient, ChainEvent, ChatResponse, Health, LedgerRow, Obligation, ObligationCreated, OracleState,
-  PendingApproval, ReconciliationRow, RequestRecord, RiskReport, Role, ScenarioName, Session, StreamEvent, TreasuryState,
+  PendingApproval, ReconciliationRow, RequestRecord, RiskReport, Role, ScenarioName, Session, StreamEvent, TreasuryState, TxRequest,
 } from '../types'
 
 export type Mode = 'live' | 'replay'
@@ -21,6 +22,7 @@ export type SessionProof = { signature: Hex; issuedAt: string }
 export interface AegisApi {
   readonly mode: Mode
   setSession(token: string | null): void
+  hasSession?(): boolean
   health(): Promise<Health>
   createSession(role: Role, address: Address, proof?: SessionProof): Promise<Session>
   treasury(): Promise<TreasuryState>
@@ -44,6 +46,9 @@ export interface AegisApi {
   simulateBankAction?(action: BankAction, safe: Address, actor: Address): Promise<void>
   simulateFloorUpdate?(actor: Address): Promise<void>
   recordedApproval?(requestId: string): Promise<{ signature: Hex; signer: Address } | null>
+  attack?(kind: AttackKind): Promise<AttackResult>
+  market?(): Promise<MarketState>
+  floorUpdate?(): Promise<TxRequest | null>
   reset?(): void
   isChanged?(): boolean
 }
@@ -51,5 +56,11 @@ export interface AegisApi {
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly body?: unknown) {
     super(message)
+  }
+
+  get code(): string | undefined {
+    const b = this.body as { error?: unknown; code?: unknown } | undefined
+    const c = b && typeof b === 'object' ? (b.error ?? b.code) : undefined
+    return typeof c === 'string' ? c : undefined
   }
 }

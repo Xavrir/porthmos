@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import time
+
 from aegis.services import Services
 
 PAUSE_KEY = "keeper_paused"
+LAST_POKE_KEY = "keeper_last_poke"
 
 
 class Keeper:
@@ -20,5 +23,6 @@ class Keeper:
         if self.paused:
             return None
         tx = self.s.chain.poke(self._key)
+        self.s.db.kv_set(LAST_POKE_KEY, {"tx": tx, "at": int(time.time())})
         self.s.bus.publish({"type": "oracle", "safe": None, "poke": tx})
         return tx

@@ -165,7 +165,10 @@ contract Deploy is AegisScriptBase {
             _pair("safe", d.safe, false, true)
         );
         json = string.concat(
-            json, _pair("safeSingleton", d.singleton, true, false), _pair("safeProxyFactory", d.factory, false, true)
+            json,
+            _pair("safeSingleton", d.singleton, true, false),
+            _pair("safeProxyFactory", d.factory, false, false),
+            _pair("fallbackHandler", d.fallbackHandler, false, true)
         );
         json = string.concat(
             json,

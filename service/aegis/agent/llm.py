@@ -13,7 +13,7 @@ class LlmError(Exception):
 
 
 class LlmClient:
-    def __init__(self, base_url: str, model: str, api_key: str | None = None, timeout: float = 30.0):
+    def __init__(self, base_url: str, model: str, api_key: str | None = None, timeout: float = 20.0):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
@@ -40,6 +40,28 @@ class LlmClient:
             return json.loads(m.group(0))
         except json.JSONDecodeError as e:
             raise LlmError(str(e)) from e
+
+
+class LlmGate:
+    """Global and per-tenant hourly budgets for model calls. Over budget, the request runs deterministically."""
+
+    def __init__(self, limiter, per_hour: int, per_tenant_hour: int):
+        self.limiter = limiter
+        self.per_hour = per_hour
+        self.per_tenant_hour = per_tenant_hour
+
+    def allow(self, tenant: str | None) -> bool:
+        key = (tenant or "").lower()
+        if key and self.limiter.count("llm_tenant", key, 3600) >= self.per_tenant_hour:
+            return False
+        if not self.limiter.hit("llm", "all", self.per_hour, 3600):
+            return False
+        if key:
+            self.limiter.hit("llm_tenant", key, self.per_tenant_hour, 3600)
+        return True
+
+    def exhausted(self) -> bool:
+        return self.limiter.count("llm", "all", 3600) >= self.per_hour
 
 
 def quoted(source: str, text: str) -> dict:

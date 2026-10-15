@@ -100,6 +100,8 @@ export function RecordSheet({ record, chainId, module, expected, names, changed,
       <footer className="sheet-sig">
         {record.replayUnsigned ? (
           <p>Signature: not recorded. Replay can show new records but cannot sign them; the live service signs with the authorizer key.</p>
+        ) : !record.signature && record.signatureWithheld ? (
+          <p>Signed by the {expected?.label ?? 'signer'}. The service does not publish this signature; the contract checked it when the transaction ran.</p>
         ) : !record.signature ? (
           <p>Unsigned. Waiting for {expected?.label ?? 'a signer'}.</p>
         ) : (

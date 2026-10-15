@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 
@@ -10,7 +11,11 @@ from aegis.core.risk import RiskReport
 from aegis.db import Database
 from aegis.events import EventBus
 from aegis.ledger import Ledger
+from aegis.limits import RateLimiter
 from aegis.obligations import ObligationStore
+from aegis.tenants import TenantStore
+
+log = logging.getLogger("aegis")
 
 
 @dataclass
@@ -21,6 +26,8 @@ class Services:
     ledger: Ledger
     obligations: ObligationStore
     bus: EventBus
+    tenants: TenantStore
+    limiter: RateLimiter
 
     @classmethod
     def create(cls, settings: Settings, chain: ChainClient, db: Database | None = None,
@@ -28,11 +35,14 @@ class Services:
         db = db or Database(settings.db_path)
         bus = bus or EventBus()
         ledger = Ledger(db)
-        return cls(settings, chain, db, ledger, ObligationStore(db), bus)
+        tenants = TenantStore(db, settings.tenant_refresh)
+        register_reference(tenants, settings, chain)
+        return cls(settings, chain, db, ledger, ObligationStore(db), bus, tenants, RateLimiter(db))
 
     @property
     def safes(self) -> list[str]:
-        return list(self.settings.addresses.safes)
+        """The reference Safe(s) from the deployments file plus every activated tenant."""
+        return self.tenants.safes()
 
     def known_safe(self, safe: str) -> str | None:
         return next((s for s in self.safes if s.lower() == safe.lower()), None)
@@ -60,3 +70,19 @@ class Services:
                         (time.time(), safe.lower() if safe else None, vault, level, code, message))
         self.bus.publish({"type": "alert", "safe": safe, "level": level, "code": code, "message": message,
                           "vault": vault})
+
+
+def register_reference(tenants: TenantStore, settings: Settings, chain: ChainClient) -> None:
+    """Tenant zero: the deployments-file Safe. Owner and bank come from the registry, else from the file's roles."""
+    roles = settings.addresses.roles
+    for safe in settings.addresses.safes:
+        if tenants.get(safe):
+            continue
+        owner, bank = roles.get("owner"), roles.get("bank")
+        try:
+            pol = chain.policy(safe, [])
+            owner, bank = pol.owner, pol.bank
+        except Exception as e:
+            log.warning("reference Safe %s: registry read failed (%s); using deployment roles", safe, e)
+        if owner and bank:
+            tenants.ensure_reference(safe, owner, bank)

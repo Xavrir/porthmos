@@ -1,0 +1,7 @@
+*
+!service/pyproject.toml
+!service/uv.lock
+!service/aegis
+!deployments/31337.json
+!deployments/84532.json
+**/__pycache__

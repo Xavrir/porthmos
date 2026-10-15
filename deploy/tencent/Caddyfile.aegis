@@ -1,0 +1,8 @@
+# Add to the existing RuteAman Caddyfile, then reload Caddy.
+# Assumes Caddy reaches host loopback ports (as it does for the RuteAman API on 127.0.0.1:8090).
+aegis-api.150-109-23-187.sslip.io {
+	reverse_proxy 127.0.0.1:8787 {
+		# Server-Sent Events (/api/stream): send each event at once.
+		flush_interval -1
+	}
+}

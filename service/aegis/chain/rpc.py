@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import itertools
 import os
+import threading
 import time
 
 import httpx
 from eth_account import Account
 from eth_utils import to_checksum_address
 
+from aegis.chain import safe as safe_lib
 from aegis.chain.abi import Contract, decode_revert, error_name
 from aegis.chain.base import ChainClient, CheckResult, PolicyState, Receipt, Round, SimResult
 from aegis.config import UINT256_MAX, Settings
 from aegis.eip712 import DAR, Approval, hex32, to_bytes32
-
 
 LOG_WINDOW = int(os.environ.get("LOG_WINDOW", "5000"))
 
@@ -59,8 +60,13 @@ class RpcChain(ChainClient):
         self.vault = Contract("MockVault", out)
         self.registry = Contract("PolicyRegistry", out)
         self.module = Contract("AegisModule", out)
+        self.safe = Contract("Safe", out)
+        self.factory = Contract("SafeProxyFactory", out)
         self._http = httpx.Client(timeout=15)
         self._ids = itertools.count(1)
+        self._send_locks: dict[str, threading.Lock] = {}
+        self._send_guard = threading.Lock()
+        self._proxy_code: bytes | None = None
 
     def _rpc(self, method: str, params: list):
         body = {"jsonrpc": "2.0", "id": next(self._ids), "method": method, "params": params}
@@ -90,27 +96,71 @@ class RpcChain(ChainClient):
     def _view(self, contract: Contract, address: str, fn: str, *args):
         return contract.decode(fn, self._eth_call(address, contract.encode(fn, *args)))
 
-    def _send(self, key: str, to: str, data: bytes) -> str:
+    def _send(self, key: str, to: str, data: bytes, value: int = 0, gas: int | None = None) -> str:
+        """gas=None estimates (and raises CallReverted on a revert); a fixed gas sends even a reverting call."""
         acct = Account.from_key(key)
-        tx_call = {"from": acct.address, "to": to_checksum_address(to), "data": "0x" + data.hex()}
-        try:
-            gas = int(self._rpc("eth_estimateGas", [tx_call]), 16)
-        except RpcError as e:
-            raise CallReverted(e.data, e.message) from None
-        nonce = int(self._rpc("eth_getTransactionCount", [acct.address, "pending"]), 16)
-        block = self._rpc("eth_getBlockByNumber", ["latest", False])
-        base = int(block.get("baseFeePerGas", "0x0"), 16)
-        try:
-            tip = int(self._rpc("eth_maxPriorityFeePerGas", []), 16)
-        except RpcError:
-            tip = 10**9
-        tx = {
-            "type": 2, "chainId": self.chain_id, "nonce": nonce, "to": to_checksum_address(to),
-            "data": "0x" + data.hex(), "value": 0, "gas": gas * 13 // 10 + 20_000,
-            "maxFeePerGas": base * 2 + tip, "maxPriorityFeePerGas": tip,
-        }
-        signed = Account.sign_transaction(tx, key)
-        return self._rpc("eth_sendRawTransaction", ["0x" + bytes(signed.raw_transaction).hex()])
+        if gas is None:
+            tx_call = {"from": acct.address, "to": to_checksum_address(to), "data": "0x" + data.hex(),
+                       "value": hex(value)}
+            try:
+                gas = int(self._rpc("eth_estimateGas", [tx_call]), 16) * 13 // 10 + 20_000
+            except RpcError as e:
+                raise CallReverted(e.data, e.message) from None
+        with self._sender_lock(acct.address):
+            nonce = int(self._rpc("eth_getTransactionCount", [acct.address, "pending"]), 16)
+            block = self._rpc("eth_getBlockByNumber", ["latest", False])
+            base = int(block.get("baseFeePerGas", "0x0"), 16)
+            try:
+                tip = int(self._rpc("eth_maxPriorityFeePerGas", []), 16)
+            except RpcError:
+                tip = 10**9
+            tx = {
+                "type": 2, "chainId": self.chain_id, "nonce": nonce, "to": to_checksum_address(to),
+                "data": "0x" + data.hex(), "value": value, "gas": gas,
+                "maxFeePerGas": base * 2 + tip, "maxPriorityFeePerGas": tip,
+            }
+            signed = Account.sign_transaction(tx, key)
+            return self._rpc("eth_sendRawTransaction", ["0x" + bytes(signed.raw_transaction).hex()])
+
+    def _sender_lock(self, address: str) -> threading.Lock:
+        # Two concurrent sends from one key would read the same pending nonce.
+        with self._send_guard:
+            return self._send_locks.setdefault(address.lower(), threading.Lock())
+
+    def send(self, key: str, to: str, data: bytes, value: int = 0, gas: int | None = None) -> str:
+        return self._send(key, to, data, value, gas)
+
+    def head_timestamp(self) -> int:
+        return int(self._rpc("eth_getBlockByNumber", ["latest", False])["timestamp"], 16)
+
+    def eth_balance(self, who: str) -> int:
+        return int(self._rpc("eth_getBalance", [to_checksum_address(who), "latest"]), 16)
+
+    def code_size(self, who: str) -> int:
+        code = self._rpc("eth_getCode", [to_checksum_address(who), "latest"])
+        return max(0, (len(code) - 2) // 2)
+
+    def send_value(self, key: str, to: str, value: int) -> str:
+        return self._send(key, to, b"", value=value, gas=21_000)
+
+    def mint_usdc(self, key: str, to: str, amount: int) -> str:
+        return self._send(key, self.addr.usdc, self.usdc.encode("mint", to_checksum_address(to), amount))
+
+    def predict_safe(self, owner: str) -> str:
+        if self._proxy_code is None:
+            self._proxy_code = self._view(self.factory, self.addr.safe_proxy_factory, "proxyCreationCode")
+        a = self.addr
+        return safe_lib.predict_address(a.safe_proxy_factory, a.safe_singleton, owner, a.fallback_handler,
+                                        self._proxy_code)
+
+    def safe_threshold(self, safe: str) -> int:
+        return self._view(self.safe, safe, "getThreshold")
+
+    def safe_owners(self, safe: str) -> list[str]:
+        return [to_checksum_address(o) for o in self._view(self.safe, safe, "getOwners")]
+
+    def safe_module_enabled(self, safe: str, module: str) -> bool:
+        return self._view(self.safe, safe, "isModuleEnabled", to_checksum_address(module))
 
     def block_number(self) -> int:
         return int(self._rpc("eth_blockNumber", []), 16)
@@ -237,11 +287,12 @@ class RpcChain(ChainClient):
             return SimResult(False, e.reason)
         return SimResult(True)
 
-    def submit_deposit(self, key, dar, auth_sig, owner_sig, bank_sig, approval) -> str:
-        return self._send(key, self.addr.module, self._deposit_data(dar, auth_sig, owner_sig, bank_sig, approval))
+    def submit_deposit(self, key, dar, auth_sig, owner_sig, bank_sig, approval, gas: int | None = None) -> str:
+        return self._send(key, self.addr.module, self._deposit_data(dar, auth_sig, owner_sig, bank_sig, approval),
+                          gas=gas)
 
-    def submit_redeem(self, key, dar, sig) -> str:
-        return self._send(key, self.addr.module, self.module.encode("redeem", dar.as_tuple(), _sig(sig)))
+    def submit_redeem(self, key, dar, sig, gas: int | None = None) -> str:
+        return self._send(key, self.addr.module, self.module.encode("redeem", dar.as_tuple(), _sig(sig)), gas=gas)
 
     def receipt(self, tx_hash: str) -> Receipt | None:
         rec = self._rpc("eth_getTransactionReceipt", [tx_hash])

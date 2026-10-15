@@ -27,6 +27,10 @@ export type Health = {
   llm?: string
   demo?: boolean
   version?: string
+  llmMode?: string
+  agentMode?: string
+  onboardingOpen?: boolean
+  tenants?: number
 }
 
 export type Session = { token: string; role: Role; safe?: Address; expiresAt?: number }
@@ -133,6 +137,7 @@ export type SignedRecord = {
   signer: Address | null
   digest?: Hex
   replayUnsigned?: boolean
+  signatureWithheld?: boolean
 }
 
 export type RequestRecord = {
@@ -177,6 +182,7 @@ export type LedgerRow = {
   evidenceHash?: Hex
   prevHash: Hex
   rowHash: Hex
+  linkOk?: boolean
 }
 
 export type ChainEventName = 'AegisExecuted' | 'PolicyChanged' | 'Quarantined'

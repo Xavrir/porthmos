@@ -2,10 +2,13 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { onTick, reducedMotion } from '../components/Count'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Address } from 'viem'
+import type { Address, Hex } from 'viem'
 import { ActionCardView, ApprovalPanel } from '../components/ActionCard'
 import { Chip, Empty, ErrorNote, Figure, Hash, Loading } from '../components/bits'
 import { SwitchSeat, usePageTitle } from '../components/chrome'
+import { BankLimits } from '../components/BankLimits'
+import { TxStatus } from '../components/TxStatus'
+import { plainError } from '../lib/onboard/errors'
 import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
 import { useBankClients, usePendingApprovals, useReconciliation } from '../lib/queries'
@@ -17,8 +20,8 @@ const ACTION_LABEL: Record<BankAction, string> = { bankFreeze: 'Freeze', bankUnf
 
 export default function Bank() {
   usePageTitle('Bank desk')
-  const { mode } = useAegis()
-  const { role, identity, signedIn, session, sessionError, bankAction } = useIdentity()
+  const { mode, tenant } = useAegis()
+  const { role, identity, signedIn, session, sessionError, bankAction, isLocal } = useIdentity()
   const qc = useQueryClient()
   const clients = useBankClients()
   const pending = usePendingApprovals()
@@ -101,14 +104,18 @@ export default function Bank() {
                   </table>
                 </div>
               ) : <Empty>No clients.</Empty>}
-              <ErrorNote error={clients.error ?? act.error} />
+              <ErrorNote error={clients.error} />
+              {act.error ? <p className="error-note" role="alert">{isLocal ? plainError(act.error, 'The bank key').message : act.error.message}</p> : null}
               <div role="status">
                 {done ? (
                   <div className="ok-note">
                     <p>
                       {done.action === 'bankFreeze' ? `${done.name}: deposits frozen by the bank. Any deposit now reverts Frozen; exits still run.` : done.action === 'bankUnfreeze' ? `${done.name}: the bank lifted its freeze. Deposits can run again.` : `${done.name}: authorizer revoked and deposits frozen. No new decision record can be signed.`}
-                      {lastTx ? <> Sent: <Hash value={lastTx} /></> : mode === 'replay' ? ' Recorded in the replay; no transaction was sent.' : ''}
+                      {lastTx ? <> Sent: {mode === 'live' ? <TxStatus hash={lastTx as Hex} label="bank transaction" onMined={() => { qc.invalidateQueries({ queryKey: ['bank-clients'] }); qc.invalidateQueries({ queryKey: ['treasury'] }) }} /> : <Hash value={lastTx} />}</> : mode === 'replay' ? ' Recorded in the replay; no transaction was sent.' : ''}
                     </p>
+                    {mode === 'live' && tenant && done.action !== 'bankUnfreeze' ? (
+                      <p className="seat-note"><span>To see the effect, ask the agent for a deposit from the owner seat: it is refused. Exits still run.</span> <SwitchSeat to="owner" then="/risk" className="button small quiet">Switch to owner and try to break it</SwitchSeat></p>
+                    ) : null}
                     {mode === 'replay' && done.name === 'Harbour Lane Imports' && done.action !== 'bankUnfreeze' ? (
                       <p className="seat-note"><span>To see the effect, look at the waiting deposit as the owner: it now fails its no-freeze check.</span> <SwitchSeat to="owner" then="/copilot" className="button small quiet">Switch to owner and open Copilot</SwitchSeat></p>
                     ) : null}
@@ -116,6 +123,8 @@ export default function Bank() {
                 ) : null}
               </div>
             </section>
+
+            {mode === 'live' && isLocal && focus ? <BankLimits safe={focus.safe} /> : null}
 
             <div className="cols">
               <section className="block col-wide" aria-labelledby="esc-title">

@@ -56,7 +56,7 @@ function age(s: number): string {
 
 export function Landing() {
   usePageTitle(null)
-  const { mode, deployment, chainId } = useAegis()
+  const { mode, deployment, chainId, tenant } = useAegis()
   const { chooser } = useIdentity()
   const live = useBaseSepoliaLive()
   const t = useTreasury()
@@ -153,8 +153,12 @@ export function Landing() {
           </div>
           <p className="hero-lede">An AI agent runs a business’s stablecoin treasury under its bank’s risk desk: cash kept for what you owe, the rest earning, every action proven.</p>
           <div className="hero-actions">
-            <a href="#proof" className="button hero-action">See the on-chain proof</a>
-            <button type="button" className="button light hero-action" onClick={() => chooser.show('hero')}>Try it as owner or bank</button>
+            {tenant ? (
+              <button type="button" className="button hero-action" onClick={() => chooser.show('hero')}>Open your treasury</button>
+            ) : (
+              <Link to="/start" className="button hero-action">Create your treasury</Link>
+            )}
+            <a href="#proof" className="button light hero-action">See the on-chain proof</a>
           </div>
         </div>
         <nav className="swatches" aria-label="The system now">

@@ -1,0 +1,20 @@
+# CLIProxyAPI v8 configuration for AEGIS (copy to config.yaml in this directory; chmod 600).
+# Image eceasy/cli-proxy-api:v8.0.29 reads /CLIProxyAPI/config.yaml; OAuth tokens live in /root/.cli-proxy-api.
+config-version: 8
+
+server:
+  host: ""
+  port: 8317
+
+# Client keys for the proxy API (not provider keys). AEGIS sends one of these as LLM_API_KEY.
+# Generate with: openssl rand -hex 32
+access:
+  api-keys:
+    - "replace-with-the-same-value-as-LLM_API_KEY"
+
+oauth:
+  auth-dir: "~/.cli-proxy-api"
+
+management:
+  allow-remote: false
+  secret-key: ""

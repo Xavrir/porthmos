@@ -1,5 +1,6 @@
 import type { LiveChain } from '../lib/chain/live'
 import { useOracle, useTreasury } from '../lib/queries'
+import { useAegis } from '../lib/source'
 import { money, shortHex } from '../lib/format'
 import { CountText } from './Count'
 
@@ -13,6 +14,7 @@ function age(s: number): string {
 }
 
 export function ChainStrip({ live }: { live: LiveChain }) {
+  const { mode, tenant } = useAegis()
   const t = useTreasury()
   const o = useOracle()
   const isLive = live.status === 'live'
@@ -32,7 +34,7 @@ export function ChainStrip({ live }: { live: LiveChain }) {
         <span className="cs-status">
           {loading ? 'One moment' : isLive ? <>Block <a className="link-plain" href={`${BASESCAN}/block/${live.block}`} target="_blank" rel="noreferrer"><CountText text={live.block!.toLocaleString('en-US')} /></a></> : <span className="cs-tag">Replay values</span>}
         </span>
-        <span className="cs-sub cs-note">{isLive ? 'The coloured rail reads the chain too. The app pages replay a recorded run.' : loading ? '' : 'Everything on this page is the recorded run.'}</span>
+        <span className="cs-sub cs-note">{isLive ? mode === 'live' && tenant ? 'The coloured rail reads the chain too. The app pages run your own treasury.' : 'The coloured rail reads the chain too. The app pages replay a recorded run.' : loading ? '' : 'Everything on this page is the recorded run.'}</span>
       </div>
       <div className="cs-cell">
         <span className="cs-label">Safe holds{isLive ? '' : ' (replay)'}</span>

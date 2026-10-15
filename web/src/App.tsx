@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Outlet, Route, Routes, useLocation } from 'react-router-dom'
-import { AppHeader, Notices, usePageTitle } from './components/chrome'
+import { AppHeader, MarketBanner, ModeBanner, Notices, usePageTitle } from './components/chrome'
 import { SeatChooser } from './components/SeatChooser'
 import { Landing } from './pages/Landing'
 
@@ -9,12 +9,16 @@ const Copilot = lazy(() => import('./pages/Copilot'))
 const Risk = lazy(() => import('./pages/Risk'))
 const Audit = lazy(() => import('./pages/Audit'))
 const Bank = lazy(() => import('./pages/Bank'))
+const Start = lazy(() => import('./pages/Start'))
 
 function AppLayout() {
+  const { pathname } = useLocation()
   return (
     <div className="app">
       <a className="skip" href="#main">Skip to content</a>
       <AppHeader />
+      <MarketBanner />
+      {pathname === '/start' ? null : <ModeBanner />}
       <Suspense fallback={<main id="main" className="page"><p className="empty wrap">Loading the page…</p></main>}>
         <Outlet />
       </Suspense>
@@ -42,6 +46,7 @@ export function App() {
           <Route path="/risk" element={<Risk />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/bank" element={<Bank />} />
+          <Route path="/start" element={<Start />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

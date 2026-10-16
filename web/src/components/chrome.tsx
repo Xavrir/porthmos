@@ -7,12 +7,14 @@ import { useIdentity, type Seat } from '../lib/identity'
 import { chainName } from '../lib/wallet'
 import { shortHex } from '../lib/format'
 import { RECORDED_SCENARIOS, SCHEDULED_SCENARIOS, scheduledAfter } from '../lib/proof'
-import { GlossaryButton } from './Glossary'
 import { Hash } from './bits'
 import { Icon } from './icons'
 import { useSeatPicker } from '../lib/seats'
 import { useMarket } from '../lib/queries'
 import { dismissToast, useToasts } from '../lib/toast'
+import { openOverlay } from '../lib/ui'
+import { CommandPalette, SearchField } from './CommandPalette'
+import { GlossaryDialog, ShortcutsDialog, useGlobalShortcuts } from './Shortcuts'
 import type { Role } from '../lib/types'
 
 export const PAGES = [
@@ -336,6 +338,29 @@ export function MarketBanner() {
   )
 }
 
+export function TestModeBanner() {
+  const { mode, chainId } = useAegis()
+  const where = mode === 'replay' || chainId === 84532 ? 'Base Sepolia testnet' : chainId === 31337 ? 'local test chain' : `${chainName(chainId).replace(/ \(\d+\)$/, '')} testnet`
+  return (
+    <div className="test-banner" role="region" aria-label="Test mode">
+      <p><strong>Test mode:</strong> {where}. No real funds.</p>
+    </div>
+  )
+}
+
+function TopBar() {
+  return (
+    <div className="top-bar">
+      <SearchField />
+      <div className="top-tools">
+        <ModeIndicator />
+        <button type="button" className="icon-button" aria-haspopup="dialog" onClick={() => openOverlay({ kind: 'shortcuts' })} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)"><Icon name="help" /></button>
+        <button type="button" className="icon-button" aria-haspopup="dialog" onClick={() => openOverlay({ kind: 'glossary' })} aria-label="What the terms mean" title="What the terms mean"><Icon name="terms" /></button>
+      </div>
+    </div>
+  )
+}
+
 const WIDE = '(min-width: 1024px)'
 
 function subscribeWide(cb: () => void) {
@@ -374,6 +399,18 @@ function SideNav() {
           </ul>
         </div>
       ))}
+      <div className="side-group">
+        <p className="side-group-label">TradeFlow</p>
+        <ul className="side-links">
+          <li>
+            <span className="side-link is-disabled" aria-disabled="true">
+              <Icon name="orders" />
+              <span className="side-label">Orders</span>
+              <span className="side-soon">Coming soon</span>
+            </span>
+          </li>
+        </ul>
+      </div>
     </nav>
   )
 }
@@ -493,16 +530,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [drawer])
 
+  useGlobalShortcuts()
+
   return (
     <div className="app">
       <a className="skip" href="#main">Skip to content</a>
+      <TestModeBanner />
       <header className="app-head">
         <div className="app-top">
           <Brand />
           <div className="app-tools">
-            {wide ? null : <><IdentityControl /><ModeIndicator /></>}
+            {wide ? null : (
+              <>
+                <button type="button" className="icon-button" aria-haspopup="dialog" aria-label="Search" onClick={() => openOverlay({ kind: 'palette' })}><Icon name="search" /></button>
+                <IdentityControl /><ModeIndicator />
+              </>
+            )}
             <button type="button" className="menu-button" ref={menuRef} aria-expanded={drawer} aria-controls="app-side" onClick={() => setOpen(true)}>
-              <Icon name="menu" /><span>Menu</span>
+              <Icon name="menu" /><span className="menu-text">Menu</span>
             </button>
           </div>
         </div>
@@ -522,18 +567,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             ) : <div className="side-org"><SafeLine /></div>}
             <SideNav />
             <div className="side-foot">
-              {wide ? (
-                <div className="side-session">
-                  <span className="side-caption">Data source</span>
-                  <ModeIndicator />
-                </div>
-              ) : null}
               <div className="side-session">
                 <span className="side-caption" id="theme-caption">Theme</span>
                 <ThemeToggle />
               </div>
               <ul className="side-tools">
-                <li><GlossaryButton className="side-tool" label={<><Icon name="terms" /><span>Terms</span></>} /></li>
+                <li><button type="button" className="side-tool" aria-haspopup="dialog" onClick={() => { setOpen(false); openOverlay({ kind: 'glossary' }) }}><Icon name="terms" /><span>Terms</span></button></li>
+                <li><button type="button" className="side-tool" aria-haspopup="dialog" onClick={() => { setOpen(false); openOverlay({ kind: 'shortcuts' }) }}><Icon name="keyboard" /><span>Shortcuts</span></button></li>
                 <li><Link to="/" className="side-tool"><Icon name="overview" /><span>Overview</span></Link></li>
               </ul>
             </div>
@@ -542,9 +582,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="side-scrim" hidden={!drawer} onClick={() => setOpen(false)} />
       </header>
       <div className="app-main" inert={drawer}>
+        {wide ? <TopBar /> : null}
         {children}
       </div>
       <Notices />
+      <CommandPalette />
+      <ShortcutsDialog />
+      <GlossaryDialog />
     </div>
   )
 }

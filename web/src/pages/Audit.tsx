@@ -1,9 +1,13 @@
-import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { onTick, reducedMotion } from '../components/Count'
 import { useSearchParams } from 'react-router-dom'
-import { Chip, Empty, ErrorNote, ErrorTag, Figure, Hash, Kpis, Loading, PageHeader, TierMark } from '../components/bits'
-import { DecisionChain } from '../components/DecisionChain'
+import { Chip, ErrorNote, ErrorTag, Figure, Hash, Kpis, Loading, PageHeader, stateTone, TierMark, type Tone } from '../components/bits'
+import { DataTable, type Column } from '../components/DataTable'
+import { CopyButton, DetailDrawer, DrawerSection, KeyValues, Timeline, useHashParam, type TimelineItem } from '../components/Drawer'
+import { Icon } from '../components/icons'
+import { toast } from '../lib/toast'
+import { dailyTotals, latestTs } from '../lib/history'
 import { EvidencePanel } from '../components/EvidencePanel'
 import { expectedSigner, RecordSheet } from '../components/RecordSheet'
 import { usePageTitle } from '../components/chrome'
@@ -11,21 +15,31 @@ import { useAegis } from '../lib/source'
 import { useChainEvents, useLedger, useReconciliation, useRequest } from '../lib/queries'
 import { verifyLinks } from '../lib/reconcile'
 import { fromUnits, money, shortHex, stamp, TIME_ZONE_LABEL } from '../lib/format'
-import { ERRORS, isErrorName } from '../lib/vocabulary'
+import { ERRORS, isErrorName, sentenceCase } from '../lib/vocabulary'
 import { chainName, explorerTx } from '../lib/wallet'
 import { isRecordedTx } from '../replay/hashes'
 import { CONTRACT_SUITE, proofFor, proofSentence, refusalFor } from '../lib/proof'
-import type { ChainEvent, LedgerRow } from '../lib/types'
+import type { ChainEvent, LedgerRow, WorkflowState } from '../lib/types'
 
 const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'execution', label: 'Executed' },
-  { key: 'rejected', label: 'Refused' },
-  { key: 'hold', label: 'Held or cancelled' },
-  { key: 'policy', label: 'Policy and risk' },
-] as const
+  { value: 'execution', label: 'Executed' },
+  { value: 'rejected', label: 'Refused' },
+  { value: 'hold', label: 'Held or cancelled' },
+  { value: 'policy', label: 'Policy and risk' },
+]
 
-type FilterKey = (typeof FILTERS)[number]['key']
+function group(r: LedgerRow): string {
+  if (r.kind === 'execution') return 'execution'
+  if (r.kind === 'rejection' || r.kind === 'injection' || r.kind === 'denial') return 'rejected'
+  if (r.kind === 'hold' || r.kind === 'cancel') return 'hold'
+  return 'policy'
+}
+
+function txHref(row: LedgerRow, chainId: number, mode: string) {
+  if (!row.txHash) return undefined
+  if (mode === 'replay' && !isRecordedTx(row.txHash)) return undefined
+  return explorerTx(chainId, row.txHash)
+}
 
 function TxCell({ row }: { row: LedgerRow }) {
   const { mode } = useAegis()
@@ -42,13 +56,13 @@ function TxCell({ row }: { row: LedgerRow }) {
   return row.txHash ? <Hash value={row.txHash} label={`transaction for row ${row.seq}`} /> : <span className="muted">none</span>
 }
 
-function matches(r: LedgerRow, f: FilterKey, error: string | null) {
-  if (error) return error === 'No transaction' ? r.kind === 'injection' : r.revertReason === error
-  if (f === 'all') return true
-  if (f === 'execution') return r.kind === 'execution'
-  if (f === 'rejected') return r.kind === 'rejection' || r.kind === 'injection' || r.kind === 'denial'
-  if (f === 'hold') return r.kind === 'hold' || r.kind === 'cancel'
-  return r.kind === 'policy' || r.kind === 'risk' || r.kind === 'obligation'
+function errorMatch(r: LedgerRow, error: string) {
+  return error === 'No transaction' ? r.kind === 'injection' : r.revertReason === error
+}
+
+function OutcomeChip({ r }: { r: LedgerRow }) {
+  const { mode } = useAegis()
+  return r.kind === 'rejection' && mode === 'replay' && !isRecordedTx(r.txHash) ? <Chip state={r.state}>Refused in replay</Chip> : <Chip state={r.state} />
 }
 
 function eventSummary(e: ChainEvent) {
@@ -59,21 +73,32 @@ function eventSummary(e: ChainEvent) {
 
 export default function Audit() {
   usePageTitle('Audit')
-  const { chainId, deployment, mode } = useAegis()
+  const { chainId, mode, deployment } = useAegis()
   const ledger = useLedger()
   const events = useChainEvents()
   const recon = useReconciliation(deployment.safe)
   const [params, setParams] = useSearchParams()
   const error = params.get('error')
-  const [filter, setFilter] = useState<FilterKey>('all')
-  const [open, setOpen] = useState<number | null>(null)
+  const [status, setStatus] = useState<string | null>(null)
+  const [openSeq, openRow, closeRow] = useHashParam('row')
 
   const links = useMemo(() => (ledger.data ? verifyLinks(ledger.data) : new Map<number, boolean>()), [ledger.data])
   const intact = ledger.data ? [...links.values()].every(Boolean) : null
-  const rows = useMemo(() => (ledger.data ?? []).filter((r) => matches(r, filter, error)).sort((a, b) => b.seq - a.seq), [ledger.data, filter, error])
+  const all = useMemo(() => [...(ledger.data ?? [])].sort((a, b) => b.seq - a.seq), [ledger.data])
+  const rows = useMemo(() => (error ? all.filter((r) => errorMatch(r, error)) : all), [all, error])
   const executed = ledger.data?.filter((r) => r.kind === 'execution').length ?? 0
   const refused = ledger.data?.filter((r) => r.kind === 'rejection' || r.kind === 'injection').length ?? 0
   const mismatches = recon.data?.filter((x) => x.status !== 'match').length
+  const daily = useMemo(() => {
+    const list = ledger.data ?? []
+    const end = latestTs(list)
+    return {
+      rows: dailyTotals(list.map((r) => ({ t: r.ts, v: 1 })), 7, end),
+      refused: dailyTotals(list.filter((r) => r.kind === 'rejection' || r.kind === 'injection').map((r) => ({ t: r.ts, v: 1 })), 7, end),
+    }
+  }, [ledger.data])
+  const selected = openSeq ? all.find((r) => String(r.seq) === openSeq) ?? null : null
+
   const tableRef = useRef<HTMLTableSectionElement>(null)
   const seen = useRef<Set<number> | null>(null)
   useLayoutEffect(() => {
@@ -88,6 +113,17 @@ export default function Audit() {
     if (els.length) return onTick(() => { gsap.fromTo(els, { autoAlpha: 0, y: -12 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power3.out', stagger: 0.06, clearProps: 'opacity,visibility,transform' }) })
   }, [ledger.data])
 
+  const columns: Column<LedgerRow>[] = [
+    { key: 'seq', header: 'Row', className: 'dt-seq', cell: (r) => <span className="nums">{r.seq}</span> },
+    { key: 'what', header: 'What happened', primary: true, className: 'dt-wide', cell: (r) => <>{r.summary}{r.revertReason ? <> <code className="err-code">{r.revertReason}</code></> : null}</> },
+    { key: 'outcome', header: 'Outcome', cell: (r) => <OutcomeChip r={r} /> },
+    { key: 'amount', header: 'Amount', align: 'right', cell: (r) => <span className="nums">{r.amount?.display ?? ''}</span> },
+    { key: 'tier', header: 'Tier', hideNarrow: true, cell: (r) => <TierMark tier={r.tier} /> },
+    { key: 'time', header: `Time, ${TIME_ZONE_LABEL}`, label: 'Time', cell: (r) => <span className="nums nowrap">{stamp(r.ts)}</span> },
+    { key: 'tx', header: 'Transaction', hideNarrow: true, cell: (r) => <TxCell row={r} /> },
+    { key: 'chain', header: 'Hash chain', hideNarrow: true, cell: (r) => (links.get(r.seq) ? <span className="chain-ok">Linked</span> : <span className="link-bad">Broken</span>) },
+  ]
+
   return (
     <main id="main" className="page">
       <div className="page-body">
@@ -97,27 +133,16 @@ export default function Audit() {
           actions={<a className="button quiet" href="#evidence">Recorded on-chain evidence</a>}
         />
         <Kpis label="Audit figures">
-          <Figure label="Ledger rows" value={ledger.data ? String(ledger.data.length) : '…'} note={intact === null ? '' : intact ? 'Hash chain intact' : 'Hash chain broken'} tone={intact === false ? 'alert' : undefined} />
+          <Figure label="Ledger rows" value={ledger.data ? String(ledger.data.length) : '…'} spark={ledger.data?.length ? daily.rows : undefined} note={intact === null ? '' : intact ? 'Hash chain intact. Rows per day, last 7 days' : 'Hash chain broken'} tone={intact === false ? 'alert' : undefined} />
           <Figure label="Executed" value={String(executed)} note="AegisExecuted events" />
-          <Figure label="Refused" value={String(refused)} note={mode === 'replay' ? 'In the replay narrative. Real status under Recorded on Base Sepolia' : 'Typed reverts and unrepresentable requests'} />
+          <Figure label="Refused" value={String(refused)} spark={ledger.data?.length ? daily.refused : undefined} note={mode === 'replay' ? 'In the replay narrative. Real status under Recorded on Base Sepolia' : 'Typed reverts and unrepresentable requests'} />
           <Figure label="Ledger against chain" value={mismatches === undefined ? '…' : mismatches === 0 ? 'Reconciled' : `${mismatches} mismatch`} tone={mismatches ? 'alert' : undefined} />
         </Kpis>
 
         <section className="block" aria-labelledby="ledger-title">
           <div className="block-head">
             <h2 id="ledger-title">Decision ledger</h2>
-            <p>Newest first, times in {TIME_ZONE_LABEL}. Open a row to see its decision chain, its signed record and the hashes that link it.</p>
-          </div>
-          <div className="filters" role="group" aria-label="Filter rows">
-            {FILTERS.map((f) => (
-              <button key={f.key} type="button" aria-pressed={!error && filter === f.key} onClick={() => { setFilter(f.key); if (error) setParams({}) }}>{f.label}</button>
-            ))}
-            {error ? (
-              <span className="filter-error">
-                Showing <code>{error}</code>{isErrorName(error) ? `: ${ERRORS[error].short}.` : '.'}{' '}
-                <button type="button" className="link-plain clear-filter" onClick={() => setParams({})}>Clear</button>
-              </span>
-            ) : null}
+            <p>Newest first, times in {TIME_ZONE_LABEL}. Select a row to see its decision timeline, its signed record and the hashes that link it.</p>
           </div>
           {error && refusalFor(error) ? (
             <p className="proof-note" role="status">
@@ -129,40 +154,31 @@ export default function Audit() {
               })()}
             </p>
           ) : null}
-          {ledger.isLoading ? <Loading what="the ledger" /> : rows.length ? (
-            <div className="table-wrap is-tall">
-              <table className="table ledger">
-                <thead>
-                  <tr><th scope="col">Row</th><th scope="col">Time</th><th scope="col">Outcome</th><th scope="col">What happened</th><th scope="col">Tier</th><th scope="col" className="r">Amount</th><th scope="col">Transaction</th><th scope="col">Hash chain</th></tr>
-                </thead>
-                <tbody ref={tableRef}>
-                  {rows.map((r) => (
-                    <Fragment key={r.seq}>
-                      <tr data-seq={r.seq} className={`ledger-row${open === r.seq ? ' is-open' : ''}`}>
-                        <td className="nums cell-row">
-                          <button type="button" className="row-toggle" aria-expanded={open === r.seq} aria-controls={`row-${r.seq}`} onClick={() => setOpen(open === r.seq ? null : r.seq)}>
-                            <span className="row-num">{r.seq}</span><span className="row-open-label">{open === r.seq ? 'Close' : 'Details'}</span><span className="sr-only"> for row {r.seq}</span>
-                          </button>
-                        </td>
-                        <td className="nums nowrap cell-time">{stamp(r.ts)}</td>
-                        <td className="cell-outcome">{r.kind === 'rejection' && mode === 'replay' && !isRecordedTx(r.txHash) ? <Chip state={r.state}>Refused in replay</Chip> : <Chip state={r.state} />}</td>
-                        <td className="summary cell-what">{r.summary}{r.revertReason ? <> <ErrorTag name={r.revertReason} /></> : null}</td>
-                        <td className="cell-tier" data-label="Tier"><TierMark tier={r.tier} /></td>
-                        <td className="r nums cell-amount" data-label="Amount">{r.amount?.display ?? ''}</td>
-                        <td className="cell-tx" data-label="Transaction"><TxCell row={r} /></td>
-                        <td className="cell-link" data-label="Hash chain">{links.get(r.seq) ? <span className="chain-ok">Chain OK</span> : <span className="link-bad">Broken</span>}</td>
-                      </tr>
-                      {open === r.seq ? (
-                        <tr className="row-detail" id={`row-${r.seq}`}>
-                          <td colSpan={8}><RowDetail row={r} /></td>
-                        </tr>
-                      ) : null}
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : <Empty>No rows match this filter.</Empty>}
+          {ledger.isLoading ? <Loading what="the ledger" rows={6} /> : (
+            <DataTable label="Ledger rows" rows={rows} columns={columns} rowKey={(r) => String(r.seq)} rowName={(r) => `row ${r.seq}`}
+              onOpen={(r) => openRow(String(r.seq))} selectedKey={openSeq} tall
+              status={{ label: 'Outcome', get: group, options: FILTERS }} statusValue={status} onStatusChange={setStatus}
+              searchText={(r) => `${r.seq} ${r.summary} ${r.revertReason ?? ''} ${r.amount?.display ?? ''} ${r.vault ?? ''} ${r.txHash ?? ''} ${r.state}`}
+              searchLabel="Search rows, amounts, errors, hashes"
+              chips={error ? (
+                <span className="fchip is-on">
+                  <button type="button" className="fchip-x" onClick={() => setParams({})} aria-label="Clear error filter"><Icon name="clear" /></button>
+                  <span className="fchip-main is-static">Error<span className="fchip-sep" aria-hidden="true" /><span className="fchip-value">{error}</span></span>
+                </span>
+              ) : undefined}
+              onClearAll={() => { if (error) setParams({}) }}
+              rowMenu={(r) => {
+                const href = txHref(r, chainId, mode)
+                return [
+                  { key: 'open', label: 'View details', onSelect: () => openRow(String(r.seq)) },
+                  { key: 'copy', label: 'Copy row hash', onSelect: () => { void copyText(r.rowHash, 'Row hash copied') } },
+                  ...(href ? [{ key: 'tx', label: 'Open transaction on Basescan', onSelect: () => { window.open(href, '_blank', 'noopener,noreferrer') } }] : []),
+                  ...(r.revertReason ? [{ key: 'err', label: `Show every ${r.revertReason}`, onSelect: () => setParams({ error: r.revertReason! }) }] : []),
+                ]
+              }}
+              rowAttrs={(r) => ({ 'data-seq': r.seq })} bodyRef={tableRef}
+              empty="No ledger rows yet." />
+          )}
           <ErrorNote error={ledger.error} />
         </section>
 
@@ -174,23 +190,17 @@ export default function Audit() {
               <h2 id="events-title">On-chain events</h2>
               <p>Read from {chainName(chainId)}. {mode === 'replay' ? 'Contract addresses are the Base Sepolia deployment. Hashes of recorded transactions link to Basescan; the others are tagged illustrative and not linked.' : explorerTx(chainId, '0x0') ? 'Hashes link to the block explorer.' : 'This chain has no public explorer; hashes are copyable.'}</p>
             </div>
-            {events.isLoading ? <Loading what="events" /> : events.data?.length ? (
-              <div className="table-wrap is-tall">
-                <table className="table">
-                  <thead><tr><th scope="col">Block</th><th scope="col">Event</th><th scope="col">Detail</th><th scope="col">Transaction</th></tr></thead>
-                  <tbody>
-                    {[...events.data].sort((a, b) => b.blockNumber - a.blockNumber).map((e) => (
-                      <tr key={`${e.txHash}-${e.logIndex}`}>
-                        <td className="nums">{e.blockNumber}</td>
-                        <td><code>{e.name}</code></td>
-                        <td>{eventSummary(e)}</td>
-                        <td><Hash value={e.txHash} label={`${e.name} transaction`} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : <Empty>No events yet.</Empty>}
+            {events.isLoading ? <Loading what="events" /> : (
+              <DataTable label="On-chain events" rows={[...(events.data ?? [])].sort((a, b) => b.blockNumber - a.blockNumber)} tall
+                rowKey={(e) => `${e.txHash}-${e.logIndex}`}
+                columns={[
+                  { key: 'block', header: 'Block', cell: (e) => <span className="nums">{e.blockNumber}</span> },
+                  { key: 'name', header: 'Event', cell: (e) => <code>{e.name}</code> },
+                  { key: 'detail', header: 'Detail', className: 'dt-wide', cell: (e) => eventSummary(e) },
+                  { key: 'tx', header: 'Transaction', cell: (e) => <Hash value={e.txHash} label={`${e.name} transaction`} /> },
+                ]}
+                empty="No events yet." />
+            )}
             <ErrorNote error={events.error} />
           </section>
 
@@ -212,33 +222,84 @@ export default function Audit() {
           </section>
         </div>
       </div>
+      <RowDrawer row={selected} linked={selected ? links.get(selected.seq) ?? false : false} onClose={closeRow} onError={(e) => setParams({ error: e })} />
     </main>
   )
 }
 
-function RowDetail({ row }: { row: LedgerRow }) {
+async function copyText(value: string, title: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    toast({ tone: 'ok', title, text: shortHex(value, 10, 8) }, 3500)
+  } catch {
+    toast({ tone: 'refused', title: 'Could not copy', text: 'The browser blocked the clipboard.' }, 4000)
+  }
+}
+
+const TL_TONE: Record<Tone, TimelineItem['tone']> = { ok: 'ok', held: 'held', wait: 'held', frozen: 'neutral', refused: 'refused', info: 'info', neutral: 'neutral' }
+
+function RowDrawer({ row, linked, onClose, onError }: { row: LedgerRow | null; linked: boolean; onClose: () => void; onError: (e: string) => void }) {
   const { deployment, chainId, mode } = useAegis()
-  const req = useRequest(row.requestId ?? null)
-  const r = req.data
+  const req = useRequest(row?.requestId ?? null)
+  const r = row?.requestId ? req.data : undefined
+  const href = row ? txHref(row, chainId, mode) : undefined
   return (
-    <div className="detail">
-      <dl className="facts detail-facts">
-        <div><dt>Previous hash</dt><dd><code>{shortHex(row.prevHash, 10, 8)}</code></dd></div>
-        <div><dt>Row hash</dt><dd><code>{shortHex(row.rowHash, 10, 8)}</code></dd></div>
-        {row.evidenceHash ? <div><dt>Evidence hash</dt><dd><code>{shortHex(row.evidenceHash, 10, 8)}</code></dd></div> : null}
-        {row.requestId ? <div><dt>Request</dt><dd><code>{row.requestId}</code></dd></div> : null}
-        {row.revertReason ? <div><dt>Revert</dt><dd><ErrorTag name={row.revertReason} /> {isErrorName(row.revertReason) ? ERRORS[row.revertReason].plain : ''}</dd></div> : null}
-      </dl>
-      {r ? (
-        <div className="detail-body">
-          <DecisionChain history={r.history} revertReason={r.revertReason} compact />
-          {r.dar ? (
-            <RecordSheet record={r.dar} chainId={chainId} module={deployment.module} illustrative={mode === 'replay'}
-              expected={expectedSigner(r.dar, mode, r.origin === 'exit_agent' ? { address: deployment.roles.exitKey, label: 'exit key' } : { address: deployment.roles.authorizer, label: 'authorizer' })} />
+    <DetailDrawer open={!!row} onClose={onClose} eyebrow={row ? `Ledger row ${row.seq}` : ''}
+      title={row ? (row.amount ? `${row.op === 'REDEEM' ? 'Redeem' : row.op === 'DEPOSIT' ? 'Deposit' : 'Amount'} ${row.vault ? `into ${row.vault}` : ''}`.replace('Redeem into', 'Redeem from').trim() : KIND_TITLE[row.kind]) : ''}
+      badge={row ? <OutcomeChip r={row} /> : null}
+      amount={row?.amount ? <>{row.amount.display} <span className="drawer-unit">USDC</span></> : null}
+      actions={row ? (
+        <>
+          {href ? <a className="button small quiet" href={href} target="_blank" rel="noreferrer">Basescan <Icon name="external" /></a> : null}
+          <button type="button" className="button small quiet" onClick={() => { void copyText(row.rowHash, 'Row hash copied') }}><Icon name="copy" />Row hash</button>
+          {row.revertReason ? <button type="button" className="button small quiet" onClick={() => { onClose(); onError(row.revertReason!) }}>Show every {row.revertReason}</button> : null}
+        </>
+      ) : null}>
+      {row ? (
+        <>
+          <p className="drawer-lede">{row.summary}</p>
+          {row.revertReason ? (
+            <p className="drawer-note is-bad"><ErrorTag name={row.revertReason} short={false} /> {isErrorName(row.revertReason) ? ERRORS[row.revertReason].plain : ''}</p>
           ) : null}
-          {r.explanation ? <p className="decision-why">{r.explanation}</p> : null}
-        </div>
-      ) : row.requestId && req.isLoading ? <Loading what="the request" /> : null}
-    </div>
+          <DrawerSection title="Summary">
+            <KeyValues items={[
+              { label: 'Time', value: <span className="nums">{stamp(row.ts)} ({TIME_ZONE_LABEL})</span> },
+              { label: 'Outcome', value: sentenceCase(row.state as WorkflowState) },
+              row.tier !== undefined && { label: 'Tier', value: <TierMark tier={row.tier} short /> },
+              row.vault ? { label: 'Vault', value: row.vault } : null,
+              { label: 'Transaction', value: <TxCell row={row} /> },
+              row.requestId ? { label: 'Request', value: <span className="kv-copy"><code>{row.requestId}</code><CopyButton value={row.requestId} label="request ID" /></span> } : null,
+            ]} />
+          </DrawerSection>
+          {r?.history?.length ? (
+            <DrawerSection title="Timeline">
+              <Timeline items={[...r.history].reverse().map((h, i) => ({
+                key: `${h.state}-${i}`, title: sentenceCase(h.state), note: h.note, time: stamp(h.at), tone: TL_TONE[stateTone(h.state)],
+              }))} />
+            </DrawerSection>
+          ) : row.requestId && req.isLoading ? <Loading what="the request" /> : null}
+          {r?.explanation ? <p className="decision-why">{r.explanation}</p> : null}
+          {r?.dar ? (
+            <DrawerSection title="Signed record">
+              <RecordSheet record={r.dar} chainId={chainId} module={deployment.module} illustrative={mode === 'replay'}
+                expected={expectedSigner(r.dar, mode, r.origin === 'exit_agent' ? { address: deployment.roles.exitKey, label: 'exit key' } : { address: deployment.roles.authorizer, label: 'authorizer' })} />
+            </DrawerSection>
+          ) : null}
+          <DrawerSection title="Raw fields">
+            <KeyValues items={[
+              { label: 'Row hash', value: <span className="kv-copy"><code>{shortHex(row.rowHash, 10, 8)}</code><CopyButton value={row.rowHash} label="row hash" /></span> },
+              { label: 'Previous hash', value: <span className="kv-copy"><code>{shortHex(row.prevHash, 10, 8)}</code><CopyButton value={row.prevHash} label="previous hash" /></span> },
+              row.evidenceHash ? { label: 'Evidence hash', value: <span className="kv-copy"><code>{shortHex(row.evidenceHash, 10, 8)}</code><CopyButton value={row.evidenceHash} label="evidence hash" /></span> } : null,
+              { label: 'Hash chain', value: linked ? <span className="chain-ok">Linked to row {row.seq - 1 || 'genesis'}</span> : <span className="link-bad">Broken</span> },
+              { label: 'Kind', value: <code>{row.kind}</code> },
+            ]} />
+          </DrawerSection>
+        </>
+      ) : null}
+    </DetailDrawer>
   )
+}
+
+const KIND_TITLE: Record<LedgerRow['kind'], string> = {
+  execution: 'Execution', rejection: 'Refusal', hold: 'Hold', denial: 'Denial', policy: 'Policy change', risk: 'Risk action', obligation: 'Obligation change', injection: 'Refused request', cancel: 'Cancellation',
 }

@@ -31,11 +31,16 @@ export const GLOSSARY_DEF = {
   nonce: def('Nonce'),
 }
 
-export function GlossaryList() {
+export function GlossaryList({ highlight }: { highlight?: string }) {
+  const ref = useRef<HTMLDListElement>(null)
+  useEffect(() => {
+    if (!highlight) return
+    ref.current?.querySelector('.is-hit dt')?.scrollIntoView({ block: 'center' })
+  }, [highlight])
   return (
-    <dl className="glossary">
+    <dl className="glossary" ref={ref}>
       {GLOSSARY.map((g) => (
-        <div key={g.term}>
+        <div key={g.term} className={g.term === highlight ? 'is-hit' : undefined}>
           <dt>{g.term}</dt>
           <dd>{g.def}</dd>
         </div>

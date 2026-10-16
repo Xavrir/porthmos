@@ -5,6 +5,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Address, Hex } from 'viem'
 import { ActionCardView, ApprovalPanel } from '../components/ActionCard'
 import { Chip, Empty, ErrorNote, Figure, Hash, Kpis, Loading, PageHeader } from '../components/bits'
+import { DataTable, type Column } from '../components/DataTable'
+import { DetailDrawer, DrawerSection, KeyValues, useHashParam } from '../components/Drawer'
 import { SwitchSeat, usePageTitle } from '../components/chrome'
 import { BankLimits } from '../components/BankLimits'
 import { TxStatus } from '../components/TxStatus'
@@ -26,17 +28,22 @@ export default function Bank() {
   const qc = useQueryClient()
   const clients = useBankClients()
   const pending = usePendingApprovals()
-  const [selected, setSelected] = useState<Address | null>(null)
+  const [openSafe, openClient, closeClient] = useHashParam('client')
   const [confirming, setConfirming] = useState<{ action: BankAction; safe: Address } | null>(null)
   const [lastTx, setLastTx] = useState<string | null>(null)
   const [done, setDone] = useState<{ action: BankAction; name: string } | null>(null)
-  const recon = useReconciliation(role === 'bank' ? selected ?? clients.data?.[0]?.safe ?? null : null)
+  const sel = (clients.data ?? []).find((c) => c.safe.toLowerCase() === openSafe?.toLowerCase()) ?? null
+  const [lastSafe, setLastSafe] = useState<Address | null>(null)
+  if (sel && sel.safe !== lastSafe) setLastSafe(sel.safe)
+  const recon = useReconciliation(role === 'bank' ? lastSafe ?? clients.data?.[0]?.safe ?? null : null)
+  const selRecon = useReconciliation(role === 'bank' && sel ? sel.safe : null)
 
   const act = useMutation({
     mutationFn: ({ action, safe }: { action: BankAction; safe: Address }) => bankAction(action, safe),
     onSuccess: (h, v) => {
       setConfirming(null)
       setLastTx(h ?? null)
+      if (h) toast({ tone: 'ok', title: `${ACTION_LABEL[v.action]} sent`, text: list.find((c) => c.safe === v.safe)?.name }, 5000)
       const name = list.find((c) => c.safe === v.safe)?.name ?? 'the client'
       setDone({ action: v.action, name })
       if (!h) toast({ tone: 'info', title: `${ACTION_LABEL[v.action]}: ${name}`, text: mode === 'replay' ? 'Recorded in the replay. No transaction was sent.' : undefined })
@@ -49,7 +56,34 @@ export default function Bank() {
   const frozen = list.filter((c) => c.frozen.bank || c.frozen.owner).length
   const escalations = role === 'bank' ? pending.data ?? [] : []
   const mismatches = list.reduce((a, c) => a + c.mismatches, 0)
-  const focus = list.find((c) => c.safe === (selected ?? list[0]?.safe))
+  const focus = list.find((c) => c.safe === (lastSafe ?? list[0]?.safe))
+
+  const actError = act.error ? (isLocal ? plainError(act.error, 'The bank key').message : act.error.message) : null
+  const doneNote = done ? (
+    <div className="ok-note">
+      <p>
+        {done.action === 'bankFreeze' ? `${done.name}: deposits frozen by the bank. Any deposit now reverts Frozen; exits still run.` : done.action === 'bankUnfreeze' ? `${done.name}: the bank lifted its freeze. Deposits can run again.` : `${done.name}: authorizer revoked and deposits frozen. No new decision record can be signed.`}
+        {lastTx ? <> Sent: {mode === 'live' ? <TxStatus hash={lastTx as Hex} label="bank transaction" onMined={() => { qc.invalidateQueries({ queryKey: ['bank-clients'] }); qc.invalidateQueries({ queryKey: ['treasury'] }) }} /> : <Hash value={lastTx} />}</> : mode === 'replay' ? ' Recorded in the replay; no transaction was sent.' : ''}
+      </p>
+      {mode === 'live' && tenant && done.action !== 'bankUnfreeze' ? (
+        <p className="seat-note"><span>To see the effect, ask the agent for a deposit from the owner seat: it is refused. Exits still run.</span> <SwitchSeat to="owner" then="/risk" className="button small quiet">Switch to owner and try to break it</SwitchSeat></p>
+      ) : null}
+      {mode === 'replay' && done.name === 'Harbour Lane Imports' && done.action !== 'bankUnfreeze' ? (
+        <p className="seat-note"><span>To see the effect, look at the waiting deposit as the owner: it now fails its no-freeze check.</span> <SwitchSeat to="owner" then="/copilot" className="button small quiet">Switch to owner and open Copilot</SwitchSeat></p>
+      ) : null}
+    </div>
+  ) : null
+
+  const columns: Column<BankClient>[] = [
+    { key: 'name', header: 'Client', primary: true, cell: (c) => c.name },
+    { key: 'safe', header: 'Safe', hideNarrow: true, cell: (c) => <Hash value={c.safe} kind="address" label={`${c.name} Safe`} /> },
+    { key: 'total', header: 'Total, USDC', align: 'right', cell: (c) => <span className="nums">{c.total?.display ?? ''}</span> },
+    { key: 'risk', header: 'Risk', cell: (c) => <RiskScore c={c} /> },
+    { key: 'deposits', header: 'Deposits', cell: (c) => <DepositChip c={c} /> },
+    { key: 'agent', header: 'Agent', hideNarrow: true, cell: (c) => (c.authorizerRevoked ? <Chip state="REVERTED">Revoked</Chip> : 'Active') },
+    { key: 'waiting', header: 'Waiting', align: 'right', hideNarrow: true, cell: (c) => <span className="nums">{c.pendingEscalations}</span> },
+    { key: 'mismatch', header: 'Mismatch', align: 'right', cell: (c) => (c.mismatches ? <strong className="link-bad nums">{c.mismatches}</strong> : <span className="nums">0</span>) },
+  ]
 
   return (
     <main id="main" className="page">
@@ -83,45 +117,23 @@ export default function Bank() {
             <section className="block" aria-labelledby="clients-title">
               <div className="block-head">
                 <h2 id="clients-title">Clients</h2>
-                <p>Risk score is the highest vault score for that client. Select a row to reconcile its ledger against the chain.{mode === 'replay' ? ' Client names other than Harbour Lane Imports are sample data.' : ''}</p>
+                <p>Risk score is the highest vault score for that client. Select a client for its detail and ledger check; freeze and revoke sit in the row menu and the detail panel.{mode === 'replay' ? ' Client names other than Harbour Lane Imports are sample data.' : ''}</p>
               </div>
-              {clients.isLoading ? <Loading what="clients" /> : list.length ? (
-                <div className="table-wrap is-tall">
-                  <table className="table clients">
-                    <thead>
-                      <tr><th scope="col">Client</th><th scope="col">Safe</th><th scope="col" className="r">Total, USDC</th><th scope="col">Risk</th><th scope="col">Deposits</th><th scope="col">Agent</th><th scope="col" className="r">Waiting</th><th scope="col" className="r">Mismatch</th><th scope="col">Bank actions</th></tr>
-                    </thead>
-                    <tbody>
-                      {list.map((c) => (
-                        <ClientRow key={c.safe} c={c} selected={focus?.safe === c.safe} onSelect={() => setSelected(c.safe)}
-                          confirming={confirming?.safe === c.safe ? confirming.action : null}
-                          onAsk={(action) => setConfirming({ action, safe: c.safe })}
-                          onCancel={() => setConfirming(null)}
-                          onConfirm={(action) => act.mutate({ action, safe: c.safe })}
-                          busy={act.isPending} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : <Empty>No clients.</Empty>}
+              {clients.isLoading ? <Loading what="clients" /> : (
+                <DataTable label="Clients" rows={list} columns={columns} rowKey={(c) => c.safe} rowName={(c) => c.name}
+                  onOpen={(c) => openClient(c.safe)} selectedKey={sel?.safe ?? null}
+                  status={{ label: 'Deposits', get: depositState, options: DEPOSIT_STATES }}
+                  searchText={(c) => `${c.name} ${c.safe}`} searchLabel="Search clients or Safe address"
+                  rowMenu={(c) => [
+                    { key: 'open', label: 'View details', onSelect: () => openClient(c.safe) },
+                    ...actionsFor(c).map((a) => ({ key: a, label: `${ACTION_LABEL[a]}…`, danger: a !== 'bankUnfreeze', onSelect: () => { setConfirming({ action: a, safe: c.safe }); openClient(c.safe) } })),
+                    { key: 'copy', label: 'Copy Safe address', onSelect: () => { navigator.clipboard.writeText(c.safe).then(() => toast({ tone: 'ok', title: 'Safe address copied', text: c.safe }, 3500), () => toast({ tone: 'refused', title: 'Could not copy' }, 3500)) } },
+                  ]}
+                  empty="No clients." />
+              )}
               <ErrorNote error={clients.error} />
-              {act.error ? <p className="error-note" role="alert">{isLocal ? plainError(act.error, 'The bank key').message : act.error.message}</p> : null}
-              <div role="status">
-                {done ? (
-                  <div className="ok-note">
-                    <p>
-                      {done.action === 'bankFreeze' ? `${done.name}: deposits frozen by the bank. Any deposit now reverts Frozen; exits still run.` : done.action === 'bankUnfreeze' ? `${done.name}: the bank lifted its freeze. Deposits can run again.` : `${done.name}: authorizer revoked and deposits frozen. No new decision record can be signed.`}
-                      {lastTx ? <> Sent: {mode === 'live' ? <TxStatus hash={lastTx as Hex} label="bank transaction" onMined={() => { qc.invalidateQueries({ queryKey: ['bank-clients'] }); qc.invalidateQueries({ queryKey: ['treasury'] }) }} /> : <Hash value={lastTx} />}</> : mode === 'replay' ? ' Recorded in the replay; no transaction was sent.' : ''}
-                    </p>
-                    {mode === 'live' && tenant && done.action !== 'bankUnfreeze' ? (
-                      <p className="seat-note"><span>To see the effect, ask the agent for a deposit from the owner seat: it is refused. Exits still run.</span> <SwitchSeat to="owner" then="/risk" className="button small quiet">Switch to owner and try to break it</SwitchSeat></p>
-                    ) : null}
-                    {mode === 'replay' && done.name === 'Harbour Lane Imports' && done.action !== 'bankUnfreeze' ? (
-                      <p className="seat-note"><span>To see the effect, look at the waiting deposit as the owner: it now fails its no-freeze check.</span> <SwitchSeat to="owner" then="/copilot" className="button small quiet">Switch to owner and open Copilot</SwitchSeat></p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+              {act.error && !sel ? <p className="error-note" role="alert">{actError}</p> : null}
+              <div role="status">{doneNote}</div>
             </section>
 
             {mode === 'live' && isLocal && focus ? <BankLimits safe={focus.safe} /> : null}
@@ -185,59 +197,96 @@ export default function Bank() {
           </>
         )}
       </div>
+      <DetailDrawer open={!!sel} onClose={() => { setConfirming(null); closeClient() }} eyebrow="Client" title={sel?.name ?? ''} badge={sel ? <DepositChip c={sel} /> : null}
+        amount={sel?.total ? <>{sel.total.display} <span className="drawer-unit">USDC</span></> : null}
+        actions={sel ? (confirming?.safe === sel.safe ? (
+          <span className="confirm" role="group" aria-label="Confirm bank action">
+            <button type="button" className={`button small ${confirming.action === 'bankUnfreeze' ? 'navy' : 'danger'}`} disabled={act.isPending} onClick={() => act.mutate({ action: confirming.action, safe: sel.safe })}>
+              {act.isPending ? 'Sending…' : `Confirm ${ACTION_LABEL[confirming.action].toLowerCase()}`}
+            </button>
+            <button type="button" className="button small quiet" onClick={() => setConfirming(null)}>Cancel</button>
+          </span>
+        ) : (
+          actionsFor(sel).map((a) => (
+            <button key={a} type="button" className={`button small ${a === 'bankUnfreeze' ? 'navy' : a === 'bankFreeze' ? 'secondary' : 'quiet'}`} onClick={() => setConfirming({ action: a, safe: sel.safe })}>{ACTION_LABEL[a]}</button>
+          ))
+        )) : null}>
+        {sel ? (
+          <>
+            {confirming?.safe === sel.safe ? (
+              <p className="drawer-note is-warn" role="status">
+                {confirming.action === 'bankFreeze' ? 'Freezing stops every deposit for this client. Exits back to the Safe still run, and only the bank can lift its own freeze.' : confirming.action === 'bankUnfreeze' ? 'Lifting the bank freeze lets deposits run again within policy.' : 'Revoking the agent also sets the bank freeze. No new decision record can be signed until the owner sets a new authorizer.'}
+                {mode === 'replay' ? ' In replay this is recorded in your browser; no transaction is sent.' : ''}
+              </p>
+            ) : null}
+            {act.error ? <p className="error-note" role="alert">{actError}</p> : null}
+            <DrawerSection title="Summary">
+              <KeyValues items={[
+                { label: 'Safe', value: <Hash value={sel.safe} kind="address" label={`${sel.name} Safe`} head={10} tail={8} /> },
+                { label: 'Risk score', value: <RiskScore c={sel} /> },
+                { label: 'Deposits', value: sel.frozen.bank ? 'Frozen by the bank' : sel.frozen.owner ? 'Frozen by the owner' : 'Open' },
+                { label: 'Agent', value: sel.authorizerRevoked ? 'Authorizer revoked' : 'Active' },
+                { label: 'Waiting for the bank', value: <span className="nums">{sel.pendingEscalations}</span> },
+                { label: 'Ledger mismatches', value: <span className="nums">{sel.mismatches}</span> },
+                sel.policyVersion !== undefined ? { label: 'Policy version', value: <span className="nums">{sel.policyVersion}</span> } : null,
+                sel.lastActivity ? { label: 'Last activity', value: <span className="nums">{stamp(sel.lastActivity)}</span> } : null,
+              ]} />
+            </DrawerSection>
+            <DrawerSection title="Ledger against chain">
+              {selRecon.isLoading ? <Loading what="reconciliation" /> : selRecon.data?.length ? (
+                <ul className="recon">
+                  {selRecon.data.map((x) => (
+                    <li key={x.key} className={`recon-${x.status}`}>
+                      <span className="recon-what">{x.ledger?.summary ?? 'Event with no ledger row'}</span>
+                      <Chip state={x.status === 'match' ? 'CONFIRMED' : 'REVERTED'}>{x.status === 'match' ? 'Match' : x.status === 'amount-mismatch' ? 'Amounts differ' : x.status === 'hash-broken' ? 'Hash chain broken' : x.status.replace(/-/g, ' ')}</Chip>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="muted">No executions to reconcile.</p>}
+            </DrawerSection>
+          </>
+        ) : null}
+      </DetailDrawer>
     </main>
   )
 }
 
-function ClientRow({ c, selected, onSelect, confirming, onAsk, onCancel, onConfirm, busy }: {
-  c: BankClient; selected: boolean; onSelect: () => void; confirming: BankAction | null
-  onAsk: (a: BankAction) => void; onCancel: () => void; onConfirm: (a: BankAction) => void; busy: boolean
-}) {
-  const chipRef = useRef<HTMLTableCellElement>(null)
-  const state = c.frozen.bank ? 'bank' : c.frozen.owner ? 'owner' : 'open'
-  const prevState = useRef(state)
-  useLayoutEffect(() => {
-    if (prevState.current === state) return
-    prevState.current = state
-    const cell = chipRef.current
-    if (!cell || reducedMotion()) return
-    return onTick(() => { gsap.fromTo(cell.firstElementChild, { rotateX: -90, transformPerspective: 400, transformOrigin: '50% 100%' }, { rotateX: 0, duration: 0.5, ease: 'power3.out' }) })
-  }, [state])
+type DepositState = 'open' | 'owner' | 'bank'
+const DEPOSIT_STATES: { value: DepositState; label: string }[] = [
+  { value: 'open', label: 'Open' }, { value: 'owner', label: 'Owner frozen' }, { value: 'bank', label: 'Bank frozen' },
+]
+const depositState = (c: BankClient): DepositState => (c.frozen.bank ? 'bank' : c.frozen.owner ? 'owner' : 'open')
+
+function actionsFor(c: BankClient): BankAction[] {
   const actions: BankAction[] = c.frozen.bank ? ['bankUnfreeze'] : ['bankFreeze']
   if (!c.authorizerRevoked) actions.push('revokeAuthorizer')
+  return actions
+}
+
+function RiskScore({ c }: { c: BankClient }) {
   return (
-    <tr className={selected ? 'is-open' : undefined}>
-      <td>
-        <button type="button" className="row-toggle wide" aria-pressed={selected} onClick={onSelect}>{c.name}</button>
-      </td>
-      <td><Hash value={c.safe} kind="address" label={`${c.name} Safe`} /></td>
-      <td className="r nums">{c.total?.display ?? ''}</td>
-      <td>
-        <span className="score" aria-label={`Risk score ${c.riskScore.toFixed(2)}`}>
-          <span className="score-bar" aria-hidden="true"><span style={{ transform: `scaleX(${Math.min(1, c.riskScore)})` }} className={c.riskScore >= 0.5 ? 'hot' : ''} /></span>
-          <span className="nums">{c.riskScore.toFixed(2)}</span>
-        </span>
-      </td>
-      <td ref={chipRef}>{c.frozen.bank ? <Chip state="POLICY_CHANGED">Bank frozen</Chip> : c.frozen.owner ? <Chip state="POLICY_CHANGED">Owner frozen</Chip> : <Chip state="CONFIRMED">Open</Chip>}</td>
-      <td>{c.authorizerRevoked ? <Chip state="REVERTED">Revoked</Chip> : 'Active'}</td>
-      <td className="r nums">{c.pendingEscalations}</td>
-      <td className="r nums">{c.mismatches ? <strong className="link-bad">{c.mismatches}</strong> : 0}</td>
-      <td>
-        {confirming ? (
-          <span className="confirm">
-            <button type="button" className={`button small ${confirming === 'bankUnfreeze' ? 'navy' : 'danger'}`} disabled={busy} onClick={() => onConfirm(confirming)}>
-              {busy ? 'Sending…' : `Confirm ${ACTION_LABEL[confirming].toLowerCase()}`}
-            </button>
-            <button type="button" className="button small quiet" onClick={onCancel}>Cancel</button>
-          </span>
-        ) : (
-          <span className="confirm">
-            {actions.map((a) => (
-              <button key={a} type="button" className={`button small ${a === 'bankUnfreeze' ? 'navy' : a === 'bankFreeze' ? 'secondary' : 'quiet'}`} onClick={() => onAsk(a)}>{ACTION_LABEL[a]}</button>
-            ))}
-          </span>
-        )}
-      </td>
-    </tr>
+    <span className="score">
+      <span className="score-bar" aria-hidden="true"><span style={{ transform: `scaleX(${Math.min(1, c.riskScore)})` }} className={c.riskScore >= 0.5 ? 'hot' : ''} /></span>
+      <span className="nums"><span className="sr-only">Risk score </span>{c.riskScore.toFixed(2)}</span>
+    </span>
   )
 }
+
+function DepositChip({ c }: { c: BankClient }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const state = depositState(c)
+  const prev = useRef(state)
+  useLayoutEffect(() => {
+    if (prev.current === state) return
+    prev.current = state
+    const el = ref.current
+    if (!el || reducedMotion()) return
+    return onTick(() => { gsap.fromTo(el, { rotateX: -90, transformPerspective: 400, transformOrigin: '50% 100%' }, { rotateX: 0, duration: 0.5, ease: 'power3.out' }) })
+  }, [state])
+  return (
+    <span ref={ref} className="chip-flip">
+      {state === 'bank' ? <Chip state="POLICY_CHANGED" tone="frozen">Bank frozen</Chip> : state === 'owner' ? <Chip state="POLICY_CHANGED" tone="frozen">Owner frozen</Chip> : <Chip state="CONFIRMED">Open</Chip>}
+    </span>
+  )
+}
+

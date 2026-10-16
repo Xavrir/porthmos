@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { demoIdentitiesAvailable } from './demo/allowed'
 import { toViemMessage } from './eip712'
 import { REGISTRY_ABI } from './deployment'
+import { assertPinnedTarget, guardedSend, pinnedRegistry } from './txguard'
 import { bankAddress, ownerAddress } from './keys'
 import { publicClientFor } from './onboard/chain'
 import { localSender } from './onboard/signers'
@@ -178,6 +179,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
 
   const senders = useRef(new Map<string, ReturnType<typeof localSender>>())
   const localTx = useCallback((r: Role, tx: TxRequest): Promise<Hex> => {
+    assertPinnedTarget(chainId, tx)
     if (!wallet) throw new Error('No keys in this browser. Create your treasury first.')
     const pk = r === 'bank' ? wallet.bank.pk : wallet.owner.type === 'burner' ? wallet.owner.pk : null
     if (!pk) throw new Error('Your owner key is your browser wallet.')
@@ -307,21 +309,21 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     throw new Error('Sign in with a wallet to sign.')
   }, [identity, localAccount])
 
-  const sendTx = useCallback(async (tx: TxRequest): Promise<Hex> => {
+  const sendTx = useCallback((tx: TxRequest): Promise<Hex> => guardedSend(chainId, tx, async (t) => {
     if (identity.kind === 'demo') {
       const account = await demoAccount(identity.role)
       const client = createWalletClient({ account, chain: foundry, transport: http(RPC_URLS[foundry.id]) })
-      return client.sendTransaction({ to: tx.to, data: tx.data, value: BigInt(tx.value || '0') })
+      return client.sendTransaction({ to: t.to, data: t.data, value: 0n })
     }
-    if (identity.kind === 'local') return localTx(identity.role, tx)
-    if (identity.kind === 'wallet') return sendTransaction(wagmiConfig, { to: tx.to, data: tx.data, value: BigInt(tx.value || '0') })
+    if (identity.kind === 'local') return localTx(identity.role, t)
+    if (identity.kind === 'wallet') return sendTransaction(wagmiConfig, { to: t.to, data: t.data, value: 0n })
     throw new Error('Sign in with a wallet to send this transaction.')
-  }, [identity, localTx])
+  }), [chainId, identity, localTx])
 
-  const sendAs = useCallback((r: Role, fn: RegistryFn, args: readonly unknown[]): Promise<Hex> => {
+  const sendAs = useCallback(async (r: Role, fn: RegistryFn, args: readonly unknown[]): Promise<Hex> => {
     const data = encodeFunctionData({ abi: REGISTRY_ABI, functionName: fn, args } as never)
-    return localTx(r, { to: deployment.registry, data, value: '0' })
-  }, [deployment.registry, localTx])
+    return localTx(r, { to: pinnedRegistry(chainId), data, value: '0' })
+  }, [chainId, localTx])
 
   const bankAction = useCallback(async (action: BankAction, safe: Address): Promise<Hex | null> => {
     if (!address) throw new Error('Switch to the bank officer first.')
@@ -333,10 +335,10 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     if (identity.kind === 'demo') {
       const account = await demoAccount(identity.role)
       const client = createWalletClient({ account, chain: foundry, transport: http(RPC_URLS[foundry.id]) })
-      return client.writeContract({ address: deployment.registry, abi: REGISTRY_ABI, functionName: action, args: [safe] })
+      return client.writeContract({ address: pinnedRegistry(chainId), abi: REGISTRY_ABI, functionName: action, args: [safe] })
     }
-    return writeContract(wagmiConfig, { address: deployment.registry, abi: REGISTRY_ABI, functionName: action, args: [safe] })
-  }, [address, api, deployment.registry, identity, mode, sendAs])
+    return writeContract(wagmiConfig, { address: pinnedRegistry(chainId), abi: REGISTRY_ABI, functionName: action, args: [safe] })
+  }, [address, api, chainId, identity, mode, sendAs])
 
   const chooser = useMemo(() => ({
     open: chooserOpen,

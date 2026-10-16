@@ -1,14 +1,17 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useAegis } from '../lib/source'
 import { explorerAddress, explorerTx } from '../lib/wallet'
 import { shortHex } from '../lib/format'
 import { isRecordedTx } from '../replay/hashes'
 import { CountText } from './Count'
+import { CopyButton } from './Drawer'
+import { Sparkline } from './charts'
+import { Icon } from './icons'
 import { Term } from './Glossary'
 import { ERRORS, sentenceCase, stateVerdict, TIER_SHORT, TIERS, isErrorName } from '../lib/vocabulary'
 import type { ErrorName, Tier, WorkflowState } from '../lib/types'
 
-export type Tone = 'ok' | 'held' | 'wait' | 'frozen' | 'refused' | 'neutral'
+export type Tone = 'ok' | 'held' | 'wait' | 'frozen' | 'refused' | 'info' | 'neutral'
 
 export function stateTone(state: string): Tone {
   switch (state) {
@@ -21,7 +24,7 @@ export function stateTone(state: string): Tone {
     case 'REVERTED': case 'POLICY_REJECTED': case 'SIM_FAILED': case 'APPROVAL_DENIED':
       return 'refused'
     case 'POLICY_CHANGED':
-      return 'frozen'
+      return 'info'
     default:
       return 'neutral'
   }
@@ -59,19 +62,9 @@ export function ErrorTag({ name, short = true }: { name: string | undefined; sho
 
 export function Hash({ value, kind = 'tx', head = 6, tail = 4, label }: { value: string | undefined | null; kind?: 'tx' | 'address' | 'plain'; head?: number; tail?: number; label?: string }) {
   const { chainId, mode } = useAegis()
-  const [copied, setCopied] = useState(false)
   if (!value) return <span className="muted">none</span>
   const illustrative = kind === 'tx' && mode === 'replay' && !isRecordedTx(value)
   const href = kind === 'tx' ? (illustrative ? undefined : explorerTx(chainId, value)) : kind === 'address' ? explorerAddress(chainId, value) : undefined
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
-    } catch {
-      setCopied(false)
-    }
-  }
   return (
     <span className="hash">
       {href ? (
@@ -82,19 +75,27 @@ export function Hash({ value, kind = 'tx', head = 6, tail = 4, label }: { value:
         <code title={value}>{shortHex(value, head, tail)}</code>
       )}
       {illustrative ? <span className="illustrative" title="Placeholder until the recorded transaction hash is swapped in">illustrative</span> : null}
-      <button type="button" className="copy" onClick={copy} aria-label={`Copy ${label ?? 'value'} ${value}`}>
-        {copied ? 'Copied' : 'Copy'}
-      </button>
+      <CopyButton value={value} label={`${label ?? 'value'} ${value}`} />
     </span>
   )
 }
 
-export function Figure({ label, value, note, tone }: { label: string; value: ReactNode; note?: ReactNode; tone?: 'alert' }) {
+export type Trend = { text: string; dir: 'up' | 'down' | 'flat'; good?: boolean }
+
+export function Figure({ label, value, note, tone, spark, trend }: { label: string; value: ReactNode; note?: ReactNode; tone?: 'alert'; spark?: number[]; trend?: Trend }) {
   const pending = value === '…'
   return (
-    <div className={`kpi${tone === 'alert' ? ' is-alert' : ''}`}>
+    <div className={`kpi${tone === 'alert' ? ' is-alert' : ''}${spark && spark.length > 1 ? ' has-spark' : ''}`}>
       <span className="kpi-label">{label}</span>
-      <span className="kpi-value nums">{pending ? <span className="sk sk-value" aria-label="Loading" role="img" /> : typeof value === 'string' ? <CountText text={value} /> : value}</span>
+      <span className="kpi-row">
+        <span className="kpi-value nums">{pending ? <span className="sk sk-value" aria-label="Loading" role="img" /> : typeof value === 'string' ? <CountText text={value} /> : value}</span>
+        {trend ? (
+          <span className={`trend trend-${trend.dir}${trend.good === false ? ' is-bad' : ''}`}>
+            {trend.dir !== 'flat' ? <Icon name={trend.dir} /> : null}<span className="nums">{trend.text}</span>
+          </span>
+        ) : null}
+      </span>
+      {spark && spark.length > 1 ? <Sparkline values={spark} /> : null}
       {note ? <span className="kpi-note">{note}</span> : null}
     </div>
   )

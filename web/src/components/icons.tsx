@@ -17,14 +17,31 @@ const PATHS = {
   info: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17z M12 11v5.5 M12 7.5v1',
   check: 'M5 12.5l4.5 4.5L19 7.5',
   alert: 'M12 3.5l9 16H3z M12 9.5v4.5 M12 16.5v0.5',
+  search: 'M10.5 4.5a6 6 0 1 0 0 12a6 6 0 1 0 0-12z M15 15l5 5',
+  copy: 'M8.5 8.5h11v11h-11z M15.5 8.5V4.5h-11v11h4',
+  more: 'M5 12h0.01 M12 12h0.01 M19 12h0.01',
+  plus: 'M12 5v14 M5 12h14',
+  clear: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17z M9 9l6 6 M15 9l-6 6',
+  add: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17z M12 8.5v7 M8.5 12h7',
+  left: 'M14.5 6l-6 6l6 6',
+  right: 'M9.5 6l6 6l-6 6',
+  keyboard: 'M3 6.5h18v11H3z M7 10h0.01 M10.5 10h0.01 M14 10h0.01 M17 10h0.01 M7.5 14h9',
+  help: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17z M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-0.7 0.3-1 0.9-1 1.7v0.5 M12 16.5v0.5',
+  orders: 'M4.5 4.5h15v15h-15z M4.5 9.5h15 M9 13.5h6 M9 16.5h4',
+  up: 'M12 19V5 M6 11l6-6l6 6',
+  down: 'M12 5v14 M6 13l6 6l6-6',
+  page: 'M6 3.5h8l4 4v13H6z M14 3.5v4h4',
+  ledger: 'M4 6.5h16 M4 12h16 M4 17.5h10',
+  tx: 'M4 8.5h14l-3.5-3.5 M20 15.5H6l3.5 3.5',
+  safe: 'M4 5.5h16v13H4z M8 9.5h3v5H8z M15 12h2',
 } as const
 
 export type IconName = keyof typeof PATHS
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {
   return (
-    <svg className={`icon${className ? ` ${className}` : ''}`} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="square" strokeLinejoin="miter" aria-hidden="true" focusable="false">
-      <path d={PATHS[name]} />
+    <svg className={`icon${className ? ` ${className}` : ''}`} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap={name === 'more' ? 'round' : 'square'} strokeLinejoin="miter" aria-hidden="true" focusable="false">
+      <path d={PATHS[name]} strokeWidth={name === 'more' ? 2.75 : undefined} />
     </svg>
   )
 }

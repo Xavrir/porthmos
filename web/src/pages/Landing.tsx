@@ -1,467 +1,615 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import type { Address } from 'viem'
-import { ModeIndicator, usePageTitle } from '../components/chrome'
+import { useQuery } from '@tanstack/react-query'
+import { usePageTitle } from '../components/chrome'
 import { GlossaryButton } from '../components/Glossary'
-import { RecordSheet } from '../components/RecordSheet'
-import { ChainStrip } from '../components/ChainStrip'
-import { ChapterRail } from '../components/ChapterRail'
-import { CountText } from '../components/Count'
-import { Gates } from '../components/Gates'
-import { ReserveBar } from '../components/ReserveBar'
-import { TierLab } from '../components/TierLab'
 import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
 import { useBaseSepoliaLive } from '../lib/chain/live'
-import { CONTRACT_SUITE, REFUSALS, chainFacts, proofFor, scheduledAfter, SCHEDULED_SCENARIOS } from '../lib/proof'
-import { useLedger, useObligations, useOracle, usePendingApprovals, useRisk, useTreasury } from '../lib/queries'
-import { day, money, num } from '../lib/format'
-import { verifyLinks } from '../lib/reconcile'
-import { recorded } from '../replay/fixtures'
-import { REPLAY_DEPLOY } from '../lib/deployment'
-import type { SignedRecord } from '../lib/types'
+import { money } from '../lib/format'
+import { ArtAgent, ArtLock, ArtProof, ArtRelease, ArtShip, ArtVerify, IconArrow, IconBlock, IconCheck, IconContract, IconFreeze, IconGrow, IconLock, IconMilestone, IconOut, IconPlus, IconReserve } from '../landing/art'
+import { prefersStill, rng } from '../landing/canvas'
+import {
+  E1_DEPOSIT, E3_FLOOR, E5_EXIT, E5_FREEZE, RECORDED_COUNT, RECORDED_DAY, RECORDED_FLOOR, REFERENCE, REFUSED, REVERTED, SHIELD_HASHES, TICKER, TX_COUNT,
+  addressUrl, blockText, shortHash, txUrl, type TickerItem,
+} from '../landing/data'
 
-const R = REPLAY_DEPLOY
-const NAMES: Record<string, string> = {
-  [R.safe.toLowerCase()]: 'Safe',
-  [R.vaultA.toLowerCase()]: 'Vault A',
-  [R.vaultB.toLowerCase()]: 'Vault B',
+const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;700&family=Geist+Mono:wght@400;500&display=swap'
+
+function useLandingDocument() {
+  useEffect(() => {
+    const head = document.head
+    const add = (rel: string, href: string, cross?: boolean) => {
+      if (head.querySelector(`link[rel="${rel}"][href="${href}"]`)) return
+      const l = document.createElement('link')
+      l.rel = rel
+      l.href = href
+      if (cross) l.crossOrigin = ''
+      head.appendChild(l)
+    }
+    add('preconnect', 'https://fonts.googleapis.com')
+    add('preconnect', 'https://fonts.gstatic.com', true)
+    add('stylesheet', FONT_HREF)
+    const root = document.documentElement
+    root.classList.add('pm-page')
+    return () => root.classList.remove('pm-page')
+  }, [])
 }
 
-function signerOf(id: Parameters<typeof recorded>[0], role: string) {
-  return { address: recorded(id).signer as Address, label: `${role} key that signed it` }
+function Counter({ value, decimals = 0, count = true, className }: { value: number; decimals?: number; count?: boolean; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const shown = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    const from = shown.current
+    shown.current = value
+    el.textContent = fmt(value)
+    if (!count || prefersStill()) return
+    let raf = 0
+    let io: IntersectionObserver | null = null
+    const run = (start: number) => {
+      const t0 = performance.now()
+      const step = (now: number) => {
+        const p = Math.min(1, (now - t0) / 1400)
+        el.textContent = fmt(start + (value - start) * (1 - (1 - p) ** 2))
+        if (p < 1) raf = requestAnimationFrame(step)
+      }
+      raf = requestAnimationFrame(step)
+    }
+    if (from === null) {
+      io = new IntersectionObserver((es) => {
+        if (!es.some((e) => e.isIntersecting)) return
+        io?.disconnect()
+        run(0)
+      }, { threshold: 0.4 })
+      io.observe(el)
+    } else if (from !== value) run(from)
+    return () => { cancelAnimationFrame(raf); io?.disconnect() }
+  }, [value, decimals, count])
+  return <span ref={ref} className={className} />
 }
 
-type Output = { key: string; name: string; record: SignedRecord; expected: { address: Address; label: string }; changed?: Record<string, string>; caption: string }
+function Ext({ href, className, children, label }: { href: string; className?: string; children: ReactNode; label?: string }) {
+  return <a href={href} className={className} target="_blank" rel="noreferrer" aria-label={label}>{children}</a>
+}
 
-const OUTPUTS: Output[] = [
-  { key: 'dar', name: 'Decision record', record: recorded('dar-e1'), expected: signerOf('dar-e1', 'authorizer'), caption: 'E1: the first deposit into Vault B, 2,000.00. Tier 3, so it carries the hash of the owner’s approval. The deposit itself is on Base Sepolia.' },
-  { key: 'approval', name: 'Owner approval', record: recorded('apr-e1'), expected: signerOf('apr-e1', 'owner'), caption: 'What the owner signs: a ceiling, a vault, a policy version and 24 hours. The agent fills in the market data later.' },
-  { key: 'exit', name: 'Exit record', record: recorded('dar-e5-exit'), expected: signerOf('dar-e5-exit', 'exit key'), caption: 'From the replay’s freeze drill: signed by the exit key, which can only redeem back to the Safe, so a freeze does not stop it.' },
-  { key: 'tampered', name: 'Tampered record', record: recorded('dar-e4a'), expected: signerOf('dar-e4a', 'authorizer'), changed: { amount: '4000000000' }, caption: 'Signed for 900.00, submitted as 4,000.00. Your browser recovers the signer from the edited fields and gets a stranger.' },
+function Chip({ children, tone = 'light', as: Tag = 'span', className = '' }: { children: ReactNode; tone?: 'light' | 'dark' | 'green' | 'orange'; as?: 'span' | 'h2' | 'p'; className?: string }) {
+  return <Tag className={`pm-chip pm-chip-${tone} ${className}`}>{children}</Tag>
+}
+
+function TickerRow({ items, hidden }: { items: TickerItem[]; hidden?: boolean }) {
+  return (
+    <ul className="pm-ticker-row" aria-hidden={hidden || undefined}>
+      {items.map((t) => (
+        <li key={t.hash}>
+          <a href={txUrl(t.hash)} target="_blank" rel="noreferrer" tabIndex={hidden ? -1 : undefined} className="pm-ticker-item">
+            <span className="pm-ticker-id">{t.scenario}</span>
+            <span className={t.reverted ? 'pm-ticker-err' : 'pm-ticker-ok'}>{t.reverted ? `reverted ${t.error}` : 'confirmed'}</span>
+            <span>block {blockText(t.block)}</span>
+            <span>{shortHash(t.hash)}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+const GUARANTEES: { title: string; icon: ReactNode; status: ReactNode }[] = [
+  { title: 'Payment locked before the goods ship', icon: <IconLock />, status: 'TradeFlow, ships this week' },
+  { title: 'Paid per milestone, on verified proof', icon: <IconMilestone />, status: 'TradeFlow, ships this week' },
+  { title: 'Upcoming bills are reserved first', icon: <IconReserve />, status: E3_FLOOR ? <Ext href={txUrl(E3_FLOOR.hash)}>Live, E3 on BaseScan</Ext> : 'Live' },
+  { title: 'Only free cash is put to work', icon: <IconGrow />, status: E1_DEPOSIT ? <Ext href={txUrl(E1_DEPOSIT.hash)}>Live, E1 on BaseScan</Ext> : 'Live' },
+  { title: 'The bank can freeze the agent at once', icon: <IconFreeze />, status: E5_FREEZE ? <Ext href={txUrl(E5_FREEZE.hash)}>Live, E5 on BaseScan</Ext> : 'Live' },
 ]
 
-const INCIDENTS = [
-  { name: 'Freysa', when: 'Nov 2024', loss: 'about USD 47,000', what: 'Talked into a transfer by a chat message.' },
-  { name: 'Lobstar Wilde', when: 'Feb 2026', loss: 'about USD 440,000', what: 'A unit error. No attacker was involved.' },
-  { name: 'Bankr', when: 'May 2026', loss: null, what: 'Executed an encoded instruction relayed by another agent.' },
+type Step = { n: string; title: string; text: string; art: ReactNode; fn: string; live?: { label: string; href: string }; extra?: ReactNode }
+
+const STEPS: Step[] = [
+  { n: '01', title: 'Lock the funds', text: 'The buyer funds the order in one signed transaction. Example: 100,000 USDC for three milestones, held by the contract, out of the agent’s reach.', art: <ArtLock />, fn: 'TradeEscrow.createOrder' },
+  { n: '02', title: 'Ship the goods', text: 'The carrier takes the container. Its signed handover document is the proof for milestone 1, worth 20,000 USDC.', art: <ArtShip />, fn: 'Proof kind: HANDOVER' },
+  { n: '03', title: 'Submit the proof', text: 'A trusted issuer signs each proof: the carrier, a cold chain sensor, a surveyor. Anyone may submit it, because the signature is the authority.', art: <ArtProof />, fn: 'POST /api/tradeflow/orders/{id}/proofs' },
+  { n: '04', title: 'Verify', text: 'Fixed code checks the issuer, the document and the conditions, such as 2 to 8 °C for a reefer. If one check fails, the payment is held.', art: <ArtVerify />, fn: 'Proof Verifier, then the Authorizer' },
+  {
+    n: '05', title: 'Release the milestone', text: 'The contract pays the supplier address fixed in the order. Not the agent, not an issuer: no one can change the payee or the amount.', art: <ArtRelease />, fn: 'TradeEscrow.release',
+    extra: <p className="pm-flow"><span>TradeEscrow</span><span className="pm-flow-track" aria-hidden="true"><span className="pm-flow-dot" /></span><span className="sr-only">pays the</span><span>supplier</span><span className="pm-flow-amt">20,000.00 USDC</span></p>,
+  },
+  { n: '06', title: 'Invest only free cash', text: 'Cash that no bill and no order needs goes into vaults the owner approved. The contract refuses any deposit below the reserve floor.', art: <ArtAgent />, fn: 'AegisModule.deposit', live: E1_DEPOSIT ? { label: 'Live, E1 on BaseScan', href: txUrl(E1_DEPOSIT.hash) } : undefined },
 ]
 
-function age(s: number): string {
-  if (s < 90) return `${s} s`
-  if (s < 5400) return `${Math.round(s / 60)} min`
-  if (s < 172800) return `${Math.round(s / 3600)} h`
-  return `${Math.round(s / 86400)} d`
+function Stripes() {
+  const layers = useMemo(() => {
+    const rand = rng(1440)
+    const shades = ['#000000', '#000000', '#04140E', '#0B3D2C', '#137452', '#1B8560', '#2E9C74', '#4EC397', '#7DD3B0', '#A9E4CC']
+    const make = (n: number, gaps: boolean, bias: number) => Array.from({ length: n }, (_, i) => ({
+      key: i,
+      w: 4 + Math.round(rand() * 56),
+      gap: gaps ? Math.round(rand() * 90) : 0,
+      c: shades[Math.min(shades.length - 1, Math.max(0, Math.floor(rand() * shades.length * 0.8 + bias)))],
+    }))
+    return [make(26, false, 0), make(10, true, 2), make(6, true, 4)]
+  }, [])
+  return (
+    <div className="pm-stripes" aria-hidden="true">
+      {layers.map((l, i) => (
+        <div key={i} className={`pm-stripe-layer pm-stripe-l${i}`}>
+          {l.map((s) => <span key={s.key} style={{ width: s.w, marginLeft: s.gap, ['--c' as string]: s.c }} />)}
+        </div>
+      ))}
+      <span className="pm-stripe-orange" />
+    </div>
+  )
+}
+
+function FreezeDemo() {
+  const [frozen, setFrozen] = useState(false)
+  const [runs, setRuns] = useState(0)
+  const safe = shortHash(REFERENCE.safe)
+  return (
+    <div className={`pm-freeze ${frozen ? 'is-frozen' : ''}`}>
+      <div className="pm-freeze-row">
+        <Chip>Simulation</Chip>
+        <p className="pm-freeze-who">Agent of the reference treasury <span className="pm-mono">{safe}</span></p>
+        <span className={`pm-chip ${frozen ? 'pm-chip-orange' : 'pm-chip-green'} pm-freeze-state`}>{frozen ? 'FROZEN' : 'ACTIVE'}</span>
+        <button type="button" className="pm-btn pm-btn-ink" aria-pressed={frozen} onClick={() => { setFrozen((f) => !f); setRuns((r) => r + 1) }}>
+          {frozen ? 'Lift the freeze' : 'Freeze deposits'}
+        </button>
+      </div>
+      <div className="pm-freeze-log" aria-live="polite">
+        {runs === 0 ? (
+          <p className="pm-mono">Press the button to see what the bank sends. Nothing is sent from this page.</p>
+        ) : (
+          <>
+            <p key={runs} className="pm-mono pm-typed">&gt; PolicyRegistry.{frozen ? 'bankFreeze' : 'bankUnfreeze'}({safe}), simulated</p>
+            {E5_FREEZE ? (
+              <p className="pm-mono">On Base Sepolia the bank froze this treasury in E5, block {blockText(E5_FREEZE.block)}: <Ext href={txUrl(E5_FREEZE.hash)} className="pm-link-deep">{shortHash(E5_FREEZE.hash)}</Ext></p>
+            ) : null}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+type Plan = { title: string; text: string; action: ReactNode }
+
+function Plans({ plans }: { plans: Plan[] }) {
+  const [open, setOpen] = useState(0)
+  const base = useId()
+  const fine = useRef(false)
+  useEffect(() => { fine.current = matchMedia('(hover: hover) and (pointer: fine)').matches }, [])
+  return (
+    <ul className="pm-plans">
+      {plans.map((p, i) => (
+        <li key={p.title} className={`pm-plan ${open === i ? 'is-open' : ''}`} onPointerEnter={() => { if (fine.current) setOpen(i) }}>
+          <span className="pm-plan-tile" aria-hidden="true"><IconArrow /></span>
+          <h3 className="pm-plan-title">
+            <button type="button" id={`${base}-b${i}`} aria-expanded={open === i} aria-controls={`${base}-p${i}`} onClick={() => setOpen(i)}>{p.title}</button>
+          </h3>
+          <p className="pm-plan-text">{p.text}</p>
+          <div className="pm-plan-bar" id={`${base}-p${i}`} role="region" aria-labelledby={`${base}-b${i}`}>
+            <div className="pm-plan-bar-in">{p.action}</div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 export function Landing() {
   usePageTitle(null)
-  const { mode, deployment, chainId, tenant } = useAegis()
+  useLandingDocument()
+  const { tenant, http, service } = useAegis()
   const { chooser } = useIdentity()
   const live = useBaseSepoliaLive()
-  const t = useTreasury()
-  const o = useOracle()
-  const risk = useRisk()
-  const obligations = useObligations()
-  const pending = usePendingApprovals()
-  const ledger = useLedger()
-  const [out, setOut] = useState(0)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const health = useQuery({
+    queryKey: ['landing-health'],
+    queryFn: () => http.health() as Promise<{ tenantCount?: unknown }>,
+    enabled: service === 'up',
+    refetchInterval: 60000,
+    retry: 0,
+  })
+  const tenantCount = typeof health.data?.tenantCount === 'number' ? health.data.tenantCount : null
+  const isLive = live.status === 'live'
+  const floor = isLive && live.floor !== null ? live.floor : RECORDED_FLOOR
+  const vaultAssets = isLive && live.vaults ? live.vaults.reduce((a, v) => a + v.assets, 0) : null
+  const safeUsdc = isLive ? live.safeUsdc : null
+
+  const rootRef = useRef<HTMLDivElement>(null)
+  const heroCanvas = useRef<HTMLCanvasElement>(null)
+  const heroWatch = useRef<HTMLSpanElement>(null)
+  const asciiCanvas = useRef<HTMLCanvasElement>(null)
+  const barCanvas = useRef<HTMLCanvasElement>(null)
+  const topWatch = useRef<HTMLSpanElement>(null)
+  const [atTop, setAtTop] = useState(true)
 
   useEffect(() => {
-    const v = videoRef.current
-    if (!v) return
-    const calm = matchMedia('(prefers-reduced-motion: reduce)')
-    const sync = () => { if (calm.matches) v.pause(); else v.play().catch(() => undefined) }
-    sync()
-    calm.addEventListener('change', sync)
-    return () => calm.removeEventListener('change', sync)
+    const el = topWatch.current
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => setAtTop(e.isIntersecting))
+    io.observe(el)
+    return () => io.disconnect()
   }, [])
 
-  const rootRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const still = prefersStill()
+    const stops: (() => void)[] = []
+    let cancelled = false
+    void Promise.all([import('../landing/burst'), import('../landing/ascii'), import('../landing/barField')]).then(([b, a, f]) => {
+      if (cancelled) return
+      if (heroCanvas.current) stops.push(b.startBurst(heroCanvas.current, { still, observe: heroWatch.current ?? undefined }).stop)
+      if (asciiCanvas.current) stops.push(a.startAscii(asciiCanvas.current, SHIELD_HASHES, { still }).stop)
+      if (barCanvas.current) stops.push(f.startBarField(barCanvas.current, { still }).stop)
+    })
+    return () => { cancelled = true; stops.forEach((s) => s()) }
+  }, [])
+
   useEffect(() => {
     const root = rootRef.current
     if (!root) return
     let stop: (() => void) | null = null
     let cancelled = false
     const release = () => document.documentElement.classList.remove('motion-pending')
-    Promise.all([import('./landingMotion'), document.fonts?.ready ?? Promise.resolve()])
+    const fonts = Promise.race([document.fonts?.ready ?? Promise.resolve(), new Promise((r) => setTimeout(r, 1200))])
+    Promise.all([import('./landingMotion'), fonts])
       .then(([m]) => { if (!cancelled) stop = m.initLandingMotion(root) })
       .catch(release)
     return () => { cancelled = true; stop?.(); release() }
   }, [])
 
-  const tr = t.data
-  const chainOk = useMemo(() => (ledger.data ? [...verifyLinks(ledger.data).values()].every(Boolean) : null), [ledger.data])
-  const waiting = pending.data?.[0]
-  const frozen = tr ? tr.policy.frozen.bank || tr.policy.frozen.owner : false
-  const triggers = risk.data?.vaults.flatMap((v) => v.triggers) ?? []
-  const vaultB = risk.data?.vaults[1]
+  const primary = tenant
+    ? <button type="button" className="pm-btn pm-btn-green" onClick={() => chooser.show('hero')}>Open your treasury<IconArrow /></button>
+    : <Link to="/start" className="pm-btn pm-btn-green">Create your treasury<IconArrow /></Link>
 
-  const onChain = mode === 'replay' && live.status === 'live'
-  const src = mode === 'live' ? 'Live service' : onChain ? 'Base Sepolia now' : 'Replay'
-  const liveTotal = onChain && live.safeUsdc !== null && live.vaults ? live.safeUsdc + live.vaults.reduce((a, v) => a + v.assets, 0) : null
-  const liveQuarantined = onChain && live.vaults ? live.vaults.filter((v) => v.quarantined).length : 0
-  const liveFrozen = onChain && live.frozen ? live.frozen.bank || live.frozen.owner : null
-
-  const swatches = [
+  const plans: Plan[] = [
     {
-      to: '/treasury', label: 'Treasury', cls: 's-surface', src,
-      value: liveTotal !== null ? `${money(liveTotal)} USDC` : tr ? `${tr.balances.total.display} USDC` : '…',
-      sub: onChain && live.floor !== null ? `Reserve floor ${money(live.floor)}` : tr ? `Reserve floor ${tr.reserve.onchainFloor.display}` : '',
+      title: 'Try a test treasury',
+      text: 'Your own treasury on Base Sepolia in about a minute: a Safe, an owner key and a bank key, made in your browser. Free, with test funds only.',
+      action: tenant
+        ? <button type="button" className="pm-bar-link" onClick={() => chooser.show('hero')}><IconArrow />Open your treasury</button>
+        : <Link to="/start" className="pm-bar-link"><IconArrow />Create your treasury</Link>,
     },
-    {
-      to: '/risk', label: 'Risk', cls: 's-red', src,
-      value: onChain && live.price !== null ? `Peg ${live.price.toFixed(4)}` : o.data ? `Peg ${o.data.price.display}` : '…',
-      sub: onChain ? (liveQuarantined ? `${liveQuarantined} vault${liveQuarantined > 1 ? 's' : ''} quarantined` : `Price ${age(live.ageSeconds ?? 0)} old`) : triggers.length ? `${triggers.length} trigger${triggers.length > 1 ? 's' : ''} firing` : o.data ? `Price ${o.data.ageSeconds} s old` : '',
-    },
-    {
-      to: '/copilot', label: 'Copilot', cls: 's-blue', src: mode === 'live' ? 'Live service' : 'Replay',
-      value: pending.data ? `${pending.data.length} waiting` : '…',
-      sub: waiting ? `${waiting.actionCard.amount.display} into ${waiting.actionCard.vault.name}` : 'No approvals due',
-    },
-    {
-      to: '/bank', label: 'Bank desk', cls: 's-navy', src,
-      value: liveFrozen !== null ? (liveFrozen ? 'Frozen' : 'Not frozen') : tr ? (frozen ? 'Frozen' : 'Not frozen') : '…',
-      sub: onChain && live.policyVersion !== null ? `Policy v${live.policyVersion}` : tr ? `Policy v${tr.policy.version}` : '',
-    },
-    {
-      to: '/audit', label: 'Audit', cls: 's-black', src: mode === 'live' ? 'Live service' : 'Replay',
-      value: ledger.data ? `${ledger.data.length} rows` : '…',
-      sub: chainOk === null ? '' : chainOk ? 'Hash chain intact' : 'Hash chain broken',
-    },
+    { title: 'Watch the recorded run', text: 'The reference treasury’s real run, replayed in your browser. You pick a seat. Nothing to sign.', action: <Link to="/treasury" className="pm-bar-link"><IconArrow />Open the demo</Link> },
+    { title: 'Pilot for importers', text: 'Planned at US$149 to 499 a month plus 0.12% of verified payment volume. Pilots start with 3 to 5 importers in Singapore.', action: <a href="#how" className="pm-bar-link"><IconArrow />See how a milestone payment works</a> },
+    { title: 'Bank partner', text: 'One desk over every client’s agent: limits, escalations and a freeze that only the bank can lift. Enterprise plans planned from US$1,499 a month.', action: <Link to="/bank" className="pm-bar-link"><IconArrow />Open the bank desk</Link> },
   ]
 
-  const obligationLines = (obligations.data ?? []).filter((x) => !x.settled)
-  const reserveTotal = tr ? tr.reserve.required.display : '4,500.00'
-  const buffer = tr?.reserve.buffer?.display ?? '500.00'
-  const facts = chainFacts()
-  const after = scheduledAfter()
-
   return (
-    <main id="main" className="landing" ref={rootRef}>
-      <section className="hero" aria-labelledby="hero-title">
-        <div className="hero-panel">
-          <img className="hero-img" src="/media/time-lock-yale.jpg" width={1920} height={1448} fetchPriority="high" decoding="async"
-            alt="A Yale bank vault time lock: three clock movements side by side behind a steel bar, with an emergency release label" />
-          <div className="hero-top">
-            <Link to="/" className="hero-wordmark" aria-label="AEGIS Treasury, overview">AEGIS Treasury</Link>
-            <ModeIndicator />
-          </div>
-          <div className="hero-head">
-            <h1 id="hero-title">Know when<br /> not to act</h1>
-          </div>
-          <p className="hero-lede">An AI agent runs a business’s stablecoin treasury under its bank’s risk desk: cash kept for what you owe, the rest earning, every action proven.</p>
-          <div className="hero-actions">
-            {tenant ? (
-              <button type="button" className="button hero-action" onClick={() => chooser.show('hero')}>Open your treasury</button>
-            ) : (
-              <Link to="/start" className="button hero-action">Create your treasury</Link>
-            )}
-            <a href="#proof" className="button light hero-action">See the on-chain proof</a>
-          </div>
+    <div className="pm" ref={rootRef}>
+      <span className="pm-top-watch" ref={topWatch} aria-hidden="true" />
+      <header className={`pm-nav ${atTop ? 'is-top' : ''}`}>
+        <div className="pm-nav-in">
+          <Link to="/" className="pm-brand" aria-label="Porthmos, home">
+            <img src="/brand/porthmos-mark.png" width={29} height={32} alt="" />
+            <span>Porthmos</span>
+          </Link>
+          <nav className="pm-nav-links" aria-label="Sections">
+            <a href="#how">How it works<span className="pm-plus" aria-hidden="true"><IconPlus /></span></a>
+            <a href="#proof">Proof<span className="pm-plus" aria-hidden="true"><IconPlus /></span></a>
+            <a href="#bank">Bank desk<span className="pm-plus" aria-hidden="true"><IconPlus /></span></a>
+            <a href="#agent">Agent<span className="pm-plus" aria-hidden="true"><IconPlus /></span></a>
+            <a href="#start">Get started<span className="pm-plus" aria-hidden="true"><IconPlus /></span></a>
+          </nav>
+          <Link to="/treasury" className="pm-btn pm-btn-green pm-nav-cta">Open the demo</Link>
         </div>
-        <nav className="swatches" aria-label="The system now">
-          {swatches.map((s, i) => (
-            <Link key={s.to} to={s.to} className={`swatch ${s.cls}`} style={{ ['--i' as string]: i }}>
-              <span className="swatch-label">{s.label}<span className="swatch-src">{s.src}</span></span>
-              <span className="swatch-value nums">{s.value}</span>
-              {s.sub ? <span className="swatch-sub">{s.sub}</span> : null}
-            </Link>
-          ))}
-        </nav>
-        <ChainStrip live={live} />
-      </section>
+      </header>
 
-      <ChapterRail />
-
-      <section className="ch ch-black on-dark intro" id="valid" data-chapter="Valid, and still wrong" data-ink="#ffffff" aria-labelledby="intro-title">
-        <div className="wrap intro-grid">
-          <h2 id="intro-title" className="intro-title">Valid, and still wrong</h2>
-          <p className="statement">
-            Agents with wallets were talked into transfers, made unit errors and obeyed relayed orders. Each transaction was valid. <span className="mark">The decision behind it was not.<span className="mark-bar" aria-hidden="true" /></span>
-          </p>
-          <ul className="incidents">
-            {INCIDENTS.map((x) => (
-              <li key={x.name}>
-                <span className="incident-name">{x.name}</span>
-                <span className="incident-when nums">{x.when}{x.loss ? `, ${x.loss}` : ''}</span>
-                <span className="incident-what">{x.what}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section className="ch ch-black on-dark proof" id="proof" data-chapter="Refused by the contract" data-ink="#ffffff" aria-labelledby="proof-title">
-        <div className="wrap">
-          <div className="proof-top">
-            <div className="proof-intro">
-              <h2 id="proof-title" className="proof-title">Refused by the contract</h2>
-              <p>
-                A bad record never reaches the vault: the module reverts with a typed error and nothing moves.{' '}
-                {SCHEDULED_SCENARIOS.length
-                  ? <>The attack runs on Base Sepolia ({SCHEDULED_SCENARIOS.join(', ')}) are scheduled{after ? ` after ${after}, when the vault quarantine from E2 ends` : ''}, so no reverted transaction exists for them yet. Today they are proven by {CONTRACT_SUITE.count} Foundry tests in <code>{CONTRACT_SUITE.path}</code> ({CONTRACT_SUITE.ids}).</>
-                  : <>Each refusal links to its reverted transaction on Base Sepolia, and is also covered by the {CONTRACT_SUITE.count} Foundry tests in <code>{CONTRACT_SUITE.path}</code>.</>}
-              </p>
+      <main id="main" className="pm-main">
+        <div className="pm-overlap">
+          <section className="pm-hero" aria-labelledby="pm-hero-title">
+            <div className="pm-burst">
+              <canvas ref={heroCanvas} aria-hidden="true" />
             </div>
-            <div className="proof-facts">
-              <h3>On Base Sepolia now</h3>
-              <ul>
-                {facts.map((f) => (
-                  <li key={f.href}>
-                    <a className="fact-link" href={f.href} target="_blank" rel="noreferrer">
-                      <span>{f.label}</span>
-                      <span className="fact-block nums">Block {f.block.toLocaleString('en-US')} on Basescan</span>
-                    </a>
+            <div className="pm-scrim" aria-hidden="true" />
+            <div className="pm-hero-in">
+              <h1 id="pm-hero-title" className="pm-hero-title">Pay suppliers on proof</h1>
+              <p className="pm-hero-sub">Porthmos is an AI trade treasury. It holds the buyer’s payment in a contract, releases each milestone when the proof checks out, and keeps the rest of the cash safe and earning.</p>
+              <div className="pm-hero-actions">
+                <div className="pm-pair">
+                  {primary}
+                  <a href="#proof" className="pm-btn pm-btn-white">See the on-chain proof</a>
+                </div>
+                <p className="pm-hero-chips">
+                  <span className="pm-chip pm-chip-dark"><span className={`pm-dot ${isLive ? 'is-live' : ''}`} aria-hidden="true" /><span>Treasury live on Base Sepolia{isLive && live.block ? <>, block <span className="pm-num">{blockText(live.block)}</span></> : null}</span></span>
+                  <span className="pm-chip pm-chip-dark">TradeFlow escrow ships this week</span>
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="pm-problem" aria-labelledby="pm-gap-title">
+            <span className="pm-hero-watch" ref={heroWatch} aria-hidden="true" />
+            <div className="pm-ticker">
+              <p className="pm-ticker-head">{TX_COUNT} recorded transactions on Base Sepolia, from deposit to refused attack</p>
+              <div className="pm-ticker-view">
+                <div className="pm-ticker-track">
+                  <TickerRow items={TICKER} />
+                  <TickerRow items={TICKER} hidden />
+                </div>
+              </div>
+            </div>
+
+            <div className="pm-wrap pm-statement-wrap">
+              <Chip as="h2" className="pm-statement-chip"><span id="pm-gap-title">The trust gap in trade</span></Chip>
+              <p className="pm-statement">A buyer won’t pay before the goods ship. A supplier won’t ship before the money is there. So a clerk checks every document and signs off every payment by hand. Porthmos locks the payment in a contract and lets the proof release it. Nobody has to go first.</p>
+            </div>
+
+            <div className="pm-wrap pm-rules-head">
+              <span className="pm-mono pm-bracket" aria-hidden="true">[ → ]</span>
+              <Chip as="p">With Porthmos</Chip>
+            </div>
+            <div className="pm-rules-band">
+              <div className="pm-wrap">
+              <ul className="pm-rules">
+                {GUARANTEES.map((g) => (
+                  <li key={g.title} className="pm-rule">
+                    <span className="pm-rule-title">{g.title}</span>
+                    <span className="pm-rule-status pm-mono">{g.status}</span>
+                    <span className="pm-tile" aria-hidden="true">{g.icon}</span>
+                    <span className="pm-rule-line" aria-hidden="true" />
                   </li>
                 ))}
               </ul>
-              <Link to="/audit#evidence" className="link-plain proof-more">Every recorded transaction</Link>
+              </div>
             </div>
+          </section>
+        </div>
+
+        <section className="pm-how" id="how" aria-labelledby="pm-how-title">
+          <div className="pm-wipe">
+            <Stripes />
+            <div className="pm-wipe-hole" aria-hidden="true" />
+            <div className="pm-wipe-black" aria-hidden="true" />
+            <div className="pm-wipe-head">
+              <h2 id="pm-how-title" className="pm-display">How a milestone payment works</h2>
+              <p className="pm-wipe-note pm-mono">Example order: 100,000 USDC in three milestones. Steps 01 to 05 are TradeFlow, which ships this week and is not on-chain yet. Step 06 is live.</p>
+            </div>
+            <span className="pm-wipe-stub" aria-hidden="true" />
           </div>
-          <ul className="board">
-            {REFUSALS.map((r) => {
-              const p = proofFor(r)
-              const inner = (
-                <>
-                  <span className="tile-name"><span className="sr-only">{r.name}</span><span aria-hidden="true">{r.parts.map((part, j) => <span key={j}><span className="tn-part">{part}</span>{j < r.parts.length - 1 ? <wbr /> : null}</span>)}</span></span>
-                  <span className="tile-what">{r.what}</span>
-                  <span className={`tile-ref ref-${p.kind}`}>
-                    {p.kind === 'onchain' ? `Reverted on Base Sepolia, block ${p.block.toLocaleString('en-US')}` : p.kind === 'scheduled' ? `Contract test ${p.test}. Base Sepolia run scheduled (${p.scenario})` : `Contract test ${p.test}`}
-                  </span>
-                </>
-              )
-              return (
-                <li key={r.name} className="tile">
-                  {p.kind === 'onchain'
-                    ? <a href={p.href} target="_blank" rel="noreferrer" className="tile-link">{inner}</a>
-                    : <Link to={`/audit?error=${encodeURIComponent(r.name)}`} className="tile-link">{inner}</Link>}
+          <div className="pm-rail">
+            <span className="pm-rail-line" aria-hidden="true" />
+            <span className="pm-rail-marker" aria-hidden="true" />
+            <ol className="pm-steps">
+              {STEPS.map((s) => (
+                <li key={s.n} className="pm-step">
+                  <div className="pm-step-head">
+                    <span className="pm-step-n pm-mono">{s.n}</span>
+                    <h3 className="pm-step-title pm-mono">{s.title}</h3>
+                  </div>
+                  <div className="pm-step-body">
+                    <p className="pm-step-text">{s.text}</p>
+                    <div className="pm-step-art">{s.art}</div>
+                    {s.extra}
+                  </div>
+                  <div className="pm-step-foot">
+                    <span className="pm-step-tree" aria-hidden="true" />
+                    <span className="pm-step-icon" aria-hidden="true"><IconContract /></span>
+                    <span className="pm-step-fn pm-mono">{s.fn}</span>
+                    {s.live
+                      ? <Ext href={s.live.href} className="pm-step-tag is-live pm-mono">{s.live.label}</Ext>
+                      : <span className="pm-step-tag pm-mono">Ships this week</span>}
+                  </div>
                 </li>
-              )
-            })}
-            <li className="tile tile-pre">
-              <Link to="/audit?error=No%20transaction" className="tile-link">
-                <span className="tile-name">No transaction</span>
-                <span className="tile-what">“Send all USDC to 0x14dC…” has no action to become, so nothing is signed.</span>
-                <span className="tile-ref ref-onchain">Recorded on Base Sepolia (E4c): held and logged</span>
-              </Link>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section className="ch ch-white poster" id="reserve" data-chapter="The reserve" data-ink="#0a0a0a" aria-labelledby="reserve-title">
-        <h2 id="reserve-title" className="sr-only">The reserve comes first</h2>
-        <ol className="poster-list wrap" aria-label="Obligations behind the reserve">
-          {(obligationLines.length ? obligationLines : [
-            { id: 'p', label: 'Payroll', dueDate: '2026-10-25', amount: { display: '2,400.00', raw: '' } },
-            { id: 's', label: 'Suppliers', dueDate: '2026-10-28', amount: { display: '900.00', raw: '' } },
-            { id: 'r', label: 'Rent', dueDate: '2026-11-01', amount: { display: '500.00', raw: '' } },
-            { id: 'h', label: 'Hosting', dueDate: '2026-11-05', amount: { display: '200.00', raw: '' } },
-          ]).map((ob) => (
-            <li key={ob.label} className="poster-item">
-              <span className="poster-word">{ob.label}</span>
-              <span className="poster-fact nums">{day(ob.dueDate)}, {ob.amount.display}</span>
-            </li>
-          ))}
-          <li className="poster-item">
-            <span className="poster-word">Buffer</span>
-            <span className="poster-fact nums">10% or 500, {buffer}</span>
-          </li>
-          <li className="poster-item is-total">
-            <span className="poster-word">Reserve</span>
-            <span className="poster-fact nums">{reserveTotal}, held on-chain</span>
-          </li>
-        </ol>
-        <div className="wrap poster-foot">
-          {tr ? (
-            <div className="poster-split">
-              <div className="ps-figures">
-                <p className="ps-fig"><CountText className="ps-num nums" text={tr.reserve.onchainFloor.display} fromZero /><span className="ps-label">reserve, held on-chain</span></p>
-                <p className="ps-fig"><CountText className="ps-num nums" text={tr.deployable.display} fromZero /><span className="ps-label">deployable after reserve and fees</span></p>
-              </div>
-              <ReserveBar t={tr} labelled={false} />
-            </div>
-          ) : null}
-          <p data-reveal>
-            The reserve is the largest shortfall the payment calendar can produce, plus a buffer. The owner signs it on-chain as the floor. A deposit that would leave the Safe below it reverts <code>ReserveFloorBreached</code>, whoever signed it.
-          </p>
-          <Link to="/treasury" className="link-plain" data-reveal style={{ ['--i' as string]: 1 }}>See the treasury and its calendar</Link>
-        </div>
-      </section>
-
-      <Gates />
-
-      <section className="ch ch-white records" id="records" data-chapter="What gets signed" data-ink="#0a0a0a" aria-labelledby="records-title">
-        <div className="wrap records-grid">
-          <div className="records-index">
-            <h2 id="records-title" className="sr-only">What gets signed</h2>
-            <div className="records-names" role="tablist" aria-label="Signed records">
-              {OUTPUTS.map((x, i) => (
-                <button key={x.key} type="button" role="tab" id={`rec-tab-${x.key}`} aria-selected={out === i} aria-controls="rec-panel" className={out === i ? 'is-on' : ''} onClick={() => setOut(i)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); setOut((out + 1) % OUTPUTS.length); document.getElementById(`rec-tab-${OUTPUTS[(out + 1) % OUTPUTS.length].key}`)?.focus() }
-                    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); setOut((out + OUTPUTS.length - 1) % OUTPUTS.length); document.getElementById(`rec-tab-${OUTPUTS[(out + OUTPUTS.length - 1) % OUTPUTS.length].key}`)?.focus() }
-                  }}
-                  tabIndex={out === i ? 0 : -1}>
-                  {x.name}
-                </button>
               ))}
-            </div>
-            <p className="records-caption" aria-live="polite">{OUTPUTS[out].caption}</p>
-            <div className="records-note">Every action is a typed record signed under EIP-712: change any field and the signature recovers to someone else. These records come from the replay run and are recovered live in this page. The E1 deposit is a recorded Base Sepolia transaction; the signatures shown here are illustrative. <GlossaryButton className="link-plain terms-inline" label="What do DAR, EIP-712 and nonce mean?" /></div>
+            </ol>
           </div>
-          <div className="records-stage" id="rec-panel" role="tabpanel" aria-labelledby={`rec-tab-${OUTPUTS[out].key}`}>
-            <div className="records-sheet" key={OUTPUTS[out].key}>
-              <RecordSheet illustrative record={OUTPUTS[out].record} chainId={R.chainId} module={R.module} expected={OUTPUTS[out].expected} names={NAMES} changed={OUTPUTS[out].changed} />
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="ch ch-red leaves" id="leaves" data-chapter="It leaves first" data-ink="#0a0a0a" aria-labelledby="leaves-title">
-        <div className="wrap leaves-grid">
-          <div className="leaves-pin">
-            <h2 id="leaves-title" className="leaves-title">It leaves first</h2>
-            <p className="leaves-lede">The Exit Agent checks three triggers every five blocks. Any one quarantines the vault and redeems back to the Safe with a key that can do nothing else.</p>
-            <Link to="/risk" className="link-plain leaves-more">Run a depeg in the stress lab</Link>
-          </div>
-          <div className="leaves-blocks">
-            <article className="leave">
-              <h3>The peg slips past 1%</h3>
-              <div className="leave-row">
-                <img src="/media/time-lock-brass.jpg" width={1920} height={1553} loading="lazy" decoding="async" alt="A brass bank time lock with three clock dials behind glass" />
-                <ul>
-                  <li>Price more than 1.00% from 1.0000</li>
-                  <li>Quarantined, then redeemed for at least 99.5%</li>
-                  <li>Cleared only by the owner, after 24 quiet hours</li>
-                  <li className="leave-now nums">Now: {o.data ? `${o.data.price.display}, ${(Math.abs(Number(o.data.price.display) - 1) * 100).toFixed(2)}% from peg` : 'reading the feed…'}</li>
-                </ul>
-              </div>
-            </article>
-            <article className="leave">
-              <h3>The price goes quiet</h3>
-              <div className="leave-row">
-                <video ref={videoRef} autoPlay muted loop playsInline preload="metadata" poster="/media/clock-mechanism-poster.jpg" width={854} height={480} aria-hidden="true">
-                  <source src="/media/clock-mechanism.webm" type="video/webm" />
-                  <source src="/media/clock-mechanism.mp4" type="video/mp4" />
-                </video>
-                <ul>
-                  <li>Older than 180 s counts as stale</li>
-                  <li>Deposits revert <code>StaleOracle</code></li>
-                  <li>Exits still run on a stale price</li>
-                  <li className="leave-now nums">Now: {o.data ? `last update ${o.data.ageSeconds} s ago${o.data.stale ? ', stale' : ''}` : 'reading the feed…'}</li>
-                </ul>
-              </div>
-            </article>
-            <article className="leave">
-              <h3>The exit door narrows</h3>
-              <div className="leave-row">
-                <img src="/media/safe-patent-1826.jpg" width={1920} height={1420} loading="lazy" decoding="async" alt="Jesse Delano’s 1826 patent drawing of an iron safe, shown open and closed, with handwritten notes" />
-                <ul>
-                  <li>Withdrawable below 1.2 × the position</li>
-                  <li>Takes what can leave now, retries the rest</li>
-                  <li>Alerts the owner and the bank at zero</li>
-                  <li className="leave-now nums">Now: {vaultB ? `${vaultB.name} lets ${vaultB.maxRedeem.display} leave` : 'reading the vaults…'}</li>
-                </ul>
-              </div>
-            </article>
-            <article className="leave">
-              <h3>Exits never wait</h3>
-              <div className="leave-row">
-                <img src="/media/safe-patent-1836.jpg" width={1920} height={1408} loading="lazy" decoding="async" alt="James Matthews’ 1836 patent drawing of a fire-proof safe with an inner brick chamber" />
-                <ul>
-                  <li>Redemptions skip freezes and policy changes</li>
-                  <li>The receiver is always the Safe</li>
-                  <li>The exit key cannot deposit</li>
-                  <li className="leave-now">Now: {triggers.length ? triggers[0] : 'no trigger firing'}</li>
-                </ul>
-              </div>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section className="ch ch-white tiers" id="tiers" data-chapter="How much can it move alone" data-ink="#0a0a0a" aria-labelledby="tiers-title">
-        <div className="wrap">
-          <h2 id="tiers-title" className="tiers-title" data-reveal>How much can it move alone?</h2>
-          <TierLab />
-        </div>
-      </section>
-
-      <section className="bankpanel-wrap" id="bank" data-chapter="The bank’s freeze" data-ink="#0a0a0a" aria-labelledby="bank-title">
-        <div className="bankpanel on-dark">
-          <div className="bp-left">
-            <h2 id="bank-title" className="bp-title">Only the bank lifts its freeze</h2>
-            <div className="bp-door">
-              <img src="/media/vault-door.jpg" width={1560} height={1560} loading="lazy" decoding="async" alt="The round steel door of a bank vault, its locking bolts radiating from the centre" />
-            </div>
-          </div>
-          <div className="bp-right">
-            <div className="bp-block">
-              <h3>Freeze</h3>
-              <p>The bank’s risk officer can stop every deposit for a client in one transaction. The owner cannot lift it. Exits keep running, so a freeze never traps funds in a failing vault.</p>
-            </div>
-            <div className="bp-block">
-              <h3>Revoke</h3>
-              <p>Revoking the agent’s signer also sets the bank freeze. The bank can tighten caps and quarantine a vault; it can never move funds or add a vault.</p>
-            </div>
-            <p className="bp-now nums">
-              Now{onChain && liveFrozen !== null ? ' on Base Sepolia' : ''}: {onChain && liveFrozen !== null ? `${liveFrozen ? 'deposits frozen' : 'not frozen'}, policy v${live.policyVersion}` : tr ? `${frozen ? 'deposits frozen' : 'not frozen'}, authorizer ${tr.policy.authorizerRevoked ? 'revoked' : 'active'}, policy v${tr.policy.version}` : 'reading the registry…'}
-            </p>
-            <Link to="/bank" className="button">Open the bank desk</Link>
-          </div>
-        </div>
-      </section>
-
-      <Link to="/copilot" className="cta-band on-blue" id="approve" data-chapter="Approve" data-ink="#ffffff">
-        <span className="cta-line">{waiting ? `${waiting.actionCard.amount.display} into ${waiting.actionCard.vault.name} waits for the owner’s signature. Review the record and sign it.` : 'Ask the agent what it would do with today’s surplus, and watch it refuse what it should.'}</span>
-        <svg className="cta-arrow" viewBox="0 0 48 48" aria-hidden="true"><path d="M12 36 36 12M16 12h20v20" fill="none" stroke="currentColor" strokeWidth="4" /></svg>
-        <span className="cta-word">{waiting ? 'Approve' : 'Ask'}</span>
-      </Link>
-
-      <footer className="foot">
-        <div className="foot-board">
-          <div className="ft ft-statement">
-            <p className="ft-big">AEGIS makes autonomous finance accountable, not unrestricted.</p>
-            <p className="ft-legal">FinTechathon 2026, International AI Track, Topic F. Mock USDC and mock vaults on test networks. The contracts are not audited and must not hold real funds.</p>
-          </div>
-          <nav className="ft ft-nav" aria-label="Footer">
-            <ul>
-              <li><Link to="/treasury" className="link">Treasury</Link></li>
-              <li><Link to="/copilot" className="link">Copilot</Link></li>
-              <li><Link to="/risk" className="link">Risk</Link></li>
-              <li><Link to="/audit" className="link">Audit</Link></li>
-              <li><Link to="/bank" className="link">Bank desk</Link></li>
-              <li><GlossaryButton className="link ft-terms" /></li>
+        <section className="pm-proof" id="proof" aria-labelledby="pm-proof-title">
+          <div className="pm-ascii"><canvas ref={asciiCanvas} aria-hidden="true" /></div>
+          <div className="pm-wrap">
+            <h2 id="pm-proof-title" className="pm-display pm-reveal-words">Attacked on-chain. Refused on-chain.</h2>
+            <p className="pm-lede">We sent real attacks at the reference treasury on Base Sepolia. Each one was mined and reverted, so anyone can open the transaction and read the error.</p>
+            <ul className="pm-cards">
+              {REFUSED.map((r) => (
+                <li key={r.id} className="pm-card">
+                  <div className="pm-card-head">
+                    <span className="pm-card-icon" aria-hidden="true"><IconBlock /></span>
+                    <h3>{r.title}</h3>
+                    <span className="pm-chip pm-chip-orange">REFUSED</span>
+                  </div>
+                  <div className="pm-card-body">
+                    <p className="pm-caption">{r.id}, what was tried</p>
+                    <ul className="pm-tree">
+                      {r.tried.map((x) => <li key={x}>{x}</li>)}
+                      <li className="pm-tree-out">Reverted <code>{r.error}</code> in block {blockText(r.block)}</li>
+                    </ul>
+                  </div>
+                  <Ext href={txUrl(r.hash)} className="pm-actionbar" label={`View the ${r.error} revert of ${r.id} on BaseScan`}>
+                    <span>View the revert on BaseScan</span>
+                    <span className="pm-mono">{shortHash(r.hash)}</span>
+                    <IconOut />
+                  </Ext>
+                </li>
+              ))}
             </ul>
-          </nav>
-          <div className="ft ft-net">
-            <p>{mode === 'replay' ? 'Replay over the Base Sepolia contracts. Recorded transactions link to Basescan; the rest is illustrative' : `Live on chain ${chainId}`}</p>
-            <p className="ft-small">Module <code>{deployment.module.slice(0, 10)}…</code></p>
-            <p className="ft-small">Registry <code>{deployment.registry.slice(0, 10)}…</code></p>
+            <p className="pm-note">One attack never became a transaction (E4c). A chat message told the agent to send all USDC to an outside address. The agent can only deposit into approved vaults or redeem back to the Safe, so there was nothing to sign.</p>
+
+            <div className="pm-stats">
+              <div className="pm-stat pm-stat-big">
+                <p className="pm-caption">Reserve floor held by the contract, {isLive && live.floor !== null ? 'read live from Base Sepolia' : `recorded ${RECORDED_DAY}`}</p>
+                {floor !== null ? <p className="pm-counter"><Counter value={floor} decimals={2} /><span className="pm-unit">USDC</span></p> : <p className="pm-counter">n/a</p>}
+              </div>
+              <div className="pm-stat">
+                <p className="pm-caption">Attacks refused on-chain</p>
+                <p className="pm-counter pm-counter-s"><Counter value={REVERTED.length} /></p>
+              </div>
+              <div className="pm-stat">
+                {tenantCount !== null ? (
+                  <><p className="pm-caption">Treasuries created, live</p><p className="pm-counter pm-counter-s"><Counter value={tenantCount} /></p></>
+                ) : (
+                  <><p className="pm-caption">Transactions recorded</p><p className="pm-counter pm-counter-s"><Counter value={TX_COUNT} /></p></>
+                )}
+              </div>
+              <div className="pm-stat">
+                {isLive && live.block ? (
+                  <><p className="pm-caption">Latest block, live</p><p className="pm-counter pm-counter-s"><Counter value={live.block} count={false} /></p></>
+                ) : (
+                  <><p className="pm-caption">Scenarios recorded</p><p className="pm-counter pm-counter-s"><Counter value={RECORDED_COUNT} /></p></>
+                )}
+              </div>
+              <Link to="/audit#evidence" className="pm-stat pm-stat-link">
+                <p className="pm-caption">Audit</p>
+                <span>Every recorded transaction<IconArrow /></span>
+              </Link>
+            </div>
           </div>
-          <div className="ft ft-figure">
-            <p className="ft-small">Treasury now, {src.toLowerCase()}</p>
-            <p className="ft-num nums">{liveTotal !== null ? money(liveTotal) : tr ? tr.balances.total.display : '…'}</p>
-            <p className="ft-small">USDC, of which {onChain && live.floor !== null ? money(live.floor) : tr ? money(num(tr.reserve.onchainFloor)) : '…'} is reserve</p>
+        </section>
+
+        <section className="pm-bank" id="bank" aria-labelledby="pm-bank-title">
+          <div className="pm-wrap">
+            <Chip as="h2" className="pm-bank-chip"><span id="pm-bank-title">The bank desk</span></Chip>
+            <div className="pm-cols">
+              <div className="pm-col">
+                <h3 className="pm-col-title">What the risk officer sees</h3>
+                <ul className="pm-rows">
+                  <li>Every client’s agent, its risk score and its audit log</li>
+                  <li>Each action’s signed record in a hash-chained ledger</li>
+                  <li>Deposits that wait for the bank’s approval</li>
+                  <li>Escrow and held milestones per client, with TradeFlow</li>
+                </ul>
+              </div>
+              <div className="pm-col">
+                <h3 className="pm-col-title">What the risk officer can do</h3>
+                <ul className="pm-rows">
+                  <li>Freeze an agent’s deposits in one transaction</li>
+                  <li>Revoke the agent’s signing key</li>
+                  <li>Tighten limits and quarantine a vault</li>
+                  <li>Lift its own freeze, which the owner cannot</li>
+                </ul>
+              </div>
+            </div>
+            <FreezeDemo />
+            <p className="pm-bank-note">A freeze stops deposits only. Exits back to the Safe keep running, so a freeze never traps funds{E5_EXIT ? <>: in E5 the exit went through while frozen, <Ext href={txUrl(E5_EXIT.hash)} className="pm-link-deep">block {blockText(E5_EXIT.block)}</Ext></> : null}.</p>
+            <div className="pm-center">
+              <Link to="/bank" className="pm-btn pm-btn-green pm-btn-cta"><IconArrow />Open the bank desk</Link>
+            </div>
           </div>
-          <div className="ft ft-mark" aria-hidden="true"><span>AEGIS</span></div>
-          <Link to="/treasury" className="ft ft-go">
-            <span>Open the treasury</span>
-            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 36 36 12M16 12h20v20" fill="none" stroke="currentColor" strokeWidth="4" /></svg>
+        </section>
+
+        <section className="pm-agent" id="agent" aria-labelledby="pm-agent-title">
+          <div className="pm-wrap">
+            <h2 id="pm-agent-title" className="pm-display pm-scrub-words">Bills first. Only spare cash goes to work.</h2>
+            <p className="pm-lede">The agent works out what the business owes over the next 30 days, keeps that much as a reserve the contract enforces, and invests only the rest in vaults the owner approved.</p>
+            <figure className="pm-split">
+              <figcaption className="pm-caption">Reference treasury, {isLive ? 'read live from Base Sepolia' : `reserve floor recorded ${RECORDED_DAY}; live balances unavailable`}</figcaption>
+              {isLive && safeUsdc !== null && floor !== null ? (() => {
+                const reserved = Math.min(floor, safeUsdc)
+                const free = Math.max(0, safeUsdc - floor)
+                const invested = vaultAssets ?? 0
+                const total = reserved + free + invested || 1
+                return (
+                  <>
+                    <div className="pm-split-bar" aria-hidden="true">
+                      <span className="pm-seg pm-seg-reserve" style={{ flexGrow: reserved / total }} />
+                      <span className="pm-seg pm-seg-free" style={{ flexGrow: free / total }} />
+                      <span className="pm-seg pm-seg-vault" style={{ flexGrow: invested / total }} />
+                    </div>
+                    <dl className="pm-split-legend">
+                      <div><dt><span className="pm-key pm-seg-reserve" />Reserved for bills</dt><dd className="pm-num">{money(reserved)}</dd></div>
+                      <div><dt><span className="pm-key pm-seg-free" />Free in the Safe</dt><dd className="pm-num">{money(free)}</dd></div>
+                      <div><dt><span className="pm-key pm-seg-vault" />Invested in vaults</dt><dd className="pm-num">{money(invested)}</dd></div>
+                    </dl>
+                  </>
+                )
+              })() : (
+                <dl className="pm-split-legend">
+                  <div><dt><span className="pm-key pm-seg-reserve" />Reserve floor</dt><dd className="pm-num">{floor !== null ? money(floor) : 'n/a'}</dd></div>
+                </dl>
+              )}
+            </figure>
+            <ul className="pm-cards pm-cards-agent">
+              <li className="pm-card">
+                <div className="pm-card-head">
+                  <span className="pm-card-icon" aria-hidden="true"><IconCheck /></span>
+                  <h3>What the agent can do alone</h3>
+                </div>
+                <div className="pm-card-body">
+                  <ul className="pm-tree">
+                    <li>Deposit up to 1,000 USDC into a vault it has used before</li>
+                    <li>Redeem from any vault back to the Safe, at any time</li>
+                    <li>Leave a vault when the peg slips more than 1%</li>
+                    <li>Hold when the price is older than 180 seconds</li>
+                  </ul>
+                </div>
+                <Link to="/copilot" className="pm-actionbar"><span>Ask the agent</span><IconArrow /></Link>
+              </li>
+              <li className="pm-card">
+                <div className="pm-card-head">
+                  <span className="pm-card-icon" aria-hidden="true"><IconBlock /></span>
+                  <h3>What it can never do</h3>
+                </div>
+                <div className="pm-card-body">
+                  <ul className="pm-tree">
+                    <li>Send funds to any address outside the treasury</li>
+                    <li>Invest below the reserve floor</li>
+                    <li>Deposit more than 5,000 USDC in one day</li>
+                    <li>Lift a freeze set by the bank</li>
+                  </ul>
+                </div>
+                <GlossaryButton className="pm-actionbar" label={<><span>What do these terms mean?</span><IconArrow /></>} />
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section className="pm-start" id="start" aria-labelledby="pm-start-title">
+          <div className="pm-wrap">
+            <Chip as="h2" tone="dark"><span id="pm-start-title">Ways to use Porthmos</span></Chip>
+            <Plans plans={plans} />
+            <p className="pm-note">Prices are planned, not final. Settlement runs through licensed partners where the law requires it.</p>
+          </div>
+        </section>
+      </main>
+
+      <footer className="pm-foot">
+        <div className="pm-wrap">
+          <Link to="/" className="pm-brand pm-foot-brand" aria-label="Porthmos, home">
+            <img src="/brand/porthmos-mark.png" width={29} height={32} alt="" />
+            <span>Porthmos</span>
           </Link>
+          <div className="pm-foot-cols">
+            <nav aria-labelledby="pm-f1">
+              <p id="pm-f1" className="pm-foot-head">PRODUCT/</p>
+              <ul className="pm-foot-list">
+                <li><Link to="/treasury">Treasury</Link></li>
+                <li><Link to="/copilot">Copilot</Link></li>
+                <li><Link to="/risk">Risk</Link></li>
+                <li><Link to="/audit">Audit</Link></li>
+                <li><Link to="/bank">Bank desk</Link></li>
+                <li><Link to="/start">Create a treasury</Link></li>
+              </ul>
+            </nav>
+            <nav aria-labelledby="pm-f2">
+              <p id="pm-f2" className="pm-foot-head">PROOF/</p>
+              <ul className="pm-foot-list">
+                {E1_DEPOSIT ? <li><Ext href={txUrl(E1_DEPOSIT.hash)}>E1 Deposit with approval</Ext></li> : null}
+                {E3_FLOOR ? <li><Ext href={txUrl(E3_FLOOR.hash)}>E3 Reserve floor raised</Ext></li> : null}
+                {REFUSED.map((r) => <li key={r.id}><Ext href={txUrl(r.hash)}>{r.id} {r.error}</Ext></li>)}
+                <li><Link to="/audit#evidence">Every recorded transaction</Link></li>
+              </ul>
+            </nav>
+            <nav aria-labelledby="pm-f3">
+              <p id="pm-f3" className="pm-foot-head">CONTRACTS/</p>
+              <ul className="pm-foot-list">
+                <li><Ext href={addressUrl(REFERENCE.module)}>AegisModule</Ext></li>
+                <li><Ext href={addressUrl(REFERENCE.registry)}>PolicyRegistry</Ext></li>
+                <li><Ext href={addressUrl(REFERENCE.safe)}>Reference Safe</Ext></li>
+              </ul>
+            </nav>
+            <div>
+              <p className="pm-foot-head">ABOUT/</p>
+              <ul className="pm-foot-list">
+                <li><GlossaryButton className="pm-foot-btn" label="Terms used on this page" /></li>
+                <li><span>FinTechathon 2026, Topic F</span></li>
+              </ul>
+            </div>
+          </div>
+          <p className="pm-legal">Test networks only: mock USDC and mock vaults on Base Sepolia. The contracts are not audited and must not hold real funds. TradeFlow is in design and not deployed yet.</p>
         </div>
-        <p className="credits">
-          Pictures and footage: <a className="link-plain" href="https://commons.wikimedia.org/w/index.php?curid=85449757">“Time lock”</a> by ArnoldReinhold, <a className="link-plain" href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>;{' '}
-          <a className="link-plain" href="https://commons.wikimedia.org/wiki/File:Time_lock_(4602596296).jpg">“Time lock (4602596296)”</a> by plenty.r. from Frankfurt am Main, <a className="link-plain" href="https://creativecommons.org/licenses/by-sa/2.0/">CC BY-SA 2.0</a>;{' '}
-          <a className="link-plain" href="https://commons.wikimedia.org/wiki/File:Jesse_Delano%27s_Patent_Drawing_for_a_Safe_-_DPLA_-_bad5b2a9bf1220d90c5e639fee146c29_(page_1).jpg">Jesse Delano’s patent drawing for a safe</a> and{' '}
-          <a className="link-plain" href="https://commons.wikimedia.org/wiki/File:James_Matthews%27_Patent_Drawing_for_a_Safe_-_DPLA_-_02ec21eebd1d2332b59043ddca9cf5e3.jpg">James Matthews’ patent drawing for a safe</a>, US Patent Office, public domain;{' '}
-          <a className="link-plain" href="https://commons.wikimedia.org/w/index.php?curid=87294482">“Bank vault door”</a> by mapimaging, <a className="link-plain" href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>, cropped;{' '}
-          <a className="link-plain" href="https://commons.wikimedia.org/wiki/File:Montreal_Clock_Tower_clock_mechanism.ogv">“Montreal Clock Tower clock mechanism”</a> by Andy Mabbett, <a className="link-plain" href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. All shown in greyscale. None of them shows AEGIS or its users.
-        </p>
+        <div className="pm-field"><canvas ref={barCanvas} aria-hidden="true" /></div>
       </footer>
-    </main>
+    </div>
   )
 }

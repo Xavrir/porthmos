@@ -1,10 +1,10 @@
-# AEGIS Treasury: talking knowledge base
+# Porthmos: talking knowledge base
 
-Use this to talk about the project in demos, judge Q&A, and chats with teammates. Every answer is written to be said aloud. Facts here are confirmed from our repo and docs; anything not built is marked as not built.
+Porthmos was called AEGIS Treasury until v0.2. On-chain names still say Aegis, for example AegisModule, because renaming would change deployed bytecode. Use this to talk about the project in demos, judge Q&A, and chats with teammates. Every answer is written to be said aloud. Facts here are confirmed from our repo and docs; anything not built is marked as not built.
 
 ## One-liner
 
-AEGIS Treasury is an AI treasury agent for businesses that hold stablecoins. It keeps enough cash for upcoming bills, puts the rest to work in approved vaults, and every move it makes is checked and enforced by a smart contract, not by the AI. A bank risk officer can watch every agent and freeze it.
+Porthmos is an AI trade treasury agent for businesses that hold stablecoins. It keeps enough cash for upcoming bills, puts the rest to work in approved vaults, pays suppliers in stages when a trusted proof arrives, and every move it makes is checked and enforced by a smart contract, not by the AI. A bank risk officer can watch every agent and freeze it.
 
 Tagline: Know when to earn, when to protect, and when not to act.
 
@@ -14,7 +14,7 @@ We built it for the 2026 Shenzhen International FinTechathon, International Trac
 
 ## The team
 
-The original AEGIS concept came from Stanley: the obligation-aware reserve, state-bound authorization, the decision ledger, and the Stress Lab demo. We merged it with our own treasury agent research, which added the bank risk desk, the Exit Agent design taken from kpk, and the Safe-based wallet. The team is Rizky (Alvido), Stanley, and Aarief.
+The original Porthmos concept came from Stanley: the obligation-aware reserve, state-bound authorization, the decision ledger, and the Stress Lab demo. We merged it with our own treasury agent research, which added the bank risk desk, the Exit Agent design taken from kpk, and the Safe-based wallet. The team is Rizky (Alvido), Stanley, and Aarief.
 
 ## What problem it solves
 
@@ -86,15 +86,25 @@ We planned Zodiac Roles first. In the end a small custom Safe module was simpler
 
 ## Testing
 
-47 Foundry tests, including fuzz and invariant tests for containment and the reserve floor. 111 backend unit tests and 8 integration tests on a local chain, including a two-tenant end-to-end run where tenant B sees nothing of tenant A, and a bank freeze that blocks deposits while the exit still works. The website went through a UX review with 21 issues, all fixed, and 0 accessibility violations.
+Checked on 17 October 2026. 106 Foundry tests, including 59 for TradeEscrow, plus fuzz and invariant tests for containment, the reserve floor and the escrow. 161 backend unit tests and 15 integration tests on a local chain, including a two-tenant run where tenant B sees nothing of tenant A, and a bank freeze that blocks deposits while the exit still works. 61 web tests. The website went through a UX review with 21 issues, all fixed, and 0 accessibility violations.
 
 ## On-chain evidence
 
-All contracts are deployed on Base Sepolia, and all eight scenarios are recorded with real transaction hashes. E1 normal allocation. E2 depeg, where the Exit Agent quarantines the vault and redeems. E3 a new invoice that updates the reserve floor on-chain, then the agent rebalances. E4a amount changed after signing, refused with BadSignature. E4b replayed authorization, refused with NonceUsed. E4c prompt injection, which cannot even become a transaction. E4d price moved out of the signed band, refused with PriceOutOfBand. E5 bank freeze: the agent's deposit is refused with Frozen, and the exit redeem still goes through. The refused attacks are mined, so anyone can open them on Basescan and see the revert. The website links every proof.
+All contracts are deployed on Base Sepolia, and all scenarios are recorded with real transaction hashes. The first eight are below; TradeFlow has its own section after this one. E1 normal allocation. E2 depeg, where the Exit Agent quarantines the vault and redeems. E3 a new invoice that updates the reserve floor on-chain, then the agent rebalances. E4a amount changed after signing, refused with BadSignature. E4b replayed authorization, refused with NonceUsed. E4c prompt injection, which cannot even become a transaction. E4d price moved out of the signed band, refused with PriceOutOfBand. E5 bank freeze: the agent's deposit is refused with Frozen, and the exit redeem still goes through. The refused attacks are mined, so anyone can open them on Basescan and see the revert. The website links every proof.
+
+## TradeFlow: paying suppliers on proof
+
+TradeFlow is built and deployed on Base Sepolia. It is our first module on top of the treasury. A buyer funds a trade order of three milestones. The TradeEscrow contract holds the money and pays the supplier only when a trusted issuer signs a proof that the milestone is met, and the treasury's Authorizer signs the release too. The supplier address and every amount are fixed when the order is funded, so neither the agent nor an issuer can redirect money. The owner funds an order with one Safe transaction. The agent never funds an order itself.
+
+In the demo the issuers are server keys: a carrier, a temperature sensor and a surveyor. They stand in for real bills of lading and sensors. Be honest about that: the demo shows the authorization path, not real document checking. Trade escrow itself is not new. Tazapay and Escrow.com do it, and another entry in our topic built milestone escrow. Ours is tied to the treasury, the bank freeze and the decision ledger. TradeEscrow sits at 0x009c…ce76 on Base Sepolia. The web Orders page is still in progress, so today orders run through the API.
+
+## E6: the TradeFlow proofs
+
+E6 is recorded on the reference treasury, through the real pipeline: Proof Verifier, then the Authorizer, then the Executor, with ledger references. E6a funds a 1,000 test USDC order split 200, 400, 400. E6b releases milestone 1, 200 USDC, to the supplier. E6c is the sensor proof at 9.40 degrees against a 2 to 8 degree limit. The service holds the milestone and asks for no release. Then we force a release signed with the Authorizer key, as a stand-in for a faulty agent, and the contract reverts with ConditionNotMet. E6d: the owner waives that milestone after a survey, and the supplier gets 400. E6f is a release with the amount changed after signing, reverted with BadSignature. E6g is a valid release while the bank has frozen the Safe, reverted with Frozen. E6e releases milestone 3 after the unfreeze, and the order completes with 1,000 paid. The forced rows are labelled script-signed. They are attacks, not agent actions.
 
 ## Is it a real app or a demo
 
-It is a real app. Anyone can open aegis-treasury-eta.vercel.app, click Create your treasury, and get their own treasury on Base Sepolia in about a minute: an owner key and a bank key are generated in the browser, our faucet sends test ETH, and the treasury gets 100,000 test USDC. About 13 real transactions set it up. Then they can run the agent, approve plans, freeze it from the bank seat, and try attacks that the contract refuses on-chain. The backend runs on our own server. The contracts did not need any change, because every rule is already stored per treasury. It is testnet only: the contracts are not audited and the vaults are mocks.
+It is a real app. Anyone can open aegis-treasury-eta.vercel.app, click Create your treasury, and get their own treasury on Base Sepolia in about a minute: an owner key and a bank key are generated in the browser, our faucet sends test ETH, and the treasury gets 100,000 test USDC. About 13 real transactions set it up. Then they can run the agent, approve plans, freeze it from the bank seat, and try attacks that the contract refuses on-chain. The backend runs on our own server. The contracts did not need any change, because every rule is already stored per treasury. The web Orders page is still in progress. It is testnet only: the contracts are not audited and the vaults are mocks.
 
 ## Is it just an LLM wrapper
 
@@ -106,15 +116,15 @@ No. There are smart contracts on Base Sepolia, a backend with five processes and
 
 ## What the AI model is
 
-The agent uses an OpenAI-compatible API, so the model is swappable. In production we run Claude Haiku 5.5 behind a proxy on our server. If the model fails or times out after 20 seconds, that request falls back to the rule-based mode.
+The agent uses an OpenAI-compatible API, so the model is swappable. In production we run Claude Haiku 5.5 behind a proxy on our server, and it is live: the agent chat answered in LLM mode in our last check. If the model fails or times out after 20 seconds, that request falls back to the rule-based mode.
 
 ## Known limits, said honestly
 
-Vaults and the price feed are mocks, so yield and risk numbers are illustrative. One stablecoin and one feed only. Authorizer and Exit keys are server keys, so the next step is HSM or MPC. Risk thresholds are heuristics, not backtested yet. Obligations are self-reported, so wrong input gives a wrong reserve; the next step is importing from accounting systems. The contracts are not audited, so no real money.
+Vaults and the price feed are mocks, so yield and risk numbers are illustrative. One stablecoin and one feed only. Authorizer and Exit keys are server keys, so the next step is HSM or MPC. Risk thresholds are heuristics, not backtested yet. Obligations are self-reported, so wrong input gives a wrong reserve; the next step is importing from accounting systems. Demo issuers are server keys. The contracts are not audited, so no real money.
 
 ## Why this matters for a bank like WeBank
 
-Banks are starting to test AI agents with tokenised deposits, like the HSBC and Ant test. The missing piece is control: the bank needs to see what an agent does with a client's money and stop it. AEGIS gives the bank a desk with live risk scores, the audit trail and a kill switch, while the contract guarantees the client's bills are always covered.
+Banks are starting to test AI agents with tokenised deposits, like the HSBC and Ant test. The missing piece is control: the bank needs to see what an agent does with a client's money and stop it. Porthmos gives the bank a desk with live risk scores, the audit trail and a kill switch, while the contract guarantees the client's bills are always covered.
 
 ## Short answers for common judge questions
 
@@ -130,4 +140,4 @@ How is this different from Aumo? Aumo manages yield with guardrails. We add bill
 
 ## Indonesian quick version
 
-AEGIS itu AI treasury agent buat bisnis yang pegang stablecoin. Dia nyisihin cash buat tagihan yang mau jatuh tempo, sisanya diinvest ke vault yang udah di-approve, dan semua transaksi dicek sama smart contract, bukan sama AI. Bank juga bisa pantau dan freeze agent-nya. Bedanya sama yang udah ada: reserve buat tagihan dijaga on-chain, authorization-nya terikat ke kondisi pasar saat itu, dan ada sisi bank buat oversight.
+Porthmos itu AI treasury agent buat bisnis yang pegang stablecoin. Dia nyisihin cash buat tagihan yang mau jatuh tempo, sisanya diinvest ke vault yang udah di-approve, dan semua transaksi dicek sama smart contract, bukan sama AI. Bank juga bisa pantau dan freeze agent-nya. Bedanya sama yang udah ada: reserve buat tagihan dijaga on-chain, authorization-nya terikat ke kondisi pasar saat itu, dan ada sisi bank buat oversight.

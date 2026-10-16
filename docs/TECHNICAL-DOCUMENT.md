@@ -8,9 +8,9 @@
 | Team name | TBD |
 | Competition track | International AI Track, Topic F: Agent Wallet |
 | Submission date | TBD (deadline 20 Oct 2026, 23:59 UTC+8) |
-| Document status | Draft v0.4. Applies the eleven confirmed findings of the design tribunal on v0.3 (see "Changes from v0.3"). v0.3 added the product name, the trade treasury positioning, the multi-tenant app as built, and the TradeFlow module as a design that is not built yet (see "Changes from v0.2"). Values marked TBD are filled in after deployment and testing. |
+| Document status | Draft v0.5. TradeFlow is now built and recorded on Base Sepolia (E6a to E6g). v0.4 applied the eleven confirmed findings of the design tribunal on v0.3 (see "Changes from v0.3"); v0.5 records what was built (see "Changes from v0.4"). The previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.4.md`. Values marked TBD are filled in after testing. |
 
-**Build status labels.** **[Built]** means the part runs on Base Sepolia and has tests in the repository. **[Design v0.3]** means the part is specified in this document and is not built yet. All of TradeFlow, including the TradeEscrow contract, is [Design v0.3]; the label keeps its name in v0.4 so that references stay stable. A change made in v0.4 is marked with the finding it answers, for example (v0.4, C1). Where v0.4 changes built code, the text says so. Text without a label describes the built system. The TradeEscrow contract interface in 04 is unchanged from v0.3.
+**Build status labels.** **[Built]** means the part runs on Base Sepolia and has tests in the repository. **[In progress]** means the part is being built now. In v0.5 all of TradeFlow is [Built] except the web Orders page, which is [In progress]; the label **[Built]** no longer marks any part, and v0.4 text that used it now reads [Built]. A change made in v0.4 is marked with the finding it answers, for example (v0.4, C1). Text without a label describes the built system. The TradeEscrow contract interface in 04 is unchanged from v0.3.
 
 **Names that do not change.** The product is now Porthmos. On-chain and API identifiers keep the old name, because a change would alter deployed bytecode, signature digests, Safe addresses or live URLs. These stay as they are: the contract names `AegisModule` and `PolicyRegistry`; the EIP-712 domain name `"AegisModule"`; the event `AegisExecuted`; the mock vault token names ("Aegis Vault A", "Aegis Vault B"); the signed message prefixes that the backend verifies (`AEGIS onboarding`, `AEGIS session`); the Safe salt tag `aegis-v2`; the browser storage key `aegis.wallet.v1`; the headers `X-Aegis-Session` and `X-Aegis-Admin` and the cookie `aegis_session`; the Python package `aegis`; the repository `Xavrir/aegis-treasury`; the site `aegis-treasury-eta.vercel.app`; and the API host `aegis-api.150-109-23-187.sslip.io`.
 
@@ -32,13 +32,13 @@ The bank that serves the business has no view of, or control over, what an agent
 
 | User | Role |
 |---|---|
-| Importer finance or treasury manager (primary) | Works at a mid-sized trading company, Singapore first. Defines the mandate and the obligation calendar, approves material actions, reads decision records. With TradeFlow: creates and funds trade orders and resolves held milestones [Design v0.3] |
-| Supplier or exporter (secondary) | Sees that an order is funded and which milestones are paid. Receives each milestone payment at the address fixed in the order. Can submit a proof or a release, because submission is permissionless [Design v0.3] |
-| Bank risk officer (overseer) | Sets bank limits, monitors every client agent, approves escalations, can freeze an agent. A freeze also stops milestone releases [Design v0.3] |
+| Importer finance or treasury manager (primary) | Works at a mid-sized trading company, Singapore first. Defines the mandate and the obligation calendar, approves material actions, reads decision records. With TradeFlow: creates and funds trade orders and resolves held milestones [Built] |
+| Supplier or exporter (secondary) | Sees that an order is funded and which milestones are paid. Receives each milestone payment at the address fixed in the order. Can submit a proof or a release, because submission is permissionless [Built] |
+| Bank risk officer (overseer) | Sets bank limits, monitors every client agent, approves escalations, can freeze an agent. A freeze also stops milestone releases [Built] |
 
 Singapore is the first market because it has a large wholesale trade sector (57,715 wholesale establishments in 2024), TradeTrust for verifiable trade documents, and a stablecoin framework from MAS. In Indonesia, crypto is not a legal means of payment (Bank Indonesia), so Indonesian trade volume is not counted as Porthmos settlement volume.
 
-**Selected topic:** Topic F, Agent Wallet. Porthmos is an AI agent that holds an execution role on a smart wallet and autonomously performs asset management, transaction execution and risk control on-chain. TradeFlow extends transaction execution to conditional payments to suppliers [Design v0.3].
+**Selected topic:** Topic F, Agent Wallet. Porthmos is an AI agent that holds an execution role on a smart wallet and autonomously performs asset management, transaction execution and risk control on-chain. TradeFlow extends transaction execution to conditional payments to suppliers [Built].
 
 **Topic traceability**
 
@@ -46,7 +46,7 @@ Singapore is the first market because it has a large wholesale trade sector (57,
 |---|---|---|
 | Asset management | Obligation-aware allocation between the treasury and term vaults | E1, E3 |
 | Transaction execution | Agent-initiated deposits and redemptions through the Safe | E1 to E3 tx hashes |
-| Transaction execution (conditional settlement) | Milestone payments to a fixed supplier after a verified proof [Design v0.3] | E6a to E6g (TBD) |
+| Transaction execution (conditional settlement) | Milestone payments to a fixed supplier after a verified proof [Built] | E6a to E6g tx hashes |
 | Risk control | Exit Agent, quarantine, on-chain limits, rejection of invalid decisions | E2, E4a to E4d, E5 |
 | Real on-chain transaction hashes | Base Sepolia deployment; every self-serve treasury also produces real transactions | Execution evidence table (05) |
 
@@ -56,13 +56,13 @@ Singapore is the first market because it has a large wholesale trade sector (57,
 |---|---|---|
 | Treasury core (the engine) | Obligation-aware reserve, state-bound authorization, structural containment, Exit Agent, Bank Risk Desk, hash-chained Decision Ledger | [Built] |
 | Multi-tenant app | Any visitor creates a treasury on Base Sepolia: a Safe, an owner key and a bank key, configured by real transactions | [Built] |
-| TradeFlow (first module) | Milestone escrow per trade order. Pays the supplier only on a verified proof from a trusted issuer | [Design v0.3] |
+| TradeFlow (first module) | Milestone escrow per trade order. Pays the supplier only on a verified proof from a trusted issuer. Contract, service and API are deployed on Base Sepolia and recorded in E6. The web Orders page is in progress | [Built]; web Orders page [In progress] |
 
 TradeFlow uses the engine. Escrowed milestone funds leave the Safe when the owner funds an order, so the treasury core manages only the remaining cash and can never invest committed funds. A held milestone uses the same oversight as a refused deposit: the ledger records it, the bank desk shows it, and a bank freeze stops it.
 
 ### Core value and innovation
 
-Porthmos is an AI trade treasury with conditional settlement. It keeps enough liquidity to meet scheduled obligations, allocates only the surplus to term vaults within risk limits, withdraws automatically when risk conditions change, and executes an action only if the conditions that justified it still hold at execution time. With TradeFlow, it pays a supplier only when a trusted issuer's proof shows that a milestone is met [Design v0.3].
+Porthmos is an AI trade treasury with conditional settlement. It keeps enough liquidity to meet scheduled obligations, allocates only the surplus to term vaults within risk limits, withdraws automatically when risk conditions change, and executes an action only if the conditions that justified it still hold at execution time. With TradeFlow, it pays a supplier only when a trusted issuer's proof shows that a milestone is met [Built].
 
 Several parts of this already exist in the market. Autonomous stablecoin treasuries with risk scoring, guardrails and decision receipts are live (Aumo). Deterministic rebalancing and exit agents run on production vaults (kpk on Morpho). Policy-attested execution has been published as research (PACE, Aug 2026). Trade escrow is not new either: Tazapay and Escrow.com run escrow for trade, TradeTrust verifies trade documents, and at least one other Topic F entry (sucsage/agentic-wallet) has built milestone escrow. We do not claim those as new.
 
@@ -72,7 +72,7 @@ Our contribution is the combination of four mechanisms in one working system [Bu
 2. **State-bound authorization.** Every execution carries a signed Decision Authorization Record (DAR) that binds the typed action, the policy version, a human approval where required, and on-chain observable preconditions (oracle freshness and a bounded price band). The contract re-checks those preconditions at execution and rejects the action if they no longer hold.
 3. **Structural containment.** The agent's execution path cannot send funds to any address other than the treasury's own wallet and vaults the owner has approved. Induced transfers to an attacker are not detected and blocked. They are impossible by construction.
 4. **Institutional oversight that cannot be undone by one party.** The bank can freeze risk-increasing actions and revoke the agent's signer; only the bank can lift its own freeze. Exits always remain possible, so a freeze never traps funds.
-5. **Conditional settlement with split authority [Design v0.3].** A supplier payment needs two signatures that the contract checks: a trusted issuer's signed proof and the treasury's Authorizer. The contract checks the proof's conditions itself. The payee and every amount are fixed when the owner funds the order, so neither the agent nor an issuer can redirect funds or change an amount. With real, external issuers the two signatures come from independent parties. With the demo issuers, both are reachable from the API process, so the demo shows the authorization path, not the split (v0.4, C3).
+5. **Conditional settlement with split authority [Built].** A supplier payment needs two signatures that the contract checks: a trusted issuer's signed proof and the treasury's Authorizer. The contract checks the proof's conditions itself. The payee and every amount are fixed when the owner funds the order, so neither the agent nor an issuer can redirect funds or change an amount. With real, external issuers the two signatures come from independent parties. With the demo issuers, both are reachable from the API process, so the demo shows the authorization path, not the split (v0.4, C3).
 
 ---
 
@@ -84,9 +84,9 @@ Our contribution is the combination of four mechanisms in one working system [Bu
 |---|---|
 | The LLM is never a security boundary | The LLM process holds no key, never produces calldata, and cannot loosen any limit |
 | Deterministic code calculates money | Reserve, allocation, risk scores, actions and proof checks come from tested code, not model output |
-| Enforce on-chain what matters most | Vault allowlist, receiver, caps, reserve floor, approval tier, DAR validity and freezes are contract checks. TradeFlow adds payee, amounts, milestone order and proof conditions [Design v0.3] |
-| Risk-reducing actions have a lower bar | Redemptions back to the treasury pass even when deposits are frozen, a vault is delisted or the policy changed. Refunds of unreleased escrow to the buyer Safe pass even under a bank freeze [Design v0.3] |
-| Third-party payments need proof and fixed terms | A supplier is paid only the amount fixed at order creation, only on an issuer proof that passes the on-chain conditions, and only with the Authorizer's signature [Design v0.3] |
+| Enforce on-chain what matters most | Vault allowlist, receiver, caps, reserve floor, approval tier, DAR validity and freezes are contract checks. TradeFlow adds payee, amounts, milestone order and proof conditions [Built] |
+| Risk-reducing actions have a lower bar | Redemptions back to the treasury pass even when deposits are frozen, a vault is delisted or the policy changed. Refunds of unreleased escrow to the buyer Safe pass even under a bank freeze [Built] |
+| Third-party payments need proof and fixed terms | A supplier is paid only the amount fixed at order creation, only on an issuer proof that passes the on-chain conditions, and only with the Authorizer's signature [Built] |
 | Every decision leaves evidence | Executions emit events with measured amounts; rejections revert with typed errors; the bank desk reconciles against the chain |
 | Fail closed | Missing data, stale state, an out-of-date reserve floor or a verification error results in no action |
 | Tenants share contracts, not authority | Every on-chain rule is keyed by Safe. Every session, tool, query and stream event is bound to the session's Safe |
@@ -133,7 +133,7 @@ Our contribution is the combination of four mechanisms in one working system [Bu
 │       │ reads PolicyRegistry; pays only the supplier or refunds the buyer Safe  │
 │  Keeper process ───► MockPriceFeed (poke every 60 s)                            │
 └─────────────────────────────────────────────────────────────────────────────────┘
-  * TradeFlow, [Design v0.3], not built yet
+  * TradeFlow, [Built]: contract, service and API deployed; the web Orders page is in progress
 ```
 
 | Component | Responsibility | Trust level |
@@ -160,10 +160,10 @@ Our contribution is the combination of four mechanisms in one working system [Bu
 | AegisModule | Accepts only typed actions; derives the required tier; enforces DAR and approval validity, vault rules, caps, reserve floor, freezes; builds calls with the Safe as receiver; checks every inner call succeeded | Trust anchor |
 | PolicyRegistry | Per-Safe policy and the role matrix (see 04) | Trust anchor |
 | Safe | Custody. Owner keeps full control; the module is the agent's only path | Trust anchor |
-| Proof Verifier [Design v0.3] | Checks a milestone proof with the same rules as the contract, plus the document hash when the document is uploaded | Trusted code |
-| Verification Agent [Design v0.3] | Explains a verified or held milestone and proposes one next action from a fixed set | Untrusted output; cannot sign or choose amounts |
-| Demo issuers [Design v0.3] | Server-held keys that stand in for a carrier (eBL), a reefer sensor gateway and a surveyor | Test infrastructure only |
-| TradeEscrow [Design v0.3] | Holds milestone funds per order; releases only to the order's supplier; refunds only to the buyer Safe | Trust anchor |
+| Proof Verifier [Built] | Checks a milestone proof with the same rules as the contract, plus the document hash when the document is uploaded | Trusted code |
+| Verification Agent [Built] | Explains a verified or held milestone and proposes one next action from a fixed set | Untrusted output; cannot sign or choose amounts |
+| Demo issuers [Built] | Server-held keys that stand in for a carrier (eBL), a reefer sensor gateway and a surveyor | Test infrastructure only |
+| TradeEscrow [Built] | Holds milestone funds per order; releases only to the order's supplier; refunds only to the buyer Safe | Trust anchor |
 
 ### Key decisions and alternatives considered
 
@@ -184,10 +184,10 @@ Our contribution is the combination of four mechanisms in one working system [Bu
 | Hosting | Docker on a Tencent CVM behind an existing Caddy; one image runs the five processes under a supervisor | Serverless; one container per process | Fits a 512 MB budget; the supervisor still gives each process only its own key |
 | LLM in production | `claude-haiku-5-5` through CLIProxyAPI (OpenAI-compatible) | Qwen (the v0.2 default) | Available to the team; the provider stays swappable; no safety property depends on the model |
 | Owner transaction encoding (v0.4, C1) | The web encodes every owner and bank transaction itself, against addresses pinned from the bundled deployments file; the API returns parameters only | The API returns ready calldata (`floorUpdate {to, data, value}` in v0.2 and v0.3) | API calldata signed by the owner key let a compromised API host send a Safe delegatecall and drain the Safe. Local encoders already exist for the floor update and the Safe calls |
-| TradeFlow contract [Design v0.3] | New TradeEscrow contract that reads PolicyRegistry | A `RELEASE_MILESTONE` action inside AegisModule (master context v1.2) | No change to the deployed module or registry, so the recorded evidence and every tenant stay valid. Escrowed funds leave the Safe, so the module's rule "the receiver is always the Safe" stays absolute |
-| Escrow funding [Design v0.3] | One owner-signed Safe transaction: delegatecall to Safe MultiSendCallOnly v1.4.1 that batches `approve(escrow, total)` and `createOrder` | Transfer, then create; approve and create as two Safe transactions; agent-funded orders | Atomic; no standing allowance is left, because the escrow pulls exactly the approved total. The agent never commits funds to a third party (see "Funding path") |
-| Release authority [Design v0.3] | Two signatures checked on-chain: the milestone issuer's `MilestoneProof` and the Safe's current Authorizer's `ReleaseAuthorization` | Issuer only; Authorizer only; owner signs every release | Issuer only lets one external key move funds. Authorizer only lets the agent pay without proof. An owner signature per release removes the automation; the owner already approved the terms when funding the order |
-| Condition checks [Design v0.3] | The contract checks the signed summary fields against bounds fixed at creation | External oracle call at release; off-chain checks only | No oracle call at release time, so no oracle manipulation or liveness risk. The off-chain agent is never the only gate |
+| TradeFlow contract [Built] | New TradeEscrow contract that reads PolicyRegistry | A `RELEASE_MILESTONE` action inside AegisModule (master context v1.2) | No change to the deployed module or registry, so the recorded evidence and every tenant stay valid. Escrowed funds leave the Safe, so the module's rule "the receiver is always the Safe" stays absolute |
+| Escrow funding [Built] | One owner-signed Safe transaction: delegatecall to Safe MultiSendCallOnly v1.4.1 that batches `approve(escrow, total)` and `createOrder` | Transfer, then create; approve and create as two Safe transactions; agent-funded orders | Atomic; no standing allowance is left, because the escrow pulls exactly the approved total. The agent never commits funds to a third party (see "Funding path") |
+| Release authority [Built] | Two signatures checked on-chain: the milestone issuer's `MilestoneProof` and the Safe's current Authorizer's `ReleaseAuthorization` | Issuer only; Authorizer only; owner signs every release | Issuer only lets one external key move funds. Authorizer only lets the agent pay without proof. An owner signature per release removes the automation; the owner already approved the terms when funding the order |
+| Condition checks [Built] | The contract checks the signed summary fields against bounds fixed at creation | External oracle call at release; off-chain checks only | No oracle call at release time, so no oracle manipulation or liveness risk. The off-chain agent is never the only gate |
 
 ### Multi-tenant architecture [Built]
 
@@ -243,7 +243,7 @@ The mint is claimed with one atomic database update, so concurrent calls cannot 
 **Per-tenant attacks.** `POST /api/tenant/attack {kind}` (owner session) makes the ATTACKER key broadcast a transaction against the session's Safe with a fixed gas limit of 800,000, so it is mined and reverts. `tampered`: the Authorizer signs a small deposit DAR whose expiry is at least one hour in the past, and the amount is then changed; it reverts `BadSignature`, and as signed it could only revert `Expired`. `replay`: the tenant's last executed DAR is sent again; it reverts `NonceUsed` (409 `NothingToReplay` if there is none). Market scenarios (`depeg`, `liquidity`, `stale`, `restore`) move shared contracts, so on 84532 they need the `X-Aegis-Admin` token.
 
 **Owner and bank transactions are built in the browser (v0.4, C1).** The owner and bank keys sign only transactions that the web encodes itself. The rules:
-- The API returns parameters only. For the reserve floor it returns the floor value and the schedule hash; the web encodes `setReserveFloor(safe, floor, scheduleHash)` to the registry. Any `to` or `data` field that the API still returns is ignored. This fix to the built floor update is being implemented in the web now.
+- The API returns parameters only. For the reserve floor it returns the floor value and the schedule hash; the web encodes `setReserveFloor(safe, floor, scheduleHash)` to the registry. Any `to` or `data` field that the API still returns is ignored. 
 - Target addresses come from the deployments file bundled into the web build (`web/public/deployments/<chainId>.json`), never from an API response: the registry, the Safe proxy factory and, for TradeFlow, TradeEscrow and MultiSendCallOnly.
 - The send function accepts only typed intents (for example "floor update", "fund order", "waive", "refund") and encodes each one with a local encoder. It has no path that sends caller-supplied calldata. It refuses any target that is not pinned, and any Safe `execTransaction` that it did not build itself. This applies to burner keys and to injected wallets.
 - The confirm dialog shows the decoded call that the web built, not a value taken from the API.
@@ -280,7 +280,7 @@ Errors use codes such as `RateLimited`, `OnboardingClosed`, `FaucetEmpty`, `NotA
 | Privacy | Client IPs are stored only as salted SHA-256 hashes. The HTTP access log is off on 84532, because the stream URL can carry the session token |
 | Health | `GET /api/health` reports chain id, block lag, keeper last poke and oracle age, LLM mode, tenant count and `onboardingOpen` |
 
-### TradeFlow architecture [Design v0.3]
+### TradeFlow architecture [Built]
 
 **Scope.** One trade order has one buyer (a registered Safe), one supplier address fixed at creation, the MockUSDC token, and exactly three milestones. Each milestone has its own amount, trusted issuer, proof kind, conditions and deadline. The demo split is 20% / 40% / 40%, but amounts are per-order parameters. ZK proofs, real IoT data and real TradeTrust or eBL integration are roadmap only.
 
@@ -305,7 +305,7 @@ Availability was checked on 17 Oct 2026. On 84532, code exists at the canonical 
 
 **Off-chain flow**
 
-1. The owner opens the Trade page and enters the supplier address, the total and the terms reference. The page fills the issuers, conditions and deadlines from the bundled build (v0.4, C1). The owner can link an existing obligation to the order.
+1. The owner opens the Trade page (the web Orders page is in progress; the API and the evidence run without it) and enters the supplier address, the total and the terms reference. The page fills the issuers, conditions and deadlines from the bundled build (v0.4, C1). The owner can link an existing obligation to the order.
 2. The page shows what will be signed (the exact approve amount and every order field) and warns if the Safe cash after funding falls below the on-chain reserve floor. The web encodes the MultiSend batch and the Safe transaction itself, and the owner key sends it. The service never builds or sends it.
 3. The service reads `OrderCreated` and writes an `ORDER_CREATED` ledger row with the transaction hash. If an obligation was linked, the service settles it and returns the new floor value and schedule hash; the web encodes the floor update and the owner signs it, as for any obligation change (v0.4, C1). This stops the same payment from being counted twice.
 4. A proof arrives. It is sent by the issuer or supplier (`POST /api/tradeflow/orders/{id}/proofs`) or, in the demo, signed by a demo issuer on the owner's request.
@@ -366,12 +366,12 @@ New abuse limits: demo proofs 12 per tenant per hour; admitted proof submissions
 |---|---|---|
 | LLM | `claude-haiku-5-5` through CLIProxyAPI, an OpenAI-compatible proxy on the same host. Configured by `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; the provider is swappable | No safety property depends on the model. Without an LLM, every feature runs in deterministic mode |
 | Agent tools | `get_treasury_state`, `get_obligations`, `get_risk_report`, `plan_allocation`, `propose_action`, `explain_decision` | All deterministic. Every tool takes the Safe from the authenticated session, never from LLM arguments. `propose_action` accepts only a plan option ID and optional reductions |
-| TradeFlow tools [Design v0.3] | `get_orders`, `get_order`, `verify_proof`, `explain_hold` | Deterministic and session-bound. None signs, and none takes an amount, payee or milestone index from the LLM |
+| TradeFlow explanation | `tradeflow/explain.py` (Verification Agent): facts in, one proposal from a fixed set out; a rule-based proposal replaces any answer outside the set. The chat tools `get_orders`, `get_order`, `verify_proof`, `explain_hold` are not built | Deterministic checks decide; the explanation never signs and never takes an amount, payee or milestone index |
 | Chain data | Base Sepolia RPC | Read through the State Analyzer only |
 | Price feed | MockPriceFeed implementing `AggregatorV3Interface`, updated by the keeper process every heartbeat (60 s) | Stopping the keeper reproduces staleness; `setPrice` reproduces a depeg |
 | Vaults | Two MockVaults implementing ERC-4626 over MockUSDC (6 decimals) | Admin sets yield accrual and withdrawable liquidity for stress scenarios |
 | Obligations | Entered and approved by the owner in the app; the approval produces the on-chain floor update | Never inferred by the LLM |
-| Proof sources [Design v0.3] | EIP-712 `MilestoneProof` signed by the milestone's issuer key; demo issuers on the server | Real TradeTrust or eBL documents and IoT gateways are roadmap |
+| Proof sources [Built] | EIP-712 `MilestoneProof` signed by the milestone's issuer key; demo issuers on the server | Real TradeTrust or eBL documents and IoT gateways are roadmap |
 | Contracts toolchain | Foundry (solc 0.8.28, Cancun), OpenZeppelin 5.4, Safe v1.4.1 deployments on Base Sepolia | |
 | Frontend | React 19, Vite 8, TypeScript 6, viem 2, wagmi 3 | Deployed on Vercel |
 | Storage | SQLite (WAL) with hash-chained ledger rows | PostgreSQL in later versions |
@@ -401,12 +401,12 @@ New abuse limits: demo proofs 12 per tenant per hour; admitted proof submissions
 | Collect human approval where the tier requires it | Web App (owner, bank) |
 | Sign the DAR | Authorizer (Exit Agent for exits) |
 | Enforce and execute | AegisModule and Safe |
-| Create and fund a trade order [Design v0.3] | Owner, through a Safe transaction |
-| Check a milestone proof [Design v0.3] | Proof Verifier |
-| Explain a verified or held milestone, propose a next action [Design v0.3] | LLM (Verification Agent) |
-| Sign a release authorization [Design v0.3] | Authorizer, after its own re-verification |
-| Waive a held milestone or refund an order [Design v0.3] | Owner, through a Safe transaction |
-| Enforce and pay the supplier [Design v0.3] | TradeEscrow |
+| Create and fund a trade order [Built] | Owner, through a Safe transaction |
+| Check a milestone proof [Built] | Proof Verifier |
+| Explain a verified or held milestone, propose a next action [Built] | LLM (Verification Agent) |
+| Sign a release authorization [Built] | Authorizer, after its own re-verification |
+| Waive a held milestone or refund an order [Built] | Owner, through a Safe transaction |
+| Enforce and pay the supplier [Built] | TradeEscrow |
 
 **The "only more conservative" rule.** The Allocation Planner returns a set of options and marks one as the default: the option its deterministic objective ranks best within policy. The LLM may choose the default, "hold", or any option whose amount in every vault is at or below the default's amount, and may further reduce amounts. If the LLM chooses an option above the default in any vault, the Proposal Validator does not reject it silently: it raises the action to tier T3, so the owner must approve it. A manipulated model can therefore cause less exposure on its own, never more.
 
@@ -414,7 +414,7 @@ New abuse limits: demo proofs 12 per tenant per hour; admitted proof submissions
 - Owner chat messages are intent from an authenticated user, but they can only select within policy. A message cannot change policy; policy changes are separate signed owner or bank transactions.
 - Externally sourced text (vault or token names, metadata, documents) is passed to the LLM as quoted data with a source label, never as instructions. It cannot reach a signer, because signers accept only validated plan options.
 - Every tool call is scoped to the Safe bound to the session. The bank desk uses a separate read-only role.
-- Proof contents and uploaded trade documents are external data. They reach the LLM only as quoted data. The release decision comes from the deterministic checks, never from the LLM [Design v0.3].
+- Proof contents and uploaded trade documents are external data. They reach the LLM only as quoted data. The release decision comes from the deterministic checks, never from the LLM [Built].
 
 **State machine.** Each request runs through persisted states. Every transition stores a timestamp and the versions of the input data it used.
 
@@ -438,7 +438,7 @@ Rules:
 - Every terminal state writes a ledger row, including holds, rejections and denials.
 - `FINAL_REVALIDATION` reloads state, recomputes the plan and simulates again. If the new action no longer fits inside the human Approval, the workflow replans instead of signing.
 
-**Milestone state machine [Design v0.3].** Each milestone of an order has its own persisted off-chain state. On-chain, a milestone is only `PENDING`, `RELEASED`, `WAIVED` or `REFUNDED` (see 04).
+**Milestone state machine [Built].** Each milestone of an order has its own persisted off-chain state. On-chain, a milestone is only `PENDING`, `RELEASED`, `WAIVED` or `REFUNDED` (see 04).
 
 ```
 (proof fails admission: 4xx, no ledger row, no state change)
@@ -483,7 +483,7 @@ R_required = max over t in [0, H] of max(0, Σ_{i ≤ t} O_i − Σ_{i ≤ t} I_
 - `I_i`: inflows marked "confirmed" by the owner. Unconfirmed inflows count as zero.
 - `B`: buffer, `max(B_min, b × Σ O_i)`, defaults `B_min = 500 USDC`, `b = 10%`.
 
-Taking the maximum over cumulative net outflow covers the worst point in the horizon, so an early large payment is covered even if later inflows offset it. Escrowed TradeFlow milestones are not obligations in this formula, because their funds have already left the Safe [Design v0.3].
+Taking the maximum over cumulative net outflow covers the worst point in the horizon, so an early large payment is covered even if later inflows offset it. Escrowed TradeFlow milestones are not obligations in this formula, because their funds have already left the Safe [Built].
 
 **Floor synchronisation.** Approving or settling an obligation in the app produces an owner-signed `setReserveFloor(ceil(R_required), scheduleHash)` transaction. The API returns the floor value and the schedule hash, and the web encodes the call to the pinned registry (v0.4, C1). The planner compares `registry.reserveFloor` with `R_required` before every plan. If the on-chain floor is lower, the planner returns HOLD with reason `FloorOutOfSync` and asks the owner to sign the update. `scheduleHash` is also included in every DAR's evidence hash, so each decision is linked to the schedule it was planned against. A new tenant starts with floor 0 while the required reserve is the 500 USDC buffer, so its agent holds until the owner sends the first floor update.
 
@@ -519,7 +519,7 @@ D = max(0, L − R_required − F)
 
 Quarantine is cleared only by the owner, after a cooldown of 24 hours with no trigger.
 
-**6. Treasury view with escrow [Design v0.3].**
+**6. Treasury view with escrow [Built].**
 
 ```
 Cash      = Safe USDC + withdrawable vault assets                (= L)
@@ -529,7 +529,7 @@ Free      = D = max(0, L − R_required − F)
 
 Committed is shown so the owner sees the full position (Cash + Committed). It is never added to `L` or `R_required`.
 
-**7. Milestone proof verification [Design v0.3].** For a proof of milestone `i` of order `o`, "now" is the latest block timestamp (v0.4, C6). The Proof Verifier runs two stages.
+**7. Milestone proof verification [Built].** For a proof of milestone `i` of order `o`, "now" is the latest block timestamp (v0.4, C6). The Proof Verifier runs two stages.
 
 Stage A, admission (v0.4, C4). A failure returns 4xx, writes no ledger row and changes no state:
 1. The order exists and is active, and milestone `i` is not already paid.
@@ -557,10 +557,10 @@ The Verification Agent then writes a short explanation and proposes one action f
 | Robustness | Same request 10 times yields the same executed state |
 | Security | Contract tests, attack scenarios on testnet, curated injection set (see 04 and 05) |
 | Tenant isolation | Every endpoint and the stream tried across two tenants; a two-tenant end-to-end run on Anvil |
-| Proof verification [Design v0.3] | Fixed proof corpus: valid, out of range, wrong issuer, tampered field, wrong order, early or future issue time, missing document. Expected: 100% correct verdicts and the same verdict from the contract's `checkRelease` |
-| Settlement latency [Design v0.3] | Blocks from a valid proof to `MilestoneReleased` |
+| Proof verification [Built] | Fixed proof corpus: valid, out of range, wrong issuer, tampered field, wrong order, early or future issue time, missing document. Expected: 100% correct verdicts and the same verdict from the contract's `checkRelease` |
+| Settlement latency | Blocks from a valid proof to `MilestoneReleased`. Not measured yet |
 
-Results so far: on 17 Oct 2026, the local runs of the contract (47), service unit (111) and web (21) tests passed. The on-chain evidence E1 to E5 is recorded (05). The financial replay against baselines and a full AgentDojo run are not done: TBD.
+Results so far: on 17 Oct 2026, the local runs passed: contracts 106 Foundry tests (including 59 TradeEscrow tests, 4 TradeEscrow invariants and 2 older invariants), service 161 unit and 15 integration tests, web 61 tests. The on-chain evidence E1 to E6 is recorded (05). The financial replay against baselines and a full AgentDojo run are not done: TBD.
 
 ---
 
@@ -570,8 +570,8 @@ Results so far: on 17 Oct 2026, the local runs of the contract (47), service uni
 
 | Item | Scope |
 |---|---|
-| Asset | Treasury funds in each tenant's Safe and vaults. Escrowed milestone funds in TradeEscrow [Design v0.3] |
-| Adversaries | Prompt injection by a user or third party; malicious data sources and vault metadata; a compromised server process or non-owner key; replay of old authorizations; a malicious vault contract; a visitor who abuses the public onboarding or tries to reach another tenant; a dishonest supplier or proof issuer, or both together [Design v0.3] |
+| Asset | Treasury funds in each tenant's Safe and vaults. Escrowed milestone funds in TradeEscrow [Built] |
+| Adversaries | Prompt injection by a user or third party; malicious data sources and vault metadata; a compromised server process or non-owner key; replay of old authorizations; a malicious vault contract; a visitor who abuses the public onboarding or tries to reach another tenant; a dishonest supplier or proof issuer, or both together [Built] |
 | Out of scope for the MVP | Compromise of the owner's own wallet; consensus-level attacks; bugs in Safe core contracts; malware or script injection in a visitor's browser, which holds testnet burner keys (see Known limitations) |
 
 ### Role matrix (PolicyRegistry)
@@ -594,7 +594,7 @@ Each Safe has its own policy, its own `policyVersion`, and these roles. Any chan
 | `bankFreeze` / `bankUnfreeze` | No | Yes | No | Only the bank can lift its own freeze |
 | `quarantine(safe, vault)` | Yes | Yes | Set only | Clearing needs the owner |
 
-**TradeEscrow roles [Design v0.3].** TradeEscrow has no admin, no owner, no pause and no upgrade path. It reads PolicyRegistry for the buyer Safe: `owner` (to require a registered Safe), `authorizer` and `exitKey` (to check the release signer), `ownerFrozen` and `bankFrozen`, and `policyVersion`. It does not read `bank`, because the bank acts only through the registry freeze.
+**TradeEscrow roles [Built].** TradeEscrow has no admin, no owner, no pause and no upgrade path. It reads PolicyRegistry for the buyer Safe: `owner` (to require a registered Safe), `authorizer` and `exitKey` (to check the release signer), `ownerFrozen` and `bankFrozen`, and `policyVersion`. It does not read `bank`, because the bank acts only through the registry freeze.
 
 | Function | Buyer Safe (owner-signed Safe tx) | Bank | Authorizer | Milestone issuer | Anyone |
 |---|---|---|---|---|---|
@@ -619,7 +619,7 @@ The module derives the minimum tier from on-chain state. The declared `dar.tier`
 
 `dailyCap` (per UTC day, chosen over a rolling window to keep on-chain bookkeeping to one counter) applies to every deposit tier. An amount above `dailyCap` needs the owner to raise the cap first. A `bankLimit` of 0 means no bank approval is required.
 
-**TradeFlow actions [Design v0.3].** TradeFlow actions are not DAR tiers. They map to these confirmations:
+**TradeFlow actions [Built].** TradeFlow actions are not DAR tiers. They map to these confirmations:
 
 | Action | Who acts | Required signatures |
 |---|---|---|
@@ -649,7 +649,7 @@ AEGIS onboarding\nowner: <checksum>\nbank: <checksum>\nchainId: 84532\nissuedAt:
 AEGIS session\nrole: owner|bank\naddress: <checksum>\nchainId: 84532\nissuedAt: <ISO-8601>     max age 10 min
 ```
 
-**TradeFlow structures [Design v0.3].** EIP-712 domain: `name = "TradeEscrow"`, `version = "1"`, the chain id and the TradeEscrow address. The separate domain means a DAR signature can never be read as a release authorization, and the reverse.
+**TradeFlow structures [Built].** EIP-712 domain: `name = "TradeEscrow"`, `version = "1"`, the chain id and the TradeEscrow address. The separate domain means a DAR signature can never be read as a release authorization, and the reverse.
 
 ```
 MilestoneProof(uint256 orderId,uint8 index,uint8 kind,bytes32 docHash,int32 minTempCenti,int32 maxTempCenti,uint32 samples,uint64 issuedAt)
@@ -695,7 +695,7 @@ There is no code path that sets a receiver other than the Safe. Any failed check
 
 **Simulation entry point.** `check(dar, approval)` is a view that runs every deposit or redeem check except signature verification and returns the expected result and tier. The Simulator calls it before signing, together with an `eth_call` of the vault calls from the Safe address. After signing, it runs one final `eth_call` of the signed submission before broadcast.
 
-### On-chain enforcement (TradeEscrow) [Design v0.3]
+### On-chain enforcement (TradeEscrow) [Built]
 
 **State.**
 
@@ -838,14 +838,14 @@ Milestone i (only when i == nextIndex):   PENDING ──release──► RELEASE
 | Key | Holder | If compromised |
 |---|---|---|
 | Owner | Business owner's wallet (a browser burner key in the multi-tenant app) | Full control of their own Safe. Out of scope, as with any self-custody wallet |
-| Bank | Bank risk officer's wallet (a browser burner key in the multi-tenant app) | Can freeze deposits, remove vaults, tighten limits, revoke the Authorizer, quarantine. With TradeFlow: can stop releases and waivers [Design v0.3]. Cannot move funds and cannot block redemptions or refunds |
-| Authorizer | Separate server process | Can only make T2 deposits: ≤ `autoCap` each, ≤ `dailyCap` per day, into vaults the owner added and the Safe has used before, above the reserve floor, at a fresh in-band price. Funds cannot leave the treasury. With TradeFlow it can sign releases, but a release also needs a valid issuer proof that meets the conditions, and it pays only the fixed amount to the fixed supplier [Design v0.3]. Owner or bank can revoke it |
+| Bank | Bank risk officer's wallet (a browser burner key in the multi-tenant app) | Can freeze deposits, remove vaults, tighten limits, revoke the Authorizer, quarantine. With TradeFlow: can stop releases and waivers [Built]. Cannot move funds and cannot block redemptions or refunds |
+| Authorizer | Separate server process | Can only make T2 deposits: ≤ `autoCap` each, ≤ `dailyCap` per day, into vaults the owner added and the Safe has used before, above the reserve floor, at a fresh in-band price. Funds cannot leave the treasury. With TradeFlow it can sign releases, but a release also needs a valid issuer proof that meets the conditions, and it pays only the fixed amount to the fixed supplier [Built]. Owner or bank can revoke it |
 | Exit key | Exit Agent process | Can only redeem back to the Safe. Worst case: funds return early and earn nothing |
 | Executor | Relayer | Nothing; anyone can submit signed DARs, so withholding them only delays until the Exit Agent or owner submits |
 | LLM process | No key | Nothing on-chain; worst case is a wrong proposal that downstream checks reject or escalate |
-| Demo issuer keys [Design v0.3] | API process only (v0.4, C3) | Can sign proofs for milestones whose issuer is that demo key. A release also needs the Authorizer, but the API process also holds `INTERNAL_TOKEN` and can ask the Authorizer to sign. So in the demo, a compromise of the API process alone can obtain releases for demo-issued milestones. Each pays only the fixed amount to the supplier the owner chose |
+| Demo issuer keys [Built] | API process only (v0.4, C3) | Can sign proofs for milestones whose issuer is that demo key. A release also needs the Authorizer, but the API process also holds `INTERNAL_TOKEN` and can ask the Authorizer to sign. So in the demo, a compromise of the API process alone can obtain releases for demo-issued milestones. Each pays only the fixed amount to the supplier the owner chose |
 
-No single compromised component short of the owner's own key can move funds out of the treasury, and no single non-owner party can both freeze and unfreeze the agent. This holds only because the owner key signs nothing but transactions that the web encodes itself against pinned addresses (v0.4, C1). In v0.3 and in the built floor update before the v0.4 fix, it did not hold: a compromised API could return a Safe `execTransaction` with a delegatecall as the "floor update", and one owner click would drain the Safe. With TradeFlow, the only path out of the treasury is an owner-funded order, and its funds go only to the supplier the owner chose or back to the Safe [Design v0.3].
+No single compromised component short of the owner's own key can move funds out of the treasury, and no single non-owner party can both freeze and unfreeze the agent. This holds only because the owner key signs nothing but transactions that the web encodes itself against pinned addresses (v0.4, C1). In v0.3 and in the built floor update before the v0.4 fix, it did not hold: a compromised API could return a Safe `execTransaction` with a delegatecall as the "floor update", and one owner click would drain the Safe. With TradeFlow, the only path out of the treasury is an owner-funded order, and its funds go only to the supplier the owner chose or back to the Safe [Built].
 
 **Shared operator keys in a multi-tenant setting [Built].** The Authorizer, Exit, Executor and Keeper keys are the same for every tenant, and activation requires that. Each key's on-chain limits still apply per tenant, but one leak reaches every tenant at once.
 
@@ -880,9 +880,9 @@ No single compromised component short of the owner's own key can move funds out 
 | Hidden activity by a compromised server | Hash-chained ledger; bank desk reads `AegisExecuted` events directly and flags mismatches | Bank Risk Desk |
 | Data leakage to the LLM provider | The owner's chat text, aggregated amounts and pseudonymous IDs only; no keys or identity documents; secrets from environment, redacted from logs. Client IPs stored only as salted hashes | Porthmos Service |
 | Owner key signs API-supplied calldata (v0.4, C1) | The API returns parameters only; the web encodes every owner and bank transaction against pinned addresses; the send function refuses unpinned targets and any Safe `execTransaction` it did not build | Web App |
-| LLM triggers a supplier payment [Design v0.3] | The LLM only explains and proposes from a fixed set; a release needs deterministic checks, the Authorizer's re-verification and the on-chain checks | Verification Agent, Authorizer, TradeEscrow |
+| LLM triggers a supplier payment [Built] | The LLM only explains and proposes from a fixed set; a release needs deterministic checks, the Authorizer's re-verification and the on-chain checks | Verification Agent, Authorizer, TradeEscrow |
 
-### TradeFlow threats [Design v0.3]
+### TradeFlow threats [Built]
 
 | Threat | Effect if it succeeds | Mitigation | Residual risk |
 |---|---|---|---|
@@ -937,7 +937,7 @@ No single compromised component short of the owner's own key can move funds out 
 
 **Local development.** `make anvil`, `make deploy` (from v0.4, C10: `Deploy.s.sol`, then `DeployTradeEscrow.s.sol`, then the deployments merge), then `make dev` (the five processes, each with only its own key), or `make dev-fake` for an offline demo with an in-memory chain. Full commands: `service/README.md` and `web/README.md`.
 
-**TradeFlow [Design v0.3].** `forge script script/DeployTradeEscrow.s.sol --rpc-url $RPC_URL --broadcast` deploys TradeEscrow with the existing registry and MockUSDC, deploys MultiSendCallOnly on 31337 only, and writes the TradeFlow keys to `deployments/<chainId>.tradeflow.json`; the merge script then adds them to `deployments/<chainId>.json` and fails if any existing key would change (v0.4, C10). Then tag the running image (rollback step 6), add the three demo issuer keys to `aegis.env` (the v0.4 supervisor gives them to the API process only, C3), rebuild the service, and redeploy the web so it bundles the new addresses. Without these keys and addresses the service runs with TradeFlow disabled.
+**TradeFlow [Built].** `forge script script/DeployTradeEscrow.s.sol --rpc-url $RPC_URL --broadcast` deploys TradeEscrow with the existing registry and MockUSDC, deploys MultiSendCallOnly on 31337 only, and writes the TradeFlow keys to `deployments/<chainId>.tradeflow.json`; the merge script then adds them to `deployments/<chainId>.json` and fails if any existing key would change (v0.4, C10). Then tag the running image (rollback step 6), add the three demo issuer keys to `aegis.env` (the v0.4 supervisor gives them to the API process only, C3), rebuild the service, and redeploy the web so it bundles the new addresses. Without these keys and addresses the service runs with TradeFlow disabled.
 
 ### Deployed contracts (Base Sepolia)
 
@@ -950,8 +950,8 @@ No single compromised component short of the owner's own key can move funds out 
 | AegisModule | `0x786863E82d233eb60555dfeEFEe06068d8EcB318` |
 | Reference Safe | `0x2E1c2be3dD6BAa59344EdC6ee6A93D68e2295a0F` |
 | Safe v1.4.1 SafeL2, SafeProxyFactory, CompatibilityFallbackHandler (canonical) | `0x29fcB43b46531BcA003ddC8FCB67FFE91900C762`, `0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67`, `0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99` |
-| Safe v1.4.1 MultiSendCallOnly (canonical) [Design v0.3 dependency] | `0x9641d764fc13c8B624c04430C7356C1C7C8102e2` |
-| TradeEscrow [Design v0.3] | TBD |
+| Safe v1.4.1 MultiSendCallOnly (canonical) | `0x9641d764fc13c8B624c04430C7356C1C7C8102e2` |
+| TradeEscrow | `0x009ca6F11b24fE0bAb9dE3EBb5dAb9e15f95ce76` (deployed at block 48204293) |
 
 Operator role addresses are in `deployments/84532.json`.
 
@@ -959,14 +959,14 @@ Operator role addresses are in `deployments/84532.json`.
 
 | Suite | Count | Status |
 |---|---|---|
-| Contracts (Foundry; fuzz 256 runs; invariants 64 runs, depth 40) | 47 | Passed in a local run on 17 Oct 2026 |
-| Service unit tests (`pytest -m "not integration"`) | 111 | Passed in a local run on 17 Oct 2026 |
-| Service integration tests (`pytest -m integration`, against Anvil) | 8 | Not re-run for this document |
-| Web (Vitest) | 21 | Passed in a local run on 17 Oct 2026 |
-| v0.4 fixes to built code: W6, W7, A13, M12 extension, T52 | 5 planned | W6 is being implemented with the web floor-update fix |
-| TradeFlow T1 to T54 [Design v0.3] | 54 planned | Not written |
+| Contracts (Foundry; fuzz 256 runs; invariants 64 runs, depth 40) | 106 | Passed in a local run on 17 Oct 2026. Includes TradeEscrow 59 new tests, 4 TradeEscrow invariants and 2 older invariants |
+| Service unit tests (`pytest -m "not integration"`) | 161 | Passed in a local run on 17 Oct 2026 |
+| Service integration tests (`pytest -m integration`, against Anvil) | 15 | Passed in a local run on 17 Oct 2026 |
+| Web (Vitest) | 61 | Passed in a local run on 17 Oct 2026 |
+| v0.4 fixes to built code: W6, W7, A13, M12 extension, T52 | Built | Web owner-transaction guard (`web/src/lib/txguard.test.ts`), supervisor secrets, `AuthorizerNotCurrent` for DARs, deployment merge (`test_merge_deployment.py`) |
+| TradeFlow tests T1 to T54 | Built, in the counts above | TradeEscrow 59 Foundry tests (incl. 4 invariants); service tests in `test_tradeflow.py` and `integration/test_tradeflow_anvil.py` |
 
-Counts come from the test files: 47 Foundry tests in 5 suites; 97 service unit test functions that expand to 111 cases through two parametrized tests; 8 integration tests; 21 web tests in 5 files.
+Counts come from the local runs of 17 Oct 2026: 106 Foundry tests, 161 service unit tests, 15 service integration tests, 61 web tests. The v0.4 count of 47 contract tests did not include TradeEscrow.
 
 **Contract tests (Foundry)**
 
@@ -1061,10 +1061,10 @@ Counts come from the test files: 47 Foundry tests in 5 suites; 97 service unit t
 | W3 | Onboarding and session message text | 3 |
 | W4 | Onboarding runner: order, resume, skip of done steps | 4 |
 | W5 | Safe address prediction and call encoding | 6 |
-| W6 | v0.4, C1: the mocked API returns a `floorUpdate` whose `to` is the Safe and whose data is an `execTransaction`; then a valid response | Nothing is sent and a refusal shows; the valid response encodes exactly `setReserveFloor` to the pinned registry. Planned |
-| W7 | v0.4, C1: the send function is given an unpinned target, and a Safe `execTransaction` it did not build | Both refused; no send. Planned |
+| W6 | v0.4, C1: the mocked API returns a `floorUpdate` whose `to` is the Safe and whose data is an `execTransaction`; then a valid response | Nothing is sent and a refusal shows; the valid response encodes exactly `setReserveFloor` to the pinned registry. |
+| W7 | v0.4, C1: the send function is given an unpinned target, and a Safe `execTransaction` it did not build | Both refused; no send |
 
-**TradeFlow tests [Design v0.3]**
+**TradeFlow tests [Built]**
 
 | ID | Case | Expected |
 |---|---|---|
@@ -1123,7 +1123,7 @@ Counts come from the test files: 47 Foundry tests in 5 suites; 97 service unit t
 | T53 | v0.4, C10: deployments file without `tradeEscrow` | `GET /api/tradeflow/config` returns `enabled: false`; TradeFlow endpoints return 503 `TradeFlowDisabled`; all built tests pass unchanged |
 | T54 | v0.4, C2: schema check of `evidence-84532.json` | E6b and E6e carry `requestId`, a workflow with `PROOF_VERIFIED`, `RELEASE_SIGNED` and `RELEASED`, `ledgerRef` rows, and a release sent from the Executor; E6c carries a `MILESTONE_HELD` row with `ConditionNotMet` before the forced-submit hash |
 
-### Execution evidence plan
+### Execution evidence
 
 Rejected transactions must be broadcast to produce a hash. viem estimates gas before sending and refuses transactions that would revert, so attack scenarios are sent with a fixed gas limit. On 84532 they were sent by `service/scripts/evidence_84532.py` with EIP-1559 fees and a fixed limit of 800,000 gas. `script/Attack.s.sol` sends the same calls with legacy pricing and a 1,500,000 gas limit, which needs more ETH than the testnet roles hold, so it is used on Anvil. The full record, including setup and cleanup transactions, workflow states and ledger references, is `deployments/evidence-84532.json`.
 
@@ -1137,15 +1137,15 @@ Rejected transactions must be broadcast to produce a hash. viem estimates gas be
 | E4c | Attack: prompt injection requesting an external transfer | No transaction can express it (receiver is fixed to the Safe); refusal recorded in the ledger (request `req_872a5923cbdd4956`, flags `addressInMessage`, `crossClient`, `overrideInstructions`) |
 | E4d | Conditions changed: deposit signed, price moved out of band, submitted (reverted `PriceOutOfBand`) | [0x53939b60…](https://sepolia.basescan.org/tx/0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba) |
 | E5 | Bank freezes and revokes; agent deposit reverts `Frozen`; Exit Agent redeem still executes | [0x2c033ba9…](https://sepolia.basescan.org/tx/0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799), [0xdf111f38…](https://sepolia.basescan.org/tx/0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66) |
-| E6a | TradeFlow [Design v0.3]: the reference Safe funds an order of 1,000 test USDC (200 / 400 / 400) through MultiSendCallOnly: `approve` and `createOrder` in one owner-signed Safe transaction | TBD |
-| E6b | Milestone 1 (index 0, handed to carrier): carrier proof posted to the service; `PROOF_VERIFIED`, release signed by the Authorizer process, submitted by the Executor; the supplier receives 200. Recorded with `requestId`, workflow and `ledgerRef` (v0.4, C2) | TBD |
-| E6c | Milestone 2 (index 1, arrived): sensor proof with a maximum of 9.40 °C against the 2.00 to 8.00 °C condition, posted to the service. The service writes `MILESTONE_HELD` with `ConditionNotMet` and requests no release. Then a release signed with the Authorizer key by the evidence script, standing in for a compromised or faulty agent, is submitted anyway: mined and reverted `ConditionNotMet` (forced submit labelled "script-signed") | TBD |
-| E6d | Milestone 2 resolved: the owner waives after a survey (`waive`, an owner-signed Safe transaction); the supplier receives 400 (v0.4, C2: waive only) | TBD |
-| E6e | Milestone 3 (index 2, quality accepted): surveyor proof posted to the service after the unfreeze; `PROOF_VERIFIED`, new authorization from the Authorizer process, submitted by the Executor; the supplier receives 400; the order is completed. Recorded with `requestId`, workflow and `ledgerRef` (v0.4, C2) | TBD |
-| E6f | Attack: a valid milestone 3 authorization, signed with the Authorizer key by the evidence script, with the amount changed after signing; sent by the attacker role (reverted `BadSignature`; labelled "script-signed", as an attack row) | TBD |
-| E6g | Bank freeze: a valid milestone 3 release, signed with the Authorizer key by the evidence script, submitted while the buyer Safe is bank-frozen (reverted `Frozen`; labelled "script-signed"); the bank then unfreezes | TBD |
+| E6a | TradeFlow: the reference Safe funds order 1 of 1,000 test USDC (200 / 400 / 400) through MultiSendCallOnly: `approve` and `createOrder` in one owner-signed Safe transaction. Allowance afterwards 0, committed 1,000 | [0x63a8622b…](https://sepolia.basescan.org/tx/0x63a8622b38aa631533900f5cea7b92699132b1d2e1e036bff2fc8f035c1a07f1) |
+| E6b | Milestone 1 (index 0, handed to carrier): carrier proof posted to the service; `PROOF_VERIFIED`, release signed by the Authorizer process, submitted by the Executor; the supplier receives 200. Recorded with `requestId`, workflow and `ledgerRef` | [0x86cbfd7e…](https://sepolia.basescan.org/tx/0x86cbfd7e450b18d54448d7b28c57c20d3ddbeb7308faa5e2eba392fa67402281) |
+| E6c | Milestone 2 (index 1, arrived): sensor proof with a maximum of 9.40 °C against the 2.00 to 8.00 °C condition. The service writes `MILESTONE_HELD` with `ConditionNotMet` and requests no release. A release signed with the Authorizer key by the evidence script ("script-signed") is submitted anyway: mined and reverted `ConditionNotMet` | [0x71c4032f…](https://sepolia.basescan.org/tx/0x71c4032f5926988e7d28ef0e6c5bacda025ffc8ee2800517db885e69408386b6) |
+| E6d | Milestone 2 resolved: the owner waives after a survey (`waive`, an owner-signed Safe transaction); the supplier receives 400 | [0xb7a2a417…](https://sepolia.basescan.org/tx/0xb7a2a4178f7cbb6cb865244e6bc4a2832f94cbc8d926b848834ff432ef2a6160) |
+| E6e | Milestone 3 (index 2, quality accepted): surveyor proof posted after the unfreeze; `PROOF_VERIFIED`, new authorization from the Authorizer process, submitted by the Executor; the supplier holds 1,000 in total and the order is `COMPLETED`. Recorded with `requestId`, workflow and `ledgerRef` | [0xf4a27910…](https://sepolia.basescan.org/tx/0xf4a27910945cd6e6044bcd7973ee41e066c98762df15218802b70a60f1be1493) |
+| E6f | Attack: a valid milestone 3 authorization, script-signed, with the amount changed after signing; sent by the attacker role (reverted `BadSignature`) | [0x2bbf4bd4…](https://sepolia.basescan.org/tx/0x2bbf4bd484f679106d700dd326cb3f6b87052de7b8db709a9884f35a142e0bf5) |
+| E6g | Bank freeze: a valid milestone 3 release, script-signed, submitted while the buyer Safe is bank-frozen (reverted `Frozen`). Setup and cleanup: the bank freezes ([0xddfb6e11…](https://sepolia.basescan.org/tx/0xddfb6e11f76f453e37f06ac9158f192f8cf15f321e0d1c17f9da22ad6bd2e323)) and unfreezes ([0x880659b3…](https://sepolia.basescan.org/tx/0x880659b35223219eeb470ac734e66096ba163eb035d18c7b503e9fc2d9b5223e)) | [0x0411d80b…](https://sepolia.basescan.org/tx/0x0411d80b31157943150ca5702082dc157afc855da5edad13b4e6ac4bce448a9c) |
 
-E6 run order: E6a, E6b, E6c, E6d, E6f, E6g, E6e, so both attacks target milestone 3 before it is paid. The unfreeze bumps `policyVersion`, so E6e needs a fresh authorization. E6 runs on the reference treasury, whose owner key the team holds. It runs as phase 2 of the evidence script, as E1 to E5 did: the hosted service is stopped so that nonces do not collide, and the script starts the five processes locally against 84532 with the same keys. The settlement rows E6b and E6e therefore go through the Proof Verifier, the Authorizer process and the Executor, and the evidence file records their `requestId`, workflow states and `ledgerRef` rows, as for E1 (v0.4, C2; checked by T54). The supplier is a fresh address generated by the script and recorded in the evidence file. If any E6 settlement row has to be recorded before the Proof Verifier and `/sign-release` exist, it is labelled "contract path, script-signed" and does not claim agent execution.
+E6 ran in this order: E6a, E6b, E6c, E6d, E6f, E6g, E6e, so both attacks target milestone 3 before it is paid. The unfreeze bumps `policyVersion`, so E6e needed a fresh authorization. E6 ran on the reference treasury as phase 2 of the evidence script, with the hosted service stopped so that nonces do not collide; the script started the five processes locally against 84532 with the same keys. The settlement rows E6b and E6e therefore went through the Proof Verifier, the Authorizer process and the Executor, and the evidence file records their `requestId`, workflow states and `ledgerRef` rows (checked by T54; `e6SchemaCheck` is `ok`). The supplier is a fresh address generated by the script (`0xF64f65B9AaCDCB3F0c619EAA94D631D79841a7Ab`, in the evidence file). Rows labelled "script-signed" are attacks: the evidence script signed them with the Authorizer key to stand in for a compromised or faulty agent, and the contract refused each one. The evidence file lists one failure, `tradeflow bank desk: timed out`: the bank desk reconciliation step of that run timed out, and it does not affect any transaction above.
 
 ### Delivery plan and cut line
 
@@ -1163,13 +1163,13 @@ Remaining plan (dates in UTC+8):
 
 | Date | Work | Exit criterion |
 |---|---|---|
-| 17 Oct 2026 | This document (v0.3, then v0.4); TradeEscrow and Foundry tests T1 to T35; the web floor-update fix (C1, W6) | `forge test` green; W6 green |
-| 18 Oct 2026 | Fixes to built code from the tribunal: owner transaction rule (C1, W7), supervisor secrets (C3, M12), `AuthorizerNotCurrent` for DARs (V1, A13), `make deploy` and the rollback tag (C10, T52). Then cut-line steps 2 and 3: Proof Verifier, `/sign-release`, minimal API and the Executor release path; TradeEscrow on 31337 and 84532; E6 through phase 2 of the evidence script. Then the Trade page if time allows | E6 hashes in `evidence-84532.json`, passing T54 |
+| 17 Oct 2026 | Done: this document (v0.3 to v0.5); TradeEscrow, its tests and invariants; the web owner-transaction guard (C1) | `forge test` green; W6 and W7 green |
+| 18 Oct 2026 | Done before the freeze: tribunal fixes to built code (C1, C3, V1, deployment merge); Proof Verifier, `/sign-release`, API and Executor release path; TradeEscrow on 84532; E6a to E6g recorded in `evidence-84532.json` through the real pipeline. In progress: the web Orders page | E6 hashes in `evidence-84532.json`, passing T54 |
 | 18 Oct 2026, end of day | **Code freeze** | No feature code after this point |
 | 19 Oct 2026 | Evidence sync to the web and docs, demo video, final document; fixes to existing behaviour only | |
 | 20 Oct 2026, 23:59 | Submission deadline | |
 
-**Cut line (reordered in v0.4, C2).** TradeFlow work is ordered so that each step stands alone: (1) TradeEscrow with tests T1 to T35; (2) the Proof Verifier with admission (C4), the Authorizer `/sign-release` with the V1, C6 and C8 checks, a minimal API (proof submission, demo proofs, order read) and the Executor release path with its workflow callback (C7); (3) deployment on 84532 and E6 through phase 2 of the evidence script, so that E6b and E6e go through the Executor with `requestId`, workflow and `ledgerRef`; (4) the Trade page; (5) the LLM explanation. If E6 must be recorded before step 2 is done, the settlement rows are labelled "contract path, script-signed". If TradeFlow is not done at the freeze, it ships as design plus tests only: this specification and the tests that exist, with no claim of a TradeFlow deployment and every E6 row marked "not recorded". The treasury core and its evidence do not depend on TradeFlow: AegisModule, PolicyRegistry and the deployed addresses do not change. After the freeze, the hosted service changes only by rollback to the `aegis-treasury:pre-tradeflow` image (v0.4, C10).
+**Cut line (v0.4, C2).** TradeFlow steps 1 to 3 are done before the freeze: (1) TradeEscrow with tests; (2) the Proof Verifier with admission, the Authorizer `/sign-release` with the V1, C6 and C8 checks, the API and the Executor release path; (3) deployment on 84532 and E6 through phase 2 of the evidence script, with `requestId`, workflow and `ledgerRef` for E6b and E6e. Step 4, the web Orders page, is in progress. Step 5, the LLM explanation, exists as `tradeflow/explain.py` with a rule-based fallback; the recorded explanations came from the rules (`source: rules`). If the Orders page is not done at the freeze, it ships later and the API, the evidence and the contract stand without it. The treasury core and its evidence do not depend on TradeFlow: AegisModule, PolicyRegistry and the deployed addresses did not change. After the freeze, the hosted service changes only by rollback to the `aegis-treasury:pre-tradeflow` image (v0.4, C10).
 
 ### Known limitations
 
@@ -1188,18 +1188,31 @@ Remaining plan (dates in UTC+8):
 | The module address in onboarding comes from the API config | Onboarding targets are pinned (v0.4, C1), but the module address inside `enableModule` is read from the config, so a compromised API host could still point new tenants at a malicious module | Compare the whole onboarding config with the bundled deployments file and refuse a mismatch |
 | One host, one SQLite file | No high availability. An outage stops the agent, not the funds: the owner keeps full control of the Safe and can redeem from the vaults directly | Managed database and a second host |
 | Mock market admin key | The DEPLOYER key can move the mock price and block vault redemptions for every tenant | Real vaults and feeds have no such admin |
-| Proof issuers are trusted [Design v0.3] | A lying or compromised issuer, or one colluding with the supplier, can trigger a payment to the fixed supplier | k-of-n issuers, issuer registry with revocation, dispute window |
-| Release needs the buyer's Authorizer [Design v0.3] | The buyer side (or a long bank freeze) can stall until the deadline and then refund; the supplier has no guaranteed payout | Record proven milestones on-chain so a refund cannot cover them; arbitration |
-| Demo issuers are server keys [Design v0.3] | The demo proves the authorization path, not real document or sensor verification. The API process alone can obtain releases for demo-issued milestones (v0.4, C3) | TradeTrust verification and signed gateway data; ZK proofs where they reduce disclosure |
-| EOA issuers only [Design v0.3] | Contract-wallet issuers (EIP-1271) cannot sign proofs | Add EIP-1271 support |
-| No on-chain dispute process [Design v0.3] | A disagreement ends in a waiver or a refund | Arbitration module or a licensed escrow partner |
-| Token blocklists [Design v0.3] | With real USDC, a blocklisted supplier makes every release revert; funds return only by refund after the deadline | Check the payee before funding; owner-approved payee change |
-| Fixed three milestones [Design v0.3] | Other order structures need a new contract version | Variable milestone count |
+| Proof issuers are trusted [Built] | A lying or compromised issuer, or one colluding with the supplier, can trigger a payment to the fixed supplier | k-of-n issuers, issuer registry with revocation, dispute window |
+| Release needs the buyer's Authorizer [Built] | The buyer side (or a long bank freeze) can stall until the deadline and then refund; the supplier has no guaranteed payout | Record proven milestones on-chain so a refund cannot cover them; arbitration |
+| Demo issuers are server keys [Built] | The demo proves the authorization path, not real document or sensor verification. The API process alone can obtain releases for demo-issued milestones (v0.4, C3) | TradeTrust verification and signed gateway data; ZK proofs where they reduce disclosure |
+| EOA issuers only [Built] | Contract-wallet issuers (EIP-1271) cannot sign proofs | Add EIP-1271 support |
+| No on-chain dispute process [Built] | A disagreement ends in a waiver or a refund | Arbitration module or a licensed escrow partner |
+| Token blocklists [Built] | With real USDC, a blocklisted supplier makes every release revert; funds return only by refund after the deadline | Check the payee before funding; owner-approved payee change |
+| Web Orders page not finished | TradeFlow orders are created and read through the API and the recorded script; the browser page is in progress | Finish and ship the Orders page |
+| Fixed three milestones [Built] | Other order structures need a new contract version | Variable milestone count |
 | Regulation | On-chain settlement is possible only where stablecoin payments are allowed; Indonesia is excluded | Trade Intelligence Mode with bank or licensed PSP settlement |
 
 ---
 
 ## Changes
+
+### Changes from v0.4
+
+| Change | Section |
+|---|---|
+| TradeFlow is built: TradeEscrow (`contracts/src/TradeEscrow.sol`), the service (`service/aegis/tradeflow/*`, `service/aegis/api/tradeflow.py`), the Authorizer `/sign-release`, the Executor release path and the deployment merge script. [Design v0.3] labels became [Built]; only the web Orders page is [In progress] | All |
+| TradeEscrow `0x009ca6F1…ce76` (block 48204293) and MultiSendCallOnly added to the deployed contracts; demo issuer addresses are in `deployments/84532.json` | 05 |
+| E6a to E6g recorded on Base Sepolia through the real pipeline (Proof Verifier, Authorizer `/sign-release`, Executor), with ledger references. E6c and E6g also prove two refusals: `ConditionNotMet` and `Frozen`; E6f proves `BadSignature` | 05 Evidence |
+| Test counts: contracts 106 (was 47), service 161 unit and 15 integration (was 111 and 8), web 61 (was 21) | 03, 05 |
+| The v0.4 fixes to built code (web transaction guard, supervisor secrets, `AuthorizerNotCurrent`, deployment merge) are built | 05 |
+| LLM: `claude-haiku-5-5` through CLIProxyAPI on the VPS is live; the agent chat returned `mode=llm` in a check on 17 Oct 2026 | 02 |
+| Delivery plan and cut line: TradeFlow was done before the freeze. A known limitation was added for the unfinished Orders page; the evidence run lists one failure, a bank desk reconciliation timeout | 05 |
 
 ### Changes from v0.3 (design tribunal)
 
@@ -1207,7 +1220,7 @@ The design tribunal on v0.3 (`docs/design-tribunal-v0.3/REVIEW.md`, details in `
 
 | Finding | Severity | Change in v0.4 | Section |
 |---|---|---|---|
-| C1. The owner key sends API-supplied calldata, so an API-host compromise can drain a Safe | High | The API returns parameters only. The web encodes the floor update, the funding batch, `waive` and `refund` against addresses pinned from the bundled deployments file; the send function refuses unpinned targets and any Safe `execTransaction` it did not build; issuers and condition defaults come from the bundled build; the `resolution` endpoint is removed; blast-radius claims corrected. The floor-update fix to built code is being implemented in the web | 02 Key decisions, Multi-tenant, TradeFlow; 03 Floor synchronisation; 04 Blast radius, Protection, Threats; 05 W6, W7, T45, T47, Known limitations |
+| C1. The owner key sends API-supplied calldata, so an API-host compromise can drain a Safe | High | The API returns parameters only. The web encodes the floor update, the funding batch, `waive` and `refund` against addresses pinned from the bundled deployments file; the send function refuses unpinned targets and any Safe `execTransaction` it did not build; issuers and condition defaults come from the bundled build; the `resolution` endpoint is removed; blast-radius claims corrected. The floor-update fix to built code is done in the web | 02 Key decisions, Multi-tenant, TradeFlow; 03 Floor synchronisation; 04 Blast radius, Protection, Threats; 05 W6, W7, T45, T47, Known limitations |
 | C2. The E6 plan cannot show agent-executed settlement | High | Cut line reordered: Proof Verifier, `/sign-release` and minimal API come before E6. E6b and E6e go through the Executor in phase 2 of the evidence script, with `requestId`, workflow and `ledgerRef`. E6c records `MILESTONE_HELD` before the forced submit. E6d is a waive only. Rows recorded earlier are labelled "contract path, script-signed" | 05 Evidence, Delivery plan, T54 |
 | C3. Demo issuer keys and `INTERNAL_TOKEN` reach processes that must not hold them | Medium | Issuer keys owned by the API only; `INTERNAL_TOKEN` only for the API, Authorizer and Exit Agent; supervisor `SECRETS` and `OWNED` change; M12 extended; the demo blast radius states that the API process alone can obtain releases for demo-issued milestones | 01 mechanism 5; 02 Demo issuers; 04 Blast radius; 05 M12, Known limitations |
 | C4. Anyone can force a milestone into HELD with an unsigned proof | High | Admission checks first: unsigned, mismatched or oversized submissions get 4xx with no ledger row and no state change; only issuer-signed proofs can hold; 1 MB document cap; separate rate budget for rejects | 02 Off-chain flow, API; 03 State machine, algorithm 7; 04 Threats; 05 T36 |

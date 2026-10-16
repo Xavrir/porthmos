@@ -1,4 +1,4 @@
-# AEGIS Treasury: Master Project Context (v1.2, gabungan)
+# Porthmos (sebelumnya AEGIS Treasury): Master Project Context (v1.2, gabungan)
 
 **FinTechathon 2026 · International AI Track · Topic F**
 
@@ -85,8 +85,8 @@ Model awal yang disarankan adalah **buyer-paid**: importir membayar, pemasok men
 | Masalah bisnis | Solusi AEGIS | Status |
 |---|---|---|
 | Dana menganggur atau tidak terencana | AI Treasury Management dengan obligation-aware reserve | [sudah dibangun] |
-| Pemasok tidak yakin akan dibayar | Smart Escrow: dana milestone dikunci sebagai obligation | [usulan], memakai reserve floor yang sudah ada |
-| Pembeli takut membayar sebelum barang sesuai | Proof-Based Conditional Payment per milestone | [usulan] |
+| Pemasok tidak yakin akan dibayar | Smart Escrow: dana milestone dikunci di TradeEscrow | [sudah dibangun], direkam di E6a |
+| Pembeli takut membayar sebelum barang sesuai | Proof-Based Conditional Payment per milestone | [sudah dibangun], direkam di E6b sampai E6g (penerbit demo) |
 | Dokumen dan identitas bisnis sensitif | Zero-Knowledge verification untuk syarat tertentu | [usulan, modul tambahan] |
 | Pembayaran bertahap rumit dan manual | Programmable milestone release, opsi payment streaming | [usulan] |
 | Transaksi berisiko atau mencurigakan | AI risk monitoring, Exit Agent, state-bound authorization, bank freeze | [sudah dibangun] |
@@ -333,16 +333,19 @@ Mendekati impas operasional pada 2030, potensi laba operasional sekitar US$334.0
 
 Semua target adalah usulan eksperimen, bukan dampak yang sudah dicapai. Hasil pilot dibandingkan dengan baseline yang sama dan menyebut jumlah transaksi yang diuji.
 
-## 16. Status implementasi saat ini (baru, v1.2)
+## 16. Status implementasi saat ini (baru, v1.2; diperbarui 17 Okt 2026)
 
 Sudah dibangun dan berjalan di Base Sepolia:
 
-- **Kontrak:** AegisModule (Safe module) dan PolicyRegistry, 47 Foundry test termasuk fuzz dan invariant.
-- **Backend:** service Python 5 proses (API, Authorizer, Exit Agent, Executor, Keeper), 111 unit test dan 8 integration test, di-host di server sendiri.
-- **Web app multi-tenant:** setiap pengunjung bisa membuat treasury sendiri di Base Sepolia dalam sekitar 1 menit, lalu memakai agent, approval, Bank desk, dan demo serangan yang ditolak on-chain. Live di https://aegis-treasury-eta.vercel.app
-- **Evidence on-chain:** E1 alokasi normal, E2 depeg dan Exit Agent, E3 obligation baru yang memperbarui reserve floor on-chain, E4a BadSignature, E4b NonceUsed, E4c prompt injection, E4d PriceOutOfBand, dan E5 bank freeze (Frozen, exit tetap jalan). Kedelapan skenario sudah direkam dengan transaction hash asli.
+- **Kontrak:** AegisModule (Safe module), PolicyRegistry, dan TradeEscrow (0x009ca6F11b24fE0bAb9dE3EBb5dAb9e15f95ce76, blok 48204293). 106 Foundry test, termasuk 59 test TradeEscrow, serta fuzz dan invariant.
+- **Backend:** service Python 5 proses (API, Authorizer, Exit Agent, Executor, Keeper) di server sendiri, 161 unit test dan 15 integration test. Modul TradeFlow ada di `service/aegis/tradeflow/*` dan `service/aegis/api/tradeflow.py`. LLM `claude-haiku-5-5` lewat CLIProxyAPI di VPS sudah aktif (chat agent menjawab dengan mode=llm).
+- **Web app multi-tenant:** setiap pengunjung bisa membuat treasury sendiri dalam sekitar 1 menit, lalu memakai agent, approval, Bank desk, dan demo serangan. 61 web test. Live di https://aegis-treasury-eta.vercel.app. Halaman Orders untuk TradeFlow: sedang dikerjakan.
+- **TradeFlow dibangun dan direkam (E6a sampai E6g):** order 1.000 USDC uji dengan tiga milestone (200/400/400) didanai dalam satu transaksi Safe lewat MultiSendCallOnly. Pelepasan dana melewati pipeline asli: Proof Verifier, Authorizer `/sign-release`, lalu Executor, dengan ledger reference. Penolakan terbukti on-chain: ConditionNotMet (suhu 9,40 C di luar batas 2 sampai 8 C), BadSignature (jumlah diubah setelah ditandatangani), dan Frozen (bank freeze). Milestone yang ditahan diselesaikan owner lewat waive, dan order selesai dengan 1.000 USDC terbayar ke pemasok.
+- **Evidence on-chain:** E1 sampai E5 seperti sebelumnya (alokasi normal, depeg dan Exit Agent, obligation baru, BadSignature, NonceUsed, prompt injection, PriceOutOfBand, bank freeze), ditambah E6a sampai E6g. Semua direkam dengan transaction hash asli di `deployments/evidence-84532.json`.
 
-Belum dibangun: modul TradeFlow (milestone escrow, `RELEASE_MILESTONE`, evidence verification agent, ZK proof), integrasi TradeTrust/eBL, dan deployment FISCO BCOS.
+Catatan jujur: penerbit proof di demo adalah kunci server (carrier, sensor, surveyor), jadi demo membuktikan jalur otorisasi, bukan verifikasi dokumen atau sensor yang sebenarnya.
+
+Belum dibangun: halaman web Orders (sedang dikerjakan), ZK proof, integrasi TradeTrust/eBL dan sensor IoT nyata, dan deployment FISCO BCOS.
 
 ## 17. Rekomendasi untuk FinTechathon (baru, v1.2)
 
@@ -356,12 +359,12 @@ Narasi pitch: **AEGIS Treasury, TradeFlow module.**
 
 **Skenario demo yang disarankan:** satu kontrak pengiriman dengan tiga milestone. AI membaca status pengiriman, memverifikasi bukti, menentukan jumlah yang boleh dilepas, lalu membayar di testnet. Skenario kedua: pembayaran ditahan ketika data suhu tidak valid atau bukti dimanipulasi. Ini tetap relevan dengan Topic F karena AI Agent benar-benar mengelola dan mengeksekusi transaksi blockchain.
 
-**Saran prioritas dengan sisa waktu sampai 20 Oktober:** pertahankan treasury yang sudah berjalan sebagai inti dan bukti utama (40% nilai dari transaction hash). Tambahkan TradeFlow sebagai modul pertama dengan cakupan kecil: satu kontrak dagang, tiga milestone, bukti dari penerbit tepercaya yang ditandatangani (EIP-712), dan satu skenario penolakan. ZK proof dan sensor IoT ditampilkan sebagai roadmap, bukan klaim yang sudah dibangun.
+**Saran prioritas awal (sudah dijalankan, lihat bagian 16):** pertahankan treasury yang sudah berjalan sebagai inti dan bukti utama (40% nilai dari transaction hash). Tambahkan TradeFlow sebagai modul pertama dengan cakupan kecil: satu kontrak dagang, tiga milestone, bukti dari penerbit tepercaya yang ditandatangani (EIP-712), dan satu skenario penolakan. ZK proof dan sensor IoT ditampilkan sebagai roadmap, bukan klaim yang sudah dibangun.
 
 ## 18. Keputusan yang masih terbuka
 
-1. **Nama produk.** Dokumen feasibility menyarankan tetap **AEGIS Treasury** dengan TradeFlow sebagai modul. Tim juga mempertimbangkan **Porthmos** (bahasa Yunani: selat, jalur penyeberangan yang dijaga). Pencarian awal tidak menemukan proyek crypto atau fintech dengan nama itu. "Aegis Protocol V5" sudah dipakai proyek lain di Chainlink Hackathon 2026.
-2. **Cakupan TradeFlow sebelum deadline.** Modul kecil di testnet (saran dokumen ini) atau hanya di pitch deck sebagai roadmap?
+1. **Nama produk (diputuskan).** Nama produk adalah **Porthmos** (bahasa Yunani: selat, jalur penyeberangan yang dijaga). Logo: opsi D. Palet warna: #4EC397 dan #F99510. Nama on-chain dan API tetap memakai Aegis (AegisModule, PolicyRegistry, `aegis-treasury-eta.vercel.app`), karena mengubahnya berarti mengubah bytecode, tanda tangan, alamat Safe, dan URL yang sudah live. Bagian lain dokumen ini masih memakai nama AEGIS untuk konsistensi dengan versi sebelumnya.
+2. **Cakupan TradeFlow sebelum deadline (diputuskan).** Modul dibangun di testnet dan direkam sebagai E6a sampai E6g sebelum code freeze. Halaman web Orders masih dikerjakan.
 3. **Target pengguna di pitch.** Importir/eksportir menengah di Singapura (dokumen feasibility) dengan UMKM lintas negara sebagai segmen lanjutan.
 4. **FISCO BCOS.** Deployment tambahan untuk kesesuaian dengan teknologi WeBank, jika waktu memungkinkan.
 

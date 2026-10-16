@@ -2,7 +2,7 @@ import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { onTick, reducedMotion } from '../components/Count'
 import { useSearchParams } from 'react-router-dom'
-import { Chip, Empty, ErrorNote, ErrorTag, Figure, Hash, Loading, TierMark } from '../components/bits'
+import { Chip, Empty, ErrorNote, ErrorTag, Figure, Hash, Kpis, Loading, PageHeader, TierMark } from '../components/bits'
 import { DecisionChain } from '../components/DecisionChain'
 import { EvidencePanel } from '../components/EvidencePanel'
 import { expectedSigner, RecordSheet } from '../components/RecordSheet'
@@ -90,22 +90,19 @@ export default function Audit() {
 
   return (
     <main id="main" className="page">
-      <section className="page-band c-black on-dark">
-        <div className="wrap band-grid">
-          <div className="band-head">
-            <h1>Audit</h1>
-            <p className="band-lede">Every decision leaves a row: executions, refusals, holds and denials. Each row hashes the one before it, and the bank reads the chain to check the ledger.</p>
-          </div>
-          <div className="band-figures">
-            <Figure label="Ledger rows" value={ledger.data ? String(ledger.data.length) : '…'} note={intact === null ? '' : intact ? 'Hash chain intact' : 'Hash chain broken'} tone={intact === false ? 'alert' : undefined} />
-            <Figure label="Executed" value={String(executed)} note="AegisExecuted events" />
-            <Figure label="Refused" value={String(refused)} note={mode === 'replay' ? 'In the replay narrative. Real status under Recorded on Base Sepolia' : 'Typed reverts and unrepresentable requests'} />
-            <Figure label="Ledger vs chain" value={mismatches === undefined ? '…' : mismatches === 0 ? 'Reconciled' : `${mismatches} mismatch`} tone={mismatches ? 'alert' : undefined} />
-          </div>
-        </div>
-      </section>
+      <div className="page-body">
+        <PageHeader
+          title="Audit"
+          description="Every decision leaves a row: executions, refusals, holds and denials. Each row hashes the one before it, and the bank reads the chain to check the ledger."
+          actions={<a className="button quiet" href="#evidence">Recorded on-chain evidence</a>}
+        />
+        <Kpis label="Audit figures">
+          <Figure label="Ledger rows" value={ledger.data ? String(ledger.data.length) : '…'} note={intact === null ? '' : intact ? 'Hash chain intact' : 'Hash chain broken'} tone={intact === false ? 'alert' : undefined} />
+          <Figure label="Executed" value={String(executed)} note="AegisExecuted events" />
+          <Figure label="Refused" value={String(refused)} note={mode === 'replay' ? 'In the replay narrative. Real status under Recorded on Base Sepolia' : 'Typed reverts and unrepresentable requests'} />
+          <Figure label="Ledger against chain" value={mismatches === undefined ? '…' : mismatches === 0 ? 'Reconciled' : `${mismatches} mismatch`} tone={mismatches ? 'alert' : undefined} />
+        </Kpis>
 
-      <div className="page-body wrap">
         <section className="block" aria-labelledby="ledger-title">
           <div className="block-head">
             <h2 id="ledger-title">Decision ledger</h2>
@@ -133,7 +130,7 @@ export default function Audit() {
             </p>
           ) : null}
           {ledger.isLoading ? <Loading what="the ledger" /> : rows.length ? (
-            <div className="table-wrap">
+            <div className="table-wrap is-tall">
               <table className="table ledger">
                 <thead>
                   <tr><th scope="col">Row</th><th scope="col">Time</th><th scope="col">Outcome</th><th scope="col">What happened</th><th scope="col">Tier</th><th scope="col" className="r">Amount</th><th scope="col">Transaction</th><th scope="col">Hash chain</th></tr>
@@ -178,7 +175,7 @@ export default function Audit() {
               <p>Read from {chainName(chainId)}. {mode === 'replay' ? 'Contract addresses are the Base Sepolia deployment. Hashes of recorded transactions link to Basescan; the others are tagged illustrative and not linked.' : explorerTx(chainId, '0x0') ? 'Hashes link to the block explorer.' : 'This chain has no public explorer; hashes are copyable.'}</p>
             </div>
             {events.isLoading ? <Loading what="events" /> : events.data?.length ? (
-              <div className="table-wrap">
+              <div className="table-wrap is-tall">
                 <table className="table">
                   <thead><tr><th scope="col">Block</th><th scope="col">Event</th><th scope="col">Detail</th><th scope="col">Transaction</th></tr></thead>
                   <tbody>

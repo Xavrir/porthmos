@@ -91,12 +91,12 @@ export function ApprovalPanel({ card, role, onDone }: { card: ActionCard; role: 
       <p className={`check-sum${failing.length ? ' is-bad' : ''}`}>
         {failing.length
           ? <>Right now it would not run. Failing check: {failing.map((c) => CHECK_NAMES[c.name] ?? c.name).join(', ')}.{card.simulation.ok ? '' : <> The contract would revert <ErrorTag name={card.simulation.error} short={false} />.</>} Approving now leads to a hold, not a transaction.</>
-          : `All ${card.policyChecks.length} policy checks pass and the simulation passes.`}
+          : card.policyChecks.length ? `All ${card.policyChecks.length} policy checks pass and the simulation passes.` : 'The simulation passes.'}
       </p>
       {!canAct ? (
         <div className="seat-note">
           <p className="muted">
-            {replaying ? `You are viewing as ${myRole === 'bank' ? 'the bank officer' : myRole === 'owner' ? 'the owner' : 'a read-only visitor'}.` : myRole ? `Signed in as the ${myRole === 'bank' ? 'bank officer' : 'owner'}.` : identity.kind === 'wallet' ? 'This wallet holds no AEGIS role.' : 'You are not signed in.'}{' '}
+            {replaying ? `You are viewing as ${myRole === 'bank' ? 'the bank officer' : myRole === 'owner' ? 'the owner' : 'a read-only visitor'}.` : myRole ? `Signed in as the ${myRole === 'bank' ? 'bank officer' : 'owner'}.` : identity.kind === 'wallet' ? 'This wallet holds no Porthmos role.' : 'You are not signed in.'}{' '}
             Only the {role === 'bank' ? 'bank officer' : 'owner'} can sign this.
           </p>
           <SwitchSeat to={role} className="button small" />

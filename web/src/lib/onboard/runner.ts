@@ -56,7 +56,7 @@ export const TX_STEPS: StepId[] = ['module', 'register', 'vaultA', 'vaultB', 'au
 export const STEP_LABELS: Record<StepId, string> = {
   fund: 'Test ETH for gas',
   safe: 'Create your Safe',
-  module: 'Turn on the AEGIS module',
+  module: 'Turn on the Porthmos module',
   register: 'Register owner and bank',
   vaultA: 'Allow Vault A',
   vaultB: 'Allow Vault B',

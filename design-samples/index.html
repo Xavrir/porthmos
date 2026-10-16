@@ -1,0 +1,127 @@
+<title>Porthmos Design Options</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+/* Layout: a single reading column of three option sheets, each a picture strip over a short verdict and two links. */
+:root {
+  --bg: #f4f6f3;
+  --surface: #ffffff;
+  --ink: #0f1d17;
+  --muted: #4d5f57;
+  --line: #d6ddd8;
+  --brand: #2f8f6a;
+  --brand-solid: #4ec397;
+  --orange: #f99510;
+  --orange-ink: #1b1204;
+  --display: "Libre Franklin", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1713; --surface: #15211b; --ink: #e9f0ec; --muted: #a3b4ab; --line: #2a3a32;
+    --brand: #6fd3ad; --brand-solid: #4ec397; --orange: #f99510; --orange-ink: #1b1204; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1713; --surface: #15211b; --ink: #e9f0ec; --muted: #a3b4ab; --line: #2a3a32;
+  --brand: #6fd3ad; --brand-solid: #4ec397; --orange: #f99510; --orange-ink: #1b1204; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font: 400 17px/1.55 var(--body); padding-inline: 20px; padding-block: 40px 64px; }
+.wrap { max-width: 1080px; margin-inline: auto; display: grid; gap: 56px; }
+header { display: grid; gap: 14px; max-width: 68ch; }
+.brand { display: flex; align-items: center; gap: 12px; font: 700 15px/1 var(--display); letter-spacing: .08em; color: var(--brand); }
+.brand img { width: 40px; height: auto; border-radius: 6px; background: #fff; padding: 2px; }
+h1 { font: 700 clamp(30px, 5vw, 48px)/1.08 var(--display); letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; font: 600 13px/1 var(--display); }
+.swatch { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border: 1px solid var(--line); background: var(--surface); }
+.swatch i { width: 18px; height: 18px; display: block; }
+article { display: grid; gap: 20px; background: var(--surface); border: 1px solid var(--line); padding: clamp(16px, 3vw, 32px); }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
+h2 { font: 700 clamp(22px, 3vw, 30px)/1.15 var(--display); margin: 0; text-wrap: balance; }
+.tag { font: 600 13px/1 var(--display); padding: 6px 10px; background: var(--orange); color: var(--orange-ink); }
+.idea { margin: 0; font-size: 19px; max-width: 70ch; }
+.shots { display: grid; grid-template-columns: 1.2fr 1.2fr .5fr; gap: 12px; align-items: start; }
+.shots figure { margin: 0; display: grid; gap: 6px; min-width: 0; }
+.shots img { width: 100%; height: auto; display: block; border: 1px solid var(--line); }
+.shots figcaption { font: 600 12px/1.3 var(--display); color: var(--muted); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.cols h3 { font: 700 14px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; margin: 0 0 8px; color: var(--muted); }
+.cols ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.meta { font-size: 15px; color: var(--muted); margin: 0; }
+.links { display: flex; flex-wrap: wrap; gap: 12px; }
+.links a { font: 700 15px/1 var(--display); text-decoration: none; padding: 13px 18px; border: 2px solid var(--ink); color: var(--ink); }
+.links a.primary { background: var(--orange); border-color: var(--orange); color: var(--orange-ink); }
+.links a:focus-visible, .links a:hover { outline: 3px solid var(--brand); outline-offset: 2px; }
+footer { color: var(--muted); font-size: 15px; max-width: 70ch; display: grid; gap: 8px; }
+@media (max-width: 760px) {
+  .shots { grid-template-columns: 1fr 1fr; }
+  .shots figure:last-child { display: none; }
+  .cols { grid-template-columns: 1fr; }
+}
+@media (max-width: 460px) { .shots { grid-template-columns: 1fr; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><img src="a/img/favicon.png" alt="">PORTHMOS</div>
+    <h1>Three directions for Porthmos</h1>
+    <p>Each option has a landing page and the importer's TradeFlow order screen, built in the same style. Open both, on desktop and on your phone, then pick one. The milestone order in every option is sample data: TradeFlow is designed, not built yet. Receipts marked Base Sepolia link to real transactions from the treasury core.</p>
+    <div class="swatches" aria-label="Brand colours">
+      <span class="swatch"><i style="background:#4EC397"></i>Green #4EC397</span>
+      <span class="swatch"><i style="background:#F99510"></i>Orange #F99510</span>
+    </div>
+  </header>
+
+  <article id="a">
+    <div class="head"><h2>A. The sentence is the layout</h2></div>
+    <p class="idea">A bold, bright page. The headline reads "Money [moving water] on proof": the clip of water is the strait the payment crosses, and the line between paper and green is the waterline.</p>
+    <div class="shots">
+      <figure><img src="thumbs/a-landing.jpg" alt="Option A landing page, desktop" loading="lazy"><figcaption>Landing, desktop</figcaption></figure>
+      <figure><img src="thumbs/a-app.jpg" alt="Option A order screen, desktop" loading="lazy"><figcaption>Order screen</figcaption></figure>
+      <figure><img src="thumbs/a-mobile.jpg" alt="Option A landing page, phone" loading="lazy"><figcaption>Phone</figcaption></figure>
+    </div>
+    <div class="cols">
+      <div><h3>Strong</h3><ul><li>Uses the brand green the most; closest to the logo.</li><li>Friendly and modern, feels like a startup product.</li><li>Order screen is the clearest of the three to scan.</li></ul></div>
+      <div><h3>Weak</h3><ul><li>Least "bank-grade"; may read as playful to WeBank judges.</li><li>Lots of green can tire the eye on long app sessions.</li></ul></div>
+    </div>
+    <p class="meta">Type: Libre Franklin and Source Serif 4. Gate: 0 fails at 1440, 768 and 390.</p>
+    <div class="links"><a class="primary" href="a/index.html">Open landing page</a><a href="a/app.html">Open order screen</a></div>
+  </article>
+
+  <article id="b">
+    <div class="head"><h2>B. The printed annual</h2><span class="tag">Designer's pick</span></div>
+    <p class="idea">A voyage report for one order, on deep harbour green. The 1936 Admiralty chart of the Singapore Strait and an 1890 bill of lading become its plates; every heading keeps to one line at 42% of the width, like a ship keeping to the channel.</p>
+    <div class="shots">
+      <figure><img src="thumbs/b-landing.jpg" alt="Option B landing page, desktop sections" loading="lazy"><figcaption>Landing, desktop</figcaption></figure>
+      <figure><img src="thumbs/b-app.jpg" alt="Option B order screen, desktop" loading="lazy"><figcaption>Order screen</figcaption></figure>
+      <figure><img src="thumbs/b-mobile.jpg" alt="Option B landing page, phone" loading="lazy"><figcaption>Phone</figcaption></figure>
+    </div>
+    <div class="cols">
+      <div><h3>Strong</h3><ul><li>Most institutional; fits a trade-finance product and bank judges.</li><li>Strongest pictures: real Singapore harbour history.</li><li>Tells the importer, supplier, agent and bank story in one page.</li></ul></div>
+      <div><h3>Weak</h3><ul><li>The hero's top half is empty on desktop; the chart plate needs to show there.</li><li>Tall condensed headings are harder to read in the app.</li></ul></div>
+    </div>
+    <p class="meta">Type: Imbue and Albert Sans. Gate: 0 fails on both pages; text passes WCAG AA.</p>
+    <div class="links"><a class="primary" href="b/index.html">Open landing page</a><a href="b/app.html">Open order screen</a></div>
+  </article>
+
+  <article id="c">
+    <div class="head"><h2>C. Type and nothing else</h2></div>
+    <p class="idea">Charcoal and off-white, built from big serif type. The contract's own refusal words, Released, Held, BadSignature, NonceUsed, PriceOutOfBand and Frozen, are the design, and each one links to its real refused transaction on Base Sepolia.</p>
+    <div class="shots">
+      <figure><img src="thumbs/c-landing.jpg" alt="Option C landing page, desktop" loading="lazy"><figcaption>Landing, desktop</figcaption></figure>
+      <figure><img src="thumbs/c-app.jpg" alt="Option C order screen, desktop" loading="lazy"><figcaption>Order screen</figcaption></figure>
+      <figure><img src="thumbs/c-mobile.jpg" alt="Option C landing page, phone" loading="lazy"><figcaption>Phone</figcaption></figure>
+    </div>
+    <div class="cols">
+      <div><h3>Strong</h3><ul><li>Puts our real on-chain proof at the centre: judges can click every refusal.</li><li>Calm and premium; easiest to extend into the full app.</li><li>Cleanest pass of the taste checks (0 fails, 0 warnings on the landing page).</li></ul></div>
+      <div><h3>Weak</h3><ul><li>Uses the brand green least; the logo carries less of the page.</li><li>Fewer pictures, so the trade story is told mostly in words.</li></ul></div>
+    </div>
+    <p class="meta">Type: Erode. Gate: 0 fails, 0 warnings on the landing page.</p>
+    <div class="links"><a class="primary" href="c/index.html">Open landing page</a><a href="c/app.html">Open order screen</a></div>
+  </article>
+
+  <footer>
+    <p>Pictures come from open collections (Wikimedia Commons, The Met and others); credits are in each page's footer. The logo is a raster crop for now; a one-colour, reversed and SVG version is still needed.</p>
+    <p>UX patterns were studied from Tazapay, Escrow.com, Flexport, TradeTrust, Stripe, Ramp, Mercury, Safe and others.</p>
+  </footer>
+</div>

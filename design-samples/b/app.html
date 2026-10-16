@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PO-0417, chilled seafood: Porthmos order view (sample)</title>
+<meta name="description" content="Sample TradeFlow order view for an importer: three milestones, proof status, cash split and the agent's next action.">
+<meta name="theme-color" content="#0C2A21">
+<link rel="icon" href="img/porthmos-mark-knockout.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Imbue:opsz,wght@10..100,400&family=Albert+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="base.css">
+<script>document.documentElement.classList.add('js')</script>
+<style>
+body { font-size: var(--step-body); }
+.app-bar, .notice, main > section { container-type: inline-size; }
+.wrap { padding-inline: var(--margin); }
+.split { display: grid; grid-template-columns: var(--ax) minmax(0, 1fr); }
+.split > .side { padding-right: var(--gutter); }
+
+.app-bar { display: flex; align-items: center; gap: 24px; padding-block: 20px; min-height: 80px; position: relative; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+.brand img:first-child { width: 34px; height: auto; }
+.brand .word { width: 112px; height: auto; }
+.app-nav { position: absolute; left: 42cqw; display: flex; gap: 28px; }
+.app-nav a { text-decoration: none; color: var(--muted); }
+.app-nav a[aria-current="page"] { color: var(--ink); text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 10px; }
+.who { margin-left: auto; color: var(--muted); font-size: var(--step-small); text-align: right; }
+.who b { display: block; color: var(--ink); font-weight: 500; font-size: var(--step-body); }
+
+.notice { background: var(--surface); padding-block: 14px; }
+.notice p { max-width: 64ch; color: var(--ink); }
+.notice strong { font-weight: 500; }
+
+.order-head { padding-block: 64px 48px; align-items: end; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; font-size: var(--step-body); line-height: 1.4; }
+.facts dt { color: var(--muted); font-size: var(--step-small); padding-top: 3px; }
+.facts dd { color: var(--ink); }
+.order-head h1 { font-size: var(--step-display); max-width: 15ch; }
+.standfirst { margin-top: 24px; font-size: var(--step-lead); line-height: 1.3; max-width: 34ch; }
+.byline { margin-top: 10px; font-size: var(--step-small); color: var(--muted); }
+
+[data-ui].tally { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 36px; }
+[data-ui].tally div { background: var(--surface); padding: 12px 16px; min-width: 150px; }
+[data-ui].tally dt { font-size: var(--step-small); color: var(--muted); }
+[data-ui].tally dd { font-size: var(--step-lead); line-height: 1.2; font-variant-numeric: tabular-nums; }
+[data-ui].tally .t-held { background: var(--accent); }
+[data-ui].tally .t-held dt, [data-ui].tally .t-held dd { color: var(--accent-ink); }
+[data-ui].tally .t-next dd { font-size: var(--step-body); line-height: 1.6; }
+[data-ui].tally .act-top { margin-top: 10px; min-height: 44px; }
+[data-ui].tally .t-next { display: flex; flex-direction: column; align-items: flex-start; }
+
+h2.sec { font-size: var(--step-lead); line-height: 1; }
+.sec-row { padding-block: 56px 20px; align-items: baseline; }
+.sec-row p { color: var(--ink); max-width: 60ch; }
+
+[data-ui].steps { display: flex; gap: 6px; height: 44px; }
+[data-ui].steps div { display: flex; align-items: center; padding: 0 14px; font-size: var(--step-small); font-weight: 500; }
+[data-ui].steps .s-rel { flex: 20; background: var(--green); color: var(--green-ink); }
+[data-ui].steps .s-held { flex: 40; background: var(--accent); color: var(--accent-ink); }
+[data-ui].steps .s-wait { flex: 40; background: var(--surface); color: var(--muted); }
+
+[data-ui].legs { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+[data-ui] .leg-row { display: grid; grid-template-columns: minmax(0, 4fr) 1fr 2fr 2fr 3fr; column-gap: var(--gutter); align-items: center; width: 100%; min-height: 72px; padding: 0 20px; text-align: left; background: var(--surface); color: var(--ink); font-size: var(--step-body); transition: background-color var(--t-hover) ease, transform var(--t-press) var(--ease-out); }
+[data-ui] .leg-row:active { transform: scale(0.997); }
+[data-ui] .leg-row .n { font-size: var(--step-lead); line-height: 1.15; }
+[data-ui] .leg-row .n small { display: block; font-size: var(--step-small); color: var(--muted); }
+[data-ui] .leg-row .pc { color: var(--muted); font-variant-numeric: tabular-nums; }
+[data-ui] .leg-row .amt { font-variant-numeric: tabular-nums; text-align: right; font-size: var(--step-lead); }
+[data-ui] .leg-row .stt { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+[data-ui] .chip { padding: 2px 10px; font-size: var(--step-small); font-weight: 500; }
+[data-ui] .chip.rel { background: var(--green); color: var(--green-ink); }
+[data-ui] .chip.held { background: var(--accent); color: var(--accent-ink); }
+[data-ui] .chip.wait { background: var(--bg); color: var(--muted); box-shadow: inset 0 0 0 1px #2A5C49; }
+[data-ui] .leg-row .nx { font-size: var(--step-small); color: var(--muted); }
+[data-ui] .leg-row .nx b { display: block; font-weight: 500; color: var(--ink); font-size: var(--step-body); }
+[data-ui] .leg.is-held .leg-row { background: var(--accent); color: var(--accent-ink); }
+[data-ui] .leg.is-held .leg-row small, [data-ui] .leg.is-held .leg-row .pc, [data-ui] .leg.is-held .leg-row .nx, [data-ui] .leg.is-held .leg-row .nx b { color: var(--accent-ink); }
+[data-ui] .leg.is-held .chip.held { background: var(--bg); color: var(--accent); }
+[data-ui] .proof { display: none; padding: 4px 20px 24px; background: var(--surface); }
+[data-ui] .leg.is-held .proof { background: var(--accent); color: var(--accent-ink); }
+[data-ui] .leg-row[aria-expanded="true"] + .proof { display: block; }
+[data-ui] .proof table { width: 100%; border-collapse: collapse; font-size: var(--step-small); }
+[data-ui] .proof th { text-align: left; font-weight: 500; padding: 8px 12px 8px 0; color: var(--muted); }
+[data-ui] .leg.is-held .proof th { color: var(--accent-ink); }
+[data-ui] .proof td { padding: 10px 12px 10px 0; vertical-align: top; border-top: 1px solid #2A5C49; }
+[data-ui] .leg.is-held .proof td { border-top-color: rgba(12, 42, 33, 0.35); }
+[data-ui] .proof .bad { font-weight: 500; }
+[data-ui] .verdict { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 24px; align-items: center; }
+[data-ui] .verdict p { max-width: 70ch; }
+[data-ui] .acts { display: flex; gap: 10px; flex-wrap: wrap; }
+[data-ui] .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 18px; font-weight: 500; transition: transform var(--t-press) var(--ease-out), background-color var(--t-hover) ease, color var(--t-hover) ease; }
+[data-ui] .btn:active { transform: scale(0.97); }
+[data-ui] .btn.primary { background: var(--accent); color: var(--accent-ink); }
+[data-ui] .btn.primary.on-orange { background: var(--bg); color: var(--accent); }
+[data-ui] .btn.quiet { color: inherit; text-decoration: underline; text-underline-offset: 0.22em; text-decoration-thickness: 0.08em; }
+[data-ui] .btn[disabled] { opacity: 1; cursor: default; }
+[data-ui] .state { font-size: var(--step-small); font-weight: 500; }
+@media (hover: hover) and (pointer: fine) {
+  [data-ui] .leg:not(.is-held) .leg-row:hover { background: #184434; }
+  [data-ui] .btn.primary:hover { background: #FFA733; }
+  [data-ui] .btn.primary.on-orange:hover { background: #061A14; }
+}
+
+.cash { padding-block: 0 24px; }
+.balances { display: grid; gap: 4px; }
+.balances div { background: var(--surface); padding: 14px 16px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.balances dt { font-size: var(--step-small); color: var(--muted); }
+.balances dt b { display: block; font-weight: 500; color: var(--ink); font-size: var(--step-body); }
+.balances dd { font-size: var(--step-lead); font-variant-numeric: tabular-nums; }
+.balances .free { background: var(--green); }
+.balances .free dt, .balances .free dt b, .balances .free dd { color: var(--green-ink); }
+.free-fig { font-family: var(--font-display); font-size: var(--step-display); line-height: 0.9; font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
+.free-cap { margin-top: 12px; max-width: 46ch; }
+[data-ui].alloc { margin-top: 28px; }
+[data-ui] .alloc-bar { display: flex; gap: 3px; height: 40px; }
+[data-ui] .alloc-bar i { display: block; }
+[data-ui] .alloc-key { margin-top: 14px; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; font-size: var(--step-small); }
+[data-ui] .alloc-key .sw { width: 14px; height: 14px; }
+[data-ui] .alloc-key .v { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+[data-ui] .alloc-key .k { color: var(--muted); }
+.c-order { background: var(--accent); } .c-pay { background: #2F7A5E; } .c-bill { background: #3E9273; } .c-buf { background: #76A891; } .c-free { background: var(--green); }
+
+.next { padding-block: 0 24px; }
+.manual { display: grid; grid-template-columns: calc(var(--ax) - var(--gutter)) 420px minmax(0, 1fr); column-gap: var(--gutter); }
+.manual > .note { padding: 16px var(--gutter) 0; max-width: calc(30ch + 2 * var(--gutter)); height: 0; overflow: visible; }
+.manual > .note.l { grid-column: 1; justify-self: end; text-align: right; }
+.manual > .note.r { grid-column: 3; justify-self: start; }
+.note b { display: block; font-weight: 500; }
+.note span { display: block; margin-top: 4px; color: var(--muted); line-height: 1.45; }
+[data-ui].card { grid-column: 2; background: var(--surface); padding: 16px 20px; font-size: var(--step-small); line-height: 1.45; }
+[data-ui].card.first { padding-top: 20px; }
+[data-ui].card.last { padding-bottom: 22px; }
+[data-ui].card.gap { margin-top: 6px; }
+[data-ui] .card-k { display: block; color: var(--muted); }
+[data-ui] .card-v + .card-k { margin-top: 10px; }
+[data-ui] .card-v { color: var(--ink); font-size: var(--step-body); }
+[data-ui] .card-t { font-size: var(--step-lead); line-height: 1.2; color: var(--ink); margin-top: 4px; }
+[data-ui] .card .acts { margin-top: 12px; }
+[data-ui] .card .state { color: var(--ink); margin-top: 10px; }
+
+.record { padding-block: 0 96px; }
+.receipts { width: 100%; border-collapse: collapse; font-size: var(--step-body); }
+.receipts caption { text-align: left; padding: 22px 0 10px; font-size: var(--step-body); color: var(--ink); caption-side: top; }
+.receipts caption span { display: block; color: var(--muted); }
+.receipts th { text-align: left; font-weight: 500; color: var(--muted); padding: 8px 12px; font-size: var(--step-small); }
+.receipts td { padding: 12px; vertical-align: top; }
+.receipts tbody tr:nth-child(odd) td { background: var(--surface); }
+.receipts .amt { text-align: right; font-variant-numeric: tabular-nums; }
+.receipts .ok { color: var(--ink); font-weight: 500; }
+.receipts .rv { color: var(--accent); font-weight: 500; }
+.receipts .smp { color: var(--muted); }
+.receipts a { color: var(--ink); }
+.receipts .h { font-variant-numeric: tabular-nums; }
+.foot { padding-block: 32px; background: var(--surface); color: var(--ink); }
+.foot a { color: var(--ink); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .js [data-ui].legs .leg { opacity: 0; transform: translateY(14px); animation: rise 520ms var(--ease-out) forwards; animation-delay: calc(var(--i, 0) * 80ms + 200ms); }
+  .js [data-ui].steps div { clip-path: inset(0 100% 0 0); animation: wipe 700ms var(--ease-in-out) forwards; animation-delay: calc(var(--i, 0) * 120ms + 100ms); }
+  .js [data-ui] .alloc-bar i { transform: scaleX(0); transform-origin: left; animation: grow 700ms var(--ease-out) forwards; animation-delay: calc(var(--i, 0) * 70ms + 300ms); }
+  .state:not(:empty) { animation: rise 300ms var(--ease-out); }
+}
+@keyframes wipe { to { clip-path: inset(0); } }
+@keyframes grow { to { transform: none; } }
+
+@media (max-width: 1099px) {
+  [data-ui] .leg-row { grid-template-columns: minmax(0, 3fr) 2fr 2fr; row-gap: 4px; padding-block: 14px; }
+  [data-ui] .leg-row .pc { display: none; }
+  [data-ui] .leg-row .nx { grid-column: 1 / -1; }
+  .manual { grid-template-columns: minmax(0, 1fr) 380px; }
+  .manual > .note.r { grid-column: 1; justify-self: end; text-align: right; }
+  .app-nav { gap: 18px; }
+}
+@media (max-width: 699px) {
+  :root { --ax: 0px; --step-display: 12.5vw; }
+  .app-bar { flex-wrap: wrap; gap: 12px; }
+  .app-nav { position: static; order: 3; width: 100%; gap: 20px; overflow-x: auto; }
+  .split { display: flex; flex-direction: column; }
+  .split > .side { padding: 0; }
+  .order-head { padding-top: 36px; }
+  .order-head .main { order: -1; margin-bottom: 28px; }
+  [data-ui].tally div { flex: 1 1 40%; min-width: 0; }
+  .sec-row { padding-top: 44px; }
+  .sec-row p { margin-top: 8px; }
+  [data-ui].steps div { padding: 0 8px; }
+  [data-ui] .leg-row { grid-template-columns: minmax(0, 1fr) auto; padding: 14px 16px; }
+  [data-ui] .leg-row .amt { grid-column: 2; grid-row: 1; }
+  [data-ui] .leg-row .stt { grid-column: 1 / -1; }
+  [data-ui] .proof { padding: 4px 16px 20px; overflow-x: auto; }
+  [data-ui] .proof table, [data-ui] .proof tbody, [data-ui] .proof tr, [data-ui] .proof td { display: block; }
+  [data-ui] .proof thead { display: none; }
+  [data-ui] .proof tr { border-top: 1px solid rgba(12, 42, 33, 0.35); padding: 10px 0; }
+  [data-ui] .proof td { border: 0; padding: 2px 0; }
+  [data-ui] .proof td::before { content: attr(data-k) ": "; font-weight: 500; }
+  [data-ui] .verdict { grid-template-columns: 1fr; }
+  .balances { margin-bottom: 28px; }
+  .manual { display: flex; flex-direction: column; }
+  .manual > .note { height: auto; text-align: left !important; padding: 10px 0 18px; max-width: none; }
+  [data-ui].card { order: 0; }
+  .receipts thead { display: none; }
+  .receipts, .receipts caption, .receipts tbody, .receipts tr, .receipts td { display: block; width: 100%; }
+  .receipts tr { padding: 12px 14px; }
+  .receipts tbody tr:nth-child(odd) { background: var(--surface); }
+  .receipts td { padding: 2px 0; background: none !important; text-align: left; }
+  .receipts .amt { text-align: left; }
+}
+</style>
+</head>
+<body>
+<header class="app-bar wrap">
+  <a class="brand" href="index.html" aria-label="Porthmos home">
+    <img src="img/porthmos-mark-knockout.png" width="326" height="356" alt="">
+    <img class="word" src="img/porthmos-wordmark.svg" width="396" height="58" alt="Porthmos">
+  </a>
+  <nav class="app-nav" aria-label="App">
+    <a href="#legs" aria-current="page">Orders</a>
+    <a href="#cash">Treasury</a>
+    <a href="#next">Approvals</a>
+    <a href="#record">Record</a>
+  </nav>
+  <p class="who"><b>Harbourline Trading</b>Importer, Singapore (sample)</p>
+</header>
+
+<div class="notice wrap" role="note">
+  <p><strong>Sample order.</strong> TradeFlow milestone payments are not built yet. The order, documents, dates and amounts on this page are sample data, and no button here sends a transaction. Only the treasury record at the end links to real Base Sepolia transactions.</p>
+</div>
+
+<main>
+<section class="order-head wrap split" aria-labelledby="title">
+  <aside class="side" aria-label="Order facts">
+    <dl class="facts">
+      <dt>Order</dt><dd class="nums">PO-0417</dd>
+      <dt>Goods</dt><dd>Chilled seafood, one 40 ft reefer</dd>
+      <dt>Route</dt><dd>Cat Lai, Ho Chi Minh City, to Pasir Panjang, Singapore</dd>
+      <dt>Reefer range</dt><dd>0 to 4&nbsp;°C</dd>
+      <dt>Supplier</dt><dd class="nums">0x7a…c4, registered by you for this contract</dd>
+      <dt>Locked</dt><dd class="nums">100,000.00 USDC on 9 Oct 2026</dd>
+    </dl>
+  </aside>
+  <div class="main">
+    <h1 id="title">PO-0417, chilled seafood</h1>
+    <p class="standfirst">Leg 2 is held. The reefer log reached 6.8&nbsp;°C for 3&nbsp;h 10&nbsp;min. I propose a cargo survey; no money moves.</p>
+    <p class="byline">Treasury agent, 16 Oct, 09:12 SGT. The agent proposes; you decide.</p>
+    <dl class="tally" data-ui>
+      <div><dt>Released</dt><dd class="nums">20,000.00</dd></div>
+      <div class="t-held"><dt>Held</dt><dd class="nums">40,000.00</dd></div>
+      <div><dt>Waiting</dt><dd class="nums">40,000.00</dd></div>
+      <div class="t-next"><dt>Who acts next</dt><dd id="who-next">You: the survey proposal</dd><a class="button act-top" href="#p2">Review leg 2</a></div>
+    </dl>
+  </div>
+</section>
+
+<section class="legs-sec wrap" id="legs" aria-labelledby="legs-h">
+  <div class="split sec-row">
+    <h2 class="sec side" id="legs-h">Milestones</h2>
+    <p>Each leg pays the registered supplier only after its proof is verified. Open a leg to review its proof.</p>
+  </div>
+  <div class="steps" data-ui aria-label="Milestones by amount: 20% released, 40% held, 40% waiting">
+    <div class="s-rel" style="--i:0">20% released</div>
+    <div class="s-held" style="--i:1">40% held</div>
+    <div class="s-wait" style="--i:2">40% waiting</div>
+  </div>
+  <ol class="legs" data-ui role="list">
+    <li class="leg" style="--i:0">
+      <button class="leg-row" type="button" aria-expanded="false" aria-controls="p1">
+        <span class="n">Handed to carrier<small>Leg 1, at Cat Lai</small></span>
+        <span class="pc">20%</span>
+        <span class="amt">20,000.00</span>
+        <span class="stt"><span class="chip rel">Released</span>12 Oct</span>
+        <span class="nx"><b>Nobody</b>Paid to 0x7a…c4</span>
+      </button>
+      <div class="proof" id="p1">
+        <table>
+          <thead><tr><th>Document</th><th>Issuer</th><th>Check</th><th>Time</th><th>Record</th></tr></thead>
+          <tbody><tr><td data-k="Document">Electronic bill of lading CLI-SIN-2610-0417</td><td data-k="Issuer">Carrier, signature on the trusted list</td><td data-k="Check">Signature valid; shipper, port and container match the order</td><td data-k="Time">12 Oct, 14:05 ICT</td><td data-k="Record">Sample receipt: release of 20,000.00 to 0x7a…c4. No transaction exists.</td></tr></tbody>
+        </table>
+      </div>
+    </li>
+    <li class="leg is-held" style="--i:1">
+      <button class="leg-row" type="button" aria-expanded="true" aria-controls="p2">
+        <span class="n">Arrived<small>Leg 2, at Pasir Panjang</small></span>
+        <span class="pc">40%</span>
+        <span class="amt">40,000.00</span>
+        <span class="stt"><span class="chip held">Held</span>16 Oct</span>
+        <span class="nx"><b id="leg2-who">You</b>Approve or deny the survey</span>
+      </button>
+      <div class="proof" id="p2">
+        <table>
+          <thead><tr><th>Document</th><th>Issuer</th><th>Check</th><th>Time</th><th>Record</th></tr></thead>
+          <tbody>
+            <tr><td data-k="Document">Arrival notice</td><td data-k="Issuer">Terminal operator, signature valid</td><td data-k="Check">Passed: container discharged at Pasir Panjang</td><td data-k="Time">16 Oct, 06:20 SGT</td><td data-k="Record">Logged, no transaction</td></tr>
+            <tr><td data-k="Document">Reefer temperature log, container TGHU 812345 0</td><td data-k="Issuer">Reefer monitor, signed by the carrier; signature valid</td><td data-k="Check" class="bad">Out of range: maximum 6.8&nbsp;°C, 3&nbsp;h 10&nbsp;min above 4&nbsp;°C (14 Oct 22:40 to 15 Oct 01:50)</td><td data-k="Time">16 Oct, 08:55 SGT</td><td data-k="Record">Held and logged, no transaction</td></tr>
+          </tbody>
+        </table>
+        <div class="verdict">
+          <p>40,000.00 USDC stays locked, and leg 3 waits behind it. The supplier sees the same reading in the portal. The agent proposes an independent cargo survey before anything is paid.</p>
+          <div class="acts" data-proposal="survey">
+            <button class="btn primary on-orange" type="button" data-act="approve">Approve survey</button>
+            <button class="btn quiet" type="button" data-act="deny">Deny</button>
+          </div>
+        </div>
+        <p class="state" data-state="survey" aria-live="polite"></p>
+      </div>
+    </li>
+    <li class="leg" style="--i:2">
+      <button class="leg-row" type="button" aria-expanded="false" aria-controls="p3">
+        <span class="n">Quality accepted<small>Leg 3, your surveyor</small></span>
+        <span class="pc">40%</span>
+        <span class="amt">40,000.00</span>
+        <span class="stt"><span class="chip wait">Waiting</span>after leg 2</span>
+        <span class="nx"><b>Surveyor</b>Once leg 2 is cleared</span>
+      </button>
+      <div class="proof" id="p3">
+        <table>
+          <thead><tr><th>Document</th><th>Issuer</th><th>Check</th><th>Time</th><th>Record</th></tr></thead>
+          <tbody><tr><td data-k="Document">Quality report</td><td data-k="Issuer">Surveyor named in the contract</td><td data-k="Check">Not yet submitted</td><td data-k="Time">Not yet</td><td data-k="Record">None</td></tr></tbody>
+        </table>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section class="cash wrap" id="cash" aria-labelledby="cash-h">
+  <div class="split sec-row">
+    <h2 class="sec side" id="cash-h">Treasury</h2>
+    <p>What you hold, what is already committed, and what is free. The agent may invest only free cash.</p>
+  </div>
+  <div class="split">
+    <dl class="balances side" data-ui>
+      <div><dt><b>Cash in your Safe</b>Liquid, in USDC</dt><dd class="nums">210,000.00</dd></div>
+      <div><dt><b>Committed</b>Reserve for what you owe</dt><dd class="nums">142,230.00</dd></div>
+      <div class="free"><dt><b>Free</b>May go to approved vaults</dt><dd class="nums">67,770.00</dd></div>
+      <div><dt><b>In Vault A</b>Invested, returns only to your Safe</dt><dd class="nums">40,000.00</dd></div>
+    </dl>
+    <div>
+      <p class="free-fig" aria-label="Free cash 67,770.00 USDC">67,770.00</p>
+      <p class="free-cap">Free cash after a reserve of 142,230.00: obligations of 129,300.00 over the next 30 days, plus a 10% buffer of 12,930.00.</p>
+      <div class="alloc" data-ui>
+        <div class="alloc-bar" role="img" aria-label="Cash in the Safe split into committed and free amounts">
+          <i class="c-order" style="flex:80000;--i:0"></i><i class="c-pay" style="flex:42500;--i:1"></i><i class="c-bill" style="flex:6800;--i:2"></i><i class="c-buf" style="flex:12930;--i:3"></i><i class="c-free" style="flex:67770;--i:4"></i>
+        </div>
+        <div class="alloc-key">
+          <span class="sw c-order"></span><span class="k">PO-0417, legs 2 and 3 (locked)</span><span class="v">80,000.00</span>
+          <span class="sw c-pay"></span><span class="k">Payroll, due 31 Oct</span><span class="v">42,500.00</span>
+          <span class="sw c-bill"></span><span class="k">Forwarder invoice, due 24 Oct</span><span class="v">6,800.00</span>
+          <span class="sw c-buf"></span><span class="k">Buffer, 10% of obligations</span><span class="v">12,930.00</span>
+          <span class="sw c-free"></span><span class="k">Free cash</span><span class="v">67,770.00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="next wrap" id="next" aria-labelledby="next-h">
+  <div class="split sec-row">
+    <h2 class="sec side" id="next-h">Next action</h2>
+    <p>The agent proposes; fixed code checks; the contract enforces. Nothing here is signed until you approve.</p>
+  </div>
+  <div class="manual">
+    <div class="card first" data-ui style="grid-row:1">
+      <span class="card-k">Proposal 1, from leg 2</span>
+      <p class="card-t">Keep leg 2 locked and ask for an independent cargo survey at Pasir Panjang.</p>
+    </div>
+    <p class="note l" style="grid-row:1"><b>Proposal</b><span>Written by the agent from the failed reefer check. It can only make a plan more careful, never looser.</span></p>
+    <div class="card" data-ui style="grid-row:2">
+      <span class="card-k">Money moved</span><p class="card-v">None. 40,000.00 stays locked.</p>
+      <span class="card-k">Who signs</span><p class="card-v">You, in the app</p>
+      <div class="acts" data-proposal="survey">
+        <button class="btn primary" type="button" data-act="approve">Approve survey</button>
+        <button class="btn quiet" type="button" data-act="deny">Deny</button>
+      </div>
+      <p class="state" data-state="survey" aria-live="polite"></p>
+    </div>
+    <p class="note r" style="grid-row:2"><b>Who signs</b><span>A survey moves no money, so no on-chain authorisation is needed. Your approval is logged in the decision ledger.</span></p>
+
+    <div class="card gap" data-ui style="grid-row:3">
+      <span class="card-k">Proposal 2, from free cash</span>
+      <p class="card-t">Deposit 1,000.00 of free cash into Vault A.</p>
+    </div>
+    <p class="note l" style="grid-row:3"><b>Checks</b><span>After the deposit, free cash is 66,770.00 and the reserve is untouched. Vault A is approved and not in quarantine.</span></p>
+    <div class="card" data-ui style="grid-row:4">
+      <span class="card-k">Tier</span><p class="card-v">T2, inside the 1,000 auto cap</p>
+      <span class="card-k">Who signs</span><p class="card-v">The Authorizer alone</p>
+    </div>
+    <p class="note r" style="grid-row:4"><b>Tier</b><span>Up to 1,000 the Authorizer signs alone. Above that you sign too; above 3,000 the bank as well.</span></p>
+    <div class="card last" data-ui style="grid-row:5">
+      <span class="card-k">Authorisation expires</span><p class="card-v">120 s after signing; price limit 180 s</p>
+      <div class="acts" data-proposal="deposit">
+        <button class="btn primary" type="button" data-act="approve">Approve deposit</button>
+        <button class="btn quiet" type="button" data-act="deny">Deny</button>
+      </div>
+      <p class="state" data-state="deposit" aria-live="polite"></p>
+    </div>
+    <p class="note l" style="grid-row:5"><b>Expiry</b><span>The signed authorisation lives 120 seconds. If the price leaves its band first, the contract refuses it.</span></p>
+  </div>
+</section>
+
+<section class="record wrap" id="record" aria-labelledby="rec-h">
+  <div class="split sec-row">
+    <h2 class="sec side" id="rec-h">Record</h2>
+    <p>Sample receipts for this order first, then the real transactions of the reference treasury on Base Sepolia.</p>
+  </div>
+  <table class="receipts">
+    <caption>This order<span>Sample data. TradeFlow is not built, so none of these has a transaction.</span></caption>
+    <thead><tr><th scope="col">Date</th><th scope="col">Event</th><th scope="col">Result</th><th scope="col" class="amt">Amount</th><th scope="col">Transaction</th></tr></thead>
+    <tbody>
+      <tr><td>9 Oct</td><td>Order locked for the supplier</td><td class="smp">Sample</td><td class="amt">100,000.00</td><td class="smp">None, sample</td></tr>
+      <tr><td>12 Oct</td><td>Leg 1 released to 0x7a…c4</td><td class="smp">Sample</td><td class="amt">20,000.00</td><td class="smp">None, sample</td></tr>
+      <tr><td>16 Oct</td><td>Leg 2 held: reefer log out of range</td><td class="smp">Sample</td><td class="amt">40,000.00</td><td class="smp">None, logged only</td></tr>
+    </tbody>
+  </table>
+  <table class="receipts">
+    <caption>Reference treasury, Safe 0x2E1c…0a0F<span>Real Base Sepolia transactions behind the agent's rules. They are not payments for this order.</span></caption>
+    <thead><tr><th scope="col">Run</th><th scope="col">Event</th><th scope="col">Result</th><th scope="col" class="amt">Block</th><th scope="col">Transaction</th></tr></thead>
+    <tbody>
+      <tr><td>E1</td><td>Deposit 2,000 USDC into Vault B, tier T3, owner signed</td><td class="ok">Success</td><td class="amt">48114963</td><td><a class="link-on h" href="https://sepolia.basescan.org/tx/0x94b9690755fae93712ebb11dcf7a8d9c0095019493184e62b3e869943a68f68f">0x94b9…f68f</a></td></tr>
+      <tr><td>E3</td><td>Owner sets the reserve floor to 8,499.70 USDC</td><td class="ok">Success</td><td class="amt">48114969</td><td><a class="link-on h" href="https://sepolia.basescan.org/tx/0x0de6d291f83eb68492ca697a1c109fc4690c45de4ed8b25a213f15859645fd93">0x0de6…fd93</a></td></tr>
+      <tr><td>E3</td><td>Agent redeems 1,099.82 USDC from Vault B, tier T1</td><td class="ok">Success</td><td class="amt">48114990</td><td><a class="link-on h" href="https://sepolia.basescan.org/tx/0xab44d6dac64e4c33f52ef118dc032991cb9cc182ee9c4976e2269adafe227fce">0xab44…7fce</a></td></tr>
+      <tr><td>E2</td><td>Exit Agent redeems to the Safe after the price fell to 0.985</td><td class="ok">Success</td><td class="amt">48115005</td><td><a class="link-on h" href="https://sepolia.basescan.org/tx/0x8f73300bc28a76ee7a4ea74b601f98d8a4986039506ae6e80e7e6def570547a8">0x8f73…47a8</a></td></tr>
+      <tr><td>E4a</td><td>Amount changed after signing</td><td class="rv">Refused: BadSignature</td><td class="amt">48158282</td><td><a class="link-on h" href="https://sepolia.basescan.org/tx/0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6">0xdac6…c3d6</a></td></tr>
+      <tr><td>E4d</td><td>Price moved to 0.97 after signing</td><td class="rv">Refused: PriceOutOfBand</td><td class="amt">48158288</td><td><a class="link-on h" href="https://sepolia.basescan.org/tx/0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba">0x5393…acba</a></td></tr>
+      <tr><td>E5</td><td>Deposit while the bank freeze is on</td><td class="rv">Refused: Frozen</td><td class="amt">48158296</td><td><a class="link-on h" href="https://sepolia.basescan.org/tx/0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799">0x2c03…4799</a></td></tr>
+      <tr><td>E5</td><td>Exit redeem during the same freeze</td><td class="ok">Success</td><td class="amt">48158300</td><td><a class="link-on h" href="https://sepolia.basescan.org/tx/0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66">0xdf11…8a66</a></td></tr>
+    </tbody>
+  </table>
+</section>
+</main>
+
+<footer class="foot wrap">
+  <p>Porthmos sample order view, FinTechathon 2026. Testnet only; contracts not audited. <a class="link-on" href="index.html">Back to the overview</a>.</p>
+</footer>
+
+<script>
+(() => {
+  const rows = [...document.querySelectorAll('.leg-row')];
+  rows.forEach((row) => row.addEventListener('click', () => {
+    const open = row.getAttribute('aria-expanded') === 'true';
+    row.setAttribute('aria-expanded', String(!open));
+  }));
+
+  document.querySelector('.act-top').addEventListener('click', () => document.querySelector('[aria-controls="p2"]').setAttribute('aria-expanded', 'true'));
+
+  const text = {
+    survey: {
+      approve: 'Survey approved (sample). The surveyor at Pasir Panjang uploads a report next; leg 2 stays held until you decide on it.',
+      deny: 'Survey denied (sample). Leg 2 stays held. To pay anyway, release it with your signature and the bank\'s (tier T4), or open a dispute.',
+    },
+    deposit: {
+      approve: 'Deposit approved (sample). In the live app the Authorizer signs it and the Executor sends it; this page sends nothing.',
+      deny: 'Deposit denied (sample). Nothing moves; the agent logs your decision.',
+    },
+  };
+  document.querySelectorAll('[data-proposal]').forEach((group) => {
+    const key = group.dataset.proposal;
+    group.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', () => {
+      const act = btn.dataset.act;
+      document.querySelectorAll(`[data-state="${key}"]`).forEach((el) => { el.textContent = text[key][act]; });
+      document.querySelectorAll(`[data-proposal="${key}"] [data-act]`).forEach((b) => { b.disabled = true; b.setAttribute('aria-pressed', String(b.dataset.act === act)); });
+      if (key === 'survey') {
+        document.getElementById('who-next').textContent = act === 'approve' ? 'Surveyor: cargo survey' : 'You: release or dispute leg 2';
+        document.getElementById('leg2-who').textContent = act === 'approve' ? 'Surveyor' : 'You';
+      }
+    }));
+  });
+})();
+</script>
+</body>
+</html>

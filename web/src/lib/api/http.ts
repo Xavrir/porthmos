@@ -50,7 +50,7 @@ export class HttpApi implements AegisApi {
       try {
         res = await fetch(`${this.base}${path}`, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) }, signal: ctrl.signal })
       } catch (e) {
-        throw new ApiError((e as Error).name === 'AbortError' ? 'The AEGIS service took too long to answer' : 'Could not reach the AEGIS service', 0)
+        throw new ApiError((e as Error).name === 'AbortError' ? 'The Porthmos service took too long to answer' : 'Could not reach the Porthmos service', 0)
       }
       const text = await res.text()
       const body = text ? safeJson(text) : undefined
@@ -64,7 +64,7 @@ export class HttpApi implements AegisApi {
   async health(): Promise<Health> {
     const h = await this.call<unknown>('/api/health', {}, 2500)
     // A static host's SPA rewrite answers any path with HTML and 200, so only an explicit JSON ok counts.
-    if (!h || typeof h !== 'object') throw new ApiError('No AEGIS service at this address', 503)
+    if (!h || typeof h !== 'object') throw new ApiError('No Porthmos service at this address', 503)
     const body = h as Health & { status?: string }
     return { ...body, ok: body.ok === true || body.status === 'ok' }
   }

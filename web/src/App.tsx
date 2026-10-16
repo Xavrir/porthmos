@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import { Link, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell, MarketBanner, ModeBanner, Notices, usePageTitle } from './components/chrome'
 import { SeatChooser } from './components/SeatChooser'
+import { Loading } from './components/bits'
 import { Landing } from './pages/Landing'
 
 const Treasury = lazy(() => import('./pages/Treasury'))
@@ -17,7 +18,7 @@ function AppLayout() {
     <AppShell>
       <MarketBanner />
       {pathname === '/start' ? null : <ModeBanner />}
-      <Suspense fallback={<main id="main" className="page"><p className="empty wrap">Loading the page…</p></main>}>
+      <Suspense fallback={<main id="main" className="page"><div className="page-body"><Loading what="the page" rows={4} /></div></main>}>
         <Outlet />
       </Suspense>
     </AppShell>
@@ -55,7 +56,13 @@ function NotFound() {
   usePageTitle('Page not found')
   return (
     <main id="main" className="page">
-      <section className="page-band c-black on-dark"><div className="wrap"><h1>No such page</h1><p>This address is not part of AEGIS. Use the page list, or go back to the overview.</p></div></section>
+      <div className="page-body">
+        <section className="gate-block">
+          <h1>No such page</h1>
+          <p>This address is not part of Porthmos. Use the page list, or go back to the overview.</p>
+          <Link to="/treasury" className="button">Go to the treasury</Link>
+        </section>
+      </div>
     </main>
   )
 }

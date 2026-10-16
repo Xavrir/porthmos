@@ -4,6 +4,8 @@ import type { Hex } from 'viem'
 import { useAegis } from '../lib/source'
 import { publicClientFor, waitForReceipt } from '../lib/onboard/chain'
 import { Hash } from './bits'
+import { explorerTx } from '../lib/wallet'
+import { toast } from '../lib/toast'
 
 export function useReceipt(hash: Hex | null | undefined) {
   const { chainId, rpcUrl } = useAegis()
@@ -17,14 +19,18 @@ export function useReceipt(hash: Hex | null | undefined) {
 }
 
 export function TxStatus({ hash, label = 'transaction', onMined }: { hash: Hex; label?: string; onMined?: (ok: boolean) => void }) {
+  const { chainId } = useAegis()
   const r = useReceipt(hash)
   const status = r.data?.status
   const told = useRef(false)
   useEffect(() => {
     if (!status || told.current) return
     told.current = true
-    onMined?.(status === 'success')
-  }, [onMined, status])
+    const ok = status === 'success'
+    const href = explorerTx(chainId, hash)
+    toast({ tone: ok ? 'ok' : 'refused', title: `${label.charAt(0).toUpperCase()}${label.slice(1)} ${ok ? 'confirmed' : 'reverted'}`, text: r.data ? `Block ${r.data.blockNumber.toLocaleString('en-US')}.` : undefined, href, linkLabel: href ? 'View on Basescan' : undefined })
+    onMined?.(ok)
+  }, [onMined, status, chainId, hash, label, r.data])
   return (
     <span className="tx-status">
       <Hash value={hash} label={label} />

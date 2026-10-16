@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'r
 import { Link, useNavigate } from 'react-router-dom'
 import { useConnect, useConnection, useConnectors } from 'wagmi'
 import type { Address, Hex } from 'viem'
-import { Figure } from '../components/bits'
+import { Figure, Kpis, PageHeader } from '../components/bits'
 import { usePageTitle } from '../components/chrome'
 import { SignConfirm } from '../components/SignConfirm'
 import { Term } from '../components/Glossary'
@@ -20,8 +20,8 @@ import { chainName } from '../lib/wallet'
 const GROUPS: { id: StepGroup; title: string; what: (c: OnboardConfig) => string }[] = [
   { id: 'fund', title: 'Test ETH for gas', what: () => 'The faucet sends a little test ETH to both keys so they can pay for gas. You sign a message; nothing is spent.' },
   { id: 'safe', title: 'Create your Safe', what: () => 'A Safe smart account at an address fixed by your owner key. You are its only owner.' },
-  { id: 'module', title: 'Turn on the AEGIS module', what: () => 'The Safe lets the AEGIS module deposit into allowed vaults and redeem back. It can do nothing else.' },
-  { id: 'policy', title: 'Write your rules', what: (c) => `Nine calls to the PolicyRegistry: owner and bank, two vaults, the AEGIS keys, an auto cap of ${usd(c.params.autoCap)} and a daily cap of ${usd(c.params.dailyCap)}.` },
+  { id: 'module', title: 'Turn on the Porthmos module', what: () => 'The Safe lets the Porthmos module deposit into allowed vaults and redeem back. It can do nothing else.' },
+  { id: 'policy', title: 'Write your rules', what: (c) => `Nine calls to the PolicyRegistry: owner and bank, two vaults, the Porthmos keys, an auto cap of ${usd(c.params.autoCap)} and a daily cap of ${usd(c.params.dailyCap)}.` },
   { id: 'bank', title: 'Bank sets its limit', what: (c) => `Your bank key says above which amount the bank must also sign: ${usd(c.params.bankLimit)}.` },
   { id: 'activate', title: 'Activate', what: (c) => `The server checks every rule on-chain, then sends ${usd(c.testUsdc)} test USDC to your Safe.` },
 ]
@@ -171,25 +171,21 @@ export default function Start() {
 
   return (
     <main id="main" className="page">
-      <section className="page-band c-blue on-blue">
-        <div className="wrap band-grid">
-          <div className="band-head">
-            <h1>Create your treasury</h1>
-            <p className="band-lede">Your own AEGIS treasury on {config ? chainName(config.chainId) : 'Base Sepolia'}, with the same rules as the recorded one. Two keys are made in this browser, then a few short transactions set it up. About a minute.</p>
-          </div>
-          <div className="band-figures">
-            <Figure label="Network" value={config ? chainName(config.chainId).replace(/ \(\d+\)$/, '') : '…'} note={config ? `Chain ${config.chainId}, test network` : ''} />
-            <Figure label="Progress" value={`${doneCount} of ${steps.length}`} note={current?.txIndex ? `Transaction ${current.txIndex} of ${TX_STEPS.length}` : running ? STEP_LABELS[current?.id ?? 'fund'] : activated ? 'Ready' : started ? 'Paused' : 'Not started'} />
-            <Figure label="Your Safe" value={safe ? shortHex(safe) : 'Not yet'} note={safe ? (activated ? 'Active' : 'Address fixed by your owner key') : 'Known before it is created'} />
-            <Figure label="Test USDC" value={config ? usd(config.testUsdc) : '…'} note="Sent once, at activation" />
-          </div>
-        </div>
-      </section>
+      <div className="page-body">
+        <PageHeader
+          title="Create your treasury"
+          description={<>Your own Porthmos treasury on {config ? chainName(config.chainId) : 'Base Sepolia'}, with the same rules as the recorded one. Two keys are made in this browser, then a few short transactions set it up. About a minute.</>}
+        />
+        {config ? <Kpis label="Setup figures">
+          <Figure label="Network" value={config ? chainName(config.chainId).replace(/ \(\d+\)$/, '') : '…'} note={config ? `Chain ${config.chainId}, test network` : ''} />
+          <Figure label="Progress" value={`${doneCount} of ${steps.length}`} note={current?.txIndex ? `Transaction ${current.txIndex} of ${TX_STEPS.length}` : running ? STEP_LABELS[current?.id ?? 'fund'] : activated ? 'Ready' : started ? 'Paused' : 'Not started'} />
+          <Figure label="Your Safe" value={safe ? shortHex(safe) : 'Not yet'} note={safe ? (activated ? 'Active' : 'Address fixed by your owner key') : 'Known before it is created'} />
+          <Figure label="Test USDC" value={config ? usd(config.testUsdc) : '…'} note="Sent once, at activation" />
+        </Kpis> : null}
 
-      <div className="page-body wrap">
-        {phase === 'probing' && !config ? <p className="empty" aria-live="polite">Reaching the AEGIS service…</p> : service !== 'up' ? (
+        {phase === 'probing' && !config ? <p className="empty" aria-live="polite">Reaching the Porthmos service…</p> : service !== 'up' ? (
           <section className="gate-block" aria-labelledby="down-title">
-            <h2 id="down-title">The AEGIS service is not answering</h2>
+            <h2 id="down-title">The Porthmos service is not answering</h2>
             <p>Creating a treasury needs the service for test ETH and activation. {wallet ? 'Your keys are still in this browser, and anything already on-chain stays there.' : 'Nothing has been made yet.'}</p>
             <div className="row-actions">
               <button type="button" className="button" onClick={() => refresh(null)}>Try again</button>
@@ -199,7 +195,7 @@ export default function Start() {
         ) : !config ? (
           <section className="gate-block" aria-labelledby="old-title">
             <h2 id="old-title">This service does not create treasuries</h2>
-            <p>The connected AEGIS service has no onboarding. You can still use the recorded run.</p>
+            <p>The connected Porthmos service has no onboarding. You can still use the recorded run.</p>
           </section>
         ) : (
           <div className="cols start-cols">

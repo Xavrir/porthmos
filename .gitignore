@@ -3,3 +3,5 @@
 !*.env.example
 node_modules/
 .secrets/
+design-samples/*/shots/
+web/screenshots/

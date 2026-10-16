@@ -33,7 +33,7 @@ export class WalletFileError extends Error {}
 
 export function parseWallet(input: unknown): WalletFile {
   const data = typeof input === 'string' ? safeParse(input) : input
-  if (!data || typeof data !== 'object') throw new WalletFileError('This is not an AEGIS key file.')
+  if (!data || typeof data !== 'object') throw new WalletFileError('This is not an Porthmos key file.')
   const d = data as Record<string, unknown>
   if (d.version !== 1) throw new WalletFileError('This key file has an unknown version.')
   if (typeof d.chainId !== 'number' || !Number.isInteger(d.chainId)) throw new WalletFileError('The key file has no chain id.')
@@ -86,5 +86,5 @@ export function clearWallet(): void {
 }
 
 export function keyFileName(w: WalletFile): string {
-  return `aegis-keys-${ownerAddress(w).slice(2, 8).toLowerCase()}.json`
+  return `porthmos-keys-${ownerAddress(w).slice(2, 8).toLowerCase()}.json`
 }

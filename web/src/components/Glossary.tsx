@@ -14,10 +14,10 @@ export const GLOSSARY: { term: string; def: string }[] = [
   { term: 'Reserve floor', def: 'Cash the Safe must keep for what the business owes. The owner signs it on-chain; a deposit that would cross it reverts ReserveFloorBreached.' },
   { term: 'Quarantine', def: 'A vault flag set after a risk trigger. Deposits into it are refused; exits back to the Safe still run. Only the owner clears it, after 24 quiet hours.' },
   { term: 'Authorizer and exit key', def: 'The two machine keys. The authorizer signs deposits and redemptions after checking them again; the exit key can only redeem back to the Safe.' },
-  { term: 'Simulation (eth_call)', def: 'A dry run of the transaction against the current chain state, without sending it. AEGIS simulates before anyone signs.' },
+  { term: 'Simulation (eth_call)', def: 'A dry run of the transaction against the current chain state, without sending it. Porthmos simulates before anyone signs.' },
   { term: 'Calldata', def: 'The encoded function call a transaction carries. The language model never writes it; tested code builds it from the chosen plan.' },
   { term: 'ERC-4626 vault', def: 'The standard interface for yield vaults: deposit USDC, receive shares, redeem shares for USDC.' },
-  { term: 'Safe', def: 'The business’s smart account that holds the USDC. AEGIS is a module on it that can only deposit into owner-added vaults or redeem back.' },
+  { term: 'Safe', def: 'The business’s smart account that holds the USDC. Porthmos is a module on it that can only deposit into owner-added vaults or redeem back.' },
   { term: 'Replay', def: 'A recorded run played inside your browser over the Base Sepolia contract addresses. Nothing you do in Replay sends a transaction.' },
 ]
 

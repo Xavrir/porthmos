@@ -4,7 +4,7 @@ import { onTick, reducedMotion } from '../components/Count'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Address, Hex } from 'viem'
 import { ActionCardView, ApprovalPanel } from '../components/ActionCard'
-import { Chip, Empty, ErrorNote, Figure, Hash, Loading } from '../components/bits'
+import { Chip, Empty, ErrorNote, Figure, Hash, Kpis, Loading, PageHeader } from '../components/bits'
 import { SwitchSeat, usePageTitle } from '../components/chrome'
 import { BankLimits } from '../components/BankLimits'
 import { TxStatus } from '../components/TxStatus'
@@ -13,6 +13,7 @@ import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
 import { useBankClients, usePendingApprovals, useReconciliation } from '../lib/queries'
 import { stamp } from '../lib/format'
+import { toast } from '../lib/toast'
 import type { BankAction } from '../lib/api/contract'
 import type { BankClient } from '../lib/types'
 
@@ -36,7 +37,9 @@ export default function Bank() {
     onSuccess: (h, v) => {
       setConfirming(null)
       setLastTx(h ?? null)
-      setDone({ action: v.action, name: list.find((c) => c.safe === v.safe)?.name ?? 'the client' })
+      const name = list.find((c) => c.safe === v.safe)?.name ?? 'the client'
+      setDone({ action: v.action, name })
+      if (!h) toast({ tone: 'info', title: `${ACTION_LABEL[v.action]}: ${name}`, text: mode === 'replay' ? 'Recorded in the replay. No transaction was sent.' : undefined })
       qc.invalidateQueries({ queryKey: ['bank-clients'] })
       qc.invalidateQueries({ queryKey: ['treasury'] })
     },
@@ -50,22 +53,19 @@ export default function Bank() {
 
   return (
     <main id="main" className="page">
-      <section className="page-band c-navy on-dark">
-        <div className="wrap band-grid">
-          <div className="band-head">
-            <h1>Bank risk desk</h1>
-            <p className="band-lede">Every client agent on one screen. The bank can freeze deposits, revoke an agent and tighten limits. It cannot move funds, add a vault, or stop an exit, and only the bank can lift its own freeze.</p>
-          </div>
-          <div className="band-figures">
-            <Figure label="Client agents" value={role === 'bank' ? String(list.length) : '…'} />
-            <Figure label="Frozen" value={role === 'bank' ? String(frozen) : '…'} note="Owner or bank freeze" />
-            <Figure label="Escalations" value={role === 'bank' ? String(escalations.length) : '…'} note="Tier 4, waiting for the bank" tone={escalations.length ? 'alert' : undefined} />
-            <Figure label="Ledger mismatches" value={role === 'bank' ? String(mismatches) : '…'} tone={mismatches ? 'alert' : undefined} />
-          </div>
-        </div>
-      </section>
+      <div className="page-body">
+        <PageHeader
+          title="Bank risk desk"
+          description="Every client agent on one screen. The bank can freeze deposits, revoke an agent and tighten limits. It cannot move funds, add a vault, or stop an exit, and only the bank can lift its own freeze."
+          actions={role === 'bank' && escalations.length ? <a className="button" href="#esc-title">Review escalations</a> : null}
+        />
+        {role === 'bank' ? <Kpis label="Bank desk figures">
+          <Figure label="Client agents" value={role === 'bank' ? String(list.length) : '…'} />
+          <Figure label="Frozen" value={role === 'bank' ? String(frozen) : '…'} note="Owner or bank freeze" />
+          <Figure label="Escalations" value={role === 'bank' ? String(escalations.length) : '…'} note="Tier 4, waiting for the bank" tone={escalations.length ? 'alert' : undefined} />
+          <Figure label="Ledger mismatches" value={role === 'bank' ? String(mismatches) : '…'} tone={mismatches ? 'alert' : undefined} />
+        </Kpis> : null}
 
-      <div className="page-body wrap">
         {role !== 'bank' ? (
           <section className="gate-block" aria-labelledby="gate-title">
             <h2 id="gate-title">This desk is for the bank’s risk officer</h2>
@@ -73,7 +73,7 @@ export default function Bank() {
               The client list and the freeze controls need the bank’s seat.{' '}
               {session === 'error' && sessionError ? sessionError : mode === 'replay'
                 ? `You are viewing as ${role === 'owner' ? 'the business owner' : 'a read-only visitor'}.`
-                : signedIn ? `You are signed in as the ${role === 'owner' ? 'owner' : 'holder of no AEGIS role'}.` : identity.kind === 'wallet' ? 'Your wallet is connected but not signed in as the bank.' : 'You are not signed in.'}
+                : signedIn ? `You are signed in as the ${role === 'owner' ? 'owner' : 'holder of no Porthmos role'}.` : identity.kind === 'wallet' ? 'Your wallet is connected but not signed in as the bank.' : 'You are not signed in.'}
             </p>
             <SwitchSeat to="bank" className="button" />
             <p className="muted">In the bank’s seat you can freeze a client, approve a tier 4 deposit and reconcile ledgers. You still cannot move funds.</p>
@@ -86,7 +86,7 @@ export default function Bank() {
                 <p>Risk score is the highest vault score for that client. Select a row to reconcile its ledger against the chain.{mode === 'replay' ? ' Client names other than Harbour Lane Imports are sample data.' : ''}</p>
               </div>
               {clients.isLoading ? <Loading what="clients" /> : list.length ? (
-                <div className="table-wrap">
+                <div className="table-wrap is-tall">
                   <table className="table clients">
                     <thead>
                       <tr><th scope="col">Client</th><th scope="col">Safe</th><th scope="col" className="r">Total, USDC</th><th scope="col">Risk</th><th scope="col">Deposits</th><th scope="col">Agent</th><th scope="col" className="r">Waiting</th><th scope="col" className="r">Mismatch</th><th scope="col">Bank actions</th></tr>
@@ -218,7 +218,7 @@ function ClientRow({ c, selected, onSelect, confirming, onAsk, onCancel, onConfi
           <span className="nums">{c.riskScore.toFixed(2)}</span>
         </span>
       </td>
-      <td ref={chipRef}>{c.frozen.bank ? <Chip state="POLICY_CHANGED">Bank frozen</Chip> : c.frozen.owner ? <Chip state="HELD">Owner frozen</Chip> : <Chip state="CONFIRMED">Open</Chip>}</td>
+      <td ref={chipRef}>{c.frozen.bank ? <Chip state="POLICY_CHANGED">Bank frozen</Chip> : c.frozen.owner ? <Chip state="POLICY_CHANGED">Owner frozen</Chip> : <Chip state="CONFIRMED">Open</Chip>}</td>
       <td>{c.authorizerRevoked ? <Chip state="REVERTED">Revoked</Chip> : 'Active'}</td>
       <td className="r nums">{c.pendingEscalations}</td>
       <td className="r nums">{c.mismatches ? <strong className="link-bad">{c.mismatches}</strong> : 0}</td>

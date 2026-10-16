@@ -240,7 +240,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async () => {
     if (identity.kind !== 'wallet') throw new Error('Connect a wallet first.')
-    if (!identity.role) throw new Error('This wallet holds no AEGIS role, so there is nothing to sign in to. You can still look around read-only.')
+    if (!identity.role) throw new Error('This wallet holds no Porthmos role, so there is nothing to sign in to. You can still look around read-only.')
     const r = identity.role
     const a = identity.address
     const issuedAt = new Date().toISOString()

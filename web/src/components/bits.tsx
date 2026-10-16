@@ -8,10 +8,29 @@ import { Term } from './Glossary'
 import { ERRORS, sentenceCase, stateVerdict, TIER_SHORT, TIERS, isErrorName } from '../lib/vocabulary'
 import type { ErrorName, Tier, WorkflowState } from '../lib/types'
 
-export function Chip({ state, children }: { state: string; children?: ReactNode }) {
+export type Tone = 'ok' | 'held' | 'wait' | 'frozen' | 'refused' | 'neutral'
+
+export function stateTone(state: string): Tone {
+  switch (state) {
+    case 'CONFIRMED': case 'APPROVED': case 'DAR_SIGNED':
+      return 'ok'
+    case 'SUBMITTED': case 'FINAL_REVALIDATION': case 'AWAITING_APPROVAL': case 'NEEDS_CLARIFICATION': case 'CORRECTION_REQUESTED':
+      return 'wait'
+    case 'HELD': case 'APPROVAL_EXPIRED': case 'QUARANTINED': case 'CANCELLED':
+      return 'held'
+    case 'REVERTED': case 'POLICY_REJECTED': case 'SIM_FAILED': case 'APPROVAL_DENIED':
+      return 'refused'
+    case 'POLICY_CHANGED':
+      return 'frozen'
+    default:
+      return 'neutral'
+  }
+}
+
+export function Chip({ state, tone, children }: { state: string; tone?: Tone; children?: ReactNode }) {
   const verdict = stateVerdict(state)
   const label = children ?? sentenceCase(state as WorkflowState)
-  return <span className={`chip v-${verdict}`}>{label}</span>
+  return <span className={`chip v-${verdict} tone-${tone ?? stateTone(state)}`}>{label}</span>
 }
 
 export function TierMark({ tier, short = false }: { tier: Tier | undefined; short?: boolean }) {
@@ -71,21 +90,44 @@ export function Hash({ value, kind = 'tx', head = 6, tail = 4, label }: { value:
 }
 
 export function Figure({ label, value, note, tone }: { label: string; value: ReactNode; note?: ReactNode; tone?: 'alert' }) {
+  const pending = value === '…'
   return (
-    <div className={`figure${tone === 'alert' ? ' is-alert' : ''}`}>
-      <span className="figure-label">{label}</span>
-      <span className="figure-value nums">{typeof value === 'string' ? <CountText text={value} /> : value}</span>
-      {note ? <span className="figure-note">{note}</span> : null}
+    <div className={`kpi${tone === 'alert' ? ' is-alert' : ''}`}>
+      <span className="kpi-label">{label}</span>
+      <span className="kpi-value nums">{pending ? <span className="sk sk-value" aria-label="Loading" role="img" /> : typeof value === 'string' ? <CountText text={value} /> : value}</span>
+      {note ? <span className="kpi-note">{note}</span> : null}
     </div>
   )
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="empty">{children}</p>
+export function Kpis({ children, label }: { children: ReactNode; label: string }) {
+  return <section className="kpis" aria-label={label}>{children}</section>
 }
 
-export function Loading({ what }: { what: string }) {
-  return <p className="empty" aria-live="polite">Loading {what}…</p>
+export function PageHeader({ title, description, meta, actions }: { title: ReactNode; description?: ReactNode; meta?: ReactNode; actions?: ReactNode }) {
+  return (
+    <header className="page-head">
+      <div className="page-head-text">
+        <h1>{title}</h1>
+        {description ? <p className="page-desc">{description}</p> : null}
+        {meta ? <div className="page-meta">{meta}</div> : null}
+      </div>
+      {actions ? <div className="page-actions">{actions}</div> : null}
+    </header>
+  )
+}
+
+export function Empty({ children }: { children: ReactNode }) {
+  return <div className="empty-state"><span className="empty-mark" aria-hidden="true" /><p>{children}</p></div>
+}
+
+export function Loading({ what, rows = 3 }: { what: string; rows?: number }) {
+  return (
+    <div className="skeleton" aria-live="polite" aria-busy="true">
+      <span className="sr-only">Loading {what}…</span>
+      {Array.from({ length: rows }, (_, i) => <span key={i} className="sk sk-line" aria-hidden="true" />)}
+    </div>
+  )
 }
 
 export function ErrorNote({ error }: { error: unknown }) {

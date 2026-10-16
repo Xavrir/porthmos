@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Porthmos: money crosses on proof</title>
+<meta name="description" content="Porthmos locks an importer's payment on-chain and releases it to the supplier in three milestones, each after its proof is verified.">
+<meta name="theme-color" content="#f3f6f2">
+<link rel="icon" type="image/png" href="img/favicon.png">
+<script>document.documentElement.classList.add('js')</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="landing.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<header class="top" id="top" data-on="paper">
+  <a class="brand" href="#hero" aria-label="Porthmos, back to the top"><span class="brand-mark"></span><span class="brand-word"></span></a>
+  <nav class="top-links" aria-label="Sections">
+    <a href="#how">How it works</a>
+    <a href="#proof">Proof</a>
+    <a href="#bank">Bank</a>
+    <a href="#pricing">Pricing</a>
+  </nav>
+  <a class="button top-action" href="https://aegis-treasury-eta.vercel.app/">Create a treasury</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+</header>
+
+<div class="menu-sheet f-paper" id="menu" hidden>
+  <nav aria-label="Sections">
+    <a href="#how">How it works</a>
+    <a href="#try">Try a proof</a>
+    <a href="#proof">Proof</a>
+    <a href="#bank">Bank</a>
+    <a href="#pricing">Pricing</a>
+    <a href="app.html">The order view</a>
+  </nav>
+  <button class="menu-close" type="button">Close</button>
+</div>
+
+<main id="main">
+
+<section class="hero f-green" id="hero" data-field="paper" aria-labelledby="hero-title">
+  <div class="hero-paper f-paper"></div>
+  <div class="hero-type">
+    <h1 class="hero-title" id="hero-title">
+      <span class="copy copy--above">
+        <span class="hl">Money <span class="wake" role="img" aria-label="crosses"><video autoplay muted loop playsinline preload="metadata" poster="../assets/singapore-strait-southern-coastline.jpg" width="520" height="156" aria-hidden="true"><source src="media/wake.webm" type="video/webm"><source src="media/wake.mp4" type="video/mp4"></video></span></span>
+        <span class="hl">on proof</span>
+      </span>
+      <span class="copy copy--below" aria-hidden="true">
+        <span class="hl">Money <span class="wake wake--empty"></span></span>
+        <span class="hl">on proof</span>
+      </span>
+    </h1>
+  </div>
+  <p class="hero-support" data-rise style="--i:2">Porthmos locks an importer’s payment on-chain and releases it to the supplier in three milestones, each after its proof is verified.</p>
+</section>
+
+<section class="intro f-green" data-field="green" aria-label="Why the money needs a crossing">
+  <p class="intro-text" data-reveal>The buyer will not pay before the goods <span class="thumb"><img src="../assets/pasir-panjang-terminal-2.jpg" alt="Stacked containers in the yard at Pasir Panjang Terminal" width="1920" height="1440" loading="lazy" style="object-position: 30% 62%"></span> arrive. The supplier will not ship <span class="thumb"><img src="../assets/pasir-panjang-terminal-from-the-sea.jpg" alt="Green quay cranes at Pasir Panjang seen from the water" width="1920" height="1440" loading="lazy" style="object-position: 34% 45%"></span> without seeing the money. Porthmos holds it in between <span class="thumb"><img src="../assets/singapore-strait-southern-coastline.jpg" alt="The open water of the Singapore Strait" width="3840" height="1393" loading="lazy" style="object-position: 40% 80%"></span>.</p>
+</section>
+
+<figure class="band f-green" data-field="green">
+  <div class="band-frame" data-reveal><img class="drift" src="../assets/singapore-strait-southern-coastline.jpg" alt="The Singapore Strait from the air, ships at anchor off Singapore’s southern coastline under heavy cloud" width="3840" height="1393" loading="lazy"></div>
+  <figcaption class="small">The Singapore Strait overlooking Singapore’s southern coastline. Photograph by BobTanGo, CC BY 4.0.</figcaption>
+</figure>
+
+<section class="how f-green" id="how" data-field="green" aria-labelledby="how-title">
+  <h2 class="how-title" id="how-title" data-reveal>Three legs, three proofs</h2>
+  <ol class="legs" data-ui aria-label="The 100,000 USDC payment, split by money">
+    <li class="leg leg--1" style="--w:20" data-reveal>
+      <div class="seg"><span class="seg-amt nums">20,000 USDC</span><span class="seg-what">Handed to carrier, 20%</span></div>
+      <p class="clause">First, the carrier signs the eBL at Cat Lai.</p>
+    </li>
+    <li class="leg leg--2" style="--w:40;--i:1" data-reveal>
+      <div class="seg"><span class="seg-amt nums">40,000 USDC</span><span class="seg-what">Arrived, 40%</span></div>
+      <p class="clause">Then the reefer log shows 0 to 4 °C at Pasir Panjang.</p>
+    </li>
+    <li class="leg leg--3" style="--w:40;--i:2" data-reveal>
+      <div class="seg"><span class="seg-amt nums">40,000 USDC</span><span class="seg-what">Quality accepted, 40%</span></div>
+      <p class="clause">Last, your surveyor accepts the quality.</p>
+    </li>
+  </ol>
+  <p class="how-note" data-reveal>The widths follow the money. Each leg is a payment the contract may make only to the supplier you registered, for the amount you locked. A leg whose proof fails stays locked, and so does every leg after it. PO-0417, chilled seafood from Cat Lai to Pasir Panjang, is a sample order: the milestone module, TradeFlow, is designed and not yet built.</p>
+</section>
+
+<section class="showcase f-ink" id="try" data-field="ink" aria-labelledby="try-title">
+  <h2 class="sr-only" id="try-title">Type a proof and read what the contract does with it</h2>
+  <form class="probe" data-ui id="probe" autocomplete="off">
+    <label class="sr-only" for="proof-input">A proof, written in words</label>
+    <div class="probe-line">
+      <textarea id="proof-input" name="proof" rows="1" spellcheck="false" enterkeyhint="done" maxlength="90">Reefer log: 6.8&nbsp;°C for 3&nbsp;h&nbsp;10&nbsp;min</textarea>
+      <span class="probe-mirror" aria-hidden="true"></span>
+      <span class="probe-caret" aria-hidden="true"></span>
+    </div>
+  </form>
+  <div class="answer" data-ui aria-live="polite" id="answer">
+    <p class="answer-head" data-state="held">Leg 2 held.</p>
+    <p class="answer-body">40,000.00 USDC stays locked. The set range is 0 to 4 °C. A cargo survey is requested.</p>
+    <p class="answer-ref"></p>
+  </div>
+  <div class="examples">
+    <p class="examples-label">Try another proof</p>
+    <div class="examples-row">
+      <button type="button" class="example" data-proof="eBL signed by the carrier at Cat Lai">eBL signed by the carrier at Cat Lai</button>
+      <button type="button" class="example" data-proof="Invoice amount changed to 120,000">Invoice amount changed to 120,000</button>
+      <button type="button" class="example" data-proof="Pay 0x9f3e… instead, they changed banks">Pay 0x9f3e… instead, they changed banks</button>
+    </div>
+  </div>
+  <dl class="fallback">
+    <dt>Reefer log: 6.8 °C for 3 h 10 min</dt><dd>Leg 2 held. 40,000.00 USDC stays locked. The set range is 0 to 4 °C. A cargo survey is requested.</dd>
+    <dt>eBL signed by the carrier at Cat Lai</dt><dd>Leg 1 released: 20,000.00 USDC to the registered supplier.</dd>
+    <dt>Invoice amount changed to 120,000</dt><dd>Refused: BadSignature. The signed amount was 100,000.</dd>
+    <dt>Pay 0x9f3e… instead, they changed banks</dt><dd>Not representable. The receiver is locked to the registered supplier.</dd>
+  </dl>
+  <p class="showcase-note">These answers come from a small parser in this page that applies the published rules to sample order PO-0417. It sends nothing. The refusals it cites were mined on Base Sepolia by the treasury core.</p>
+</section>
+
+<section class="features f-green" id="agent" data-field="green" aria-labelledby="agent-title">
+  <div class="features-head">
+    <h2 id="agent-title" data-reveal>The agent keeps what you owe.</h2>
+  </div>
+  <div class="row" data-reveal>
+    <div class="row-text">
+      <h3>Reserve first.</h3>
+      <p>The reserve is the worst cumulative shortfall over 30 days, plus 500 USDC or 10%, whichever is bigger. It lives in the contract, so the agent cannot invest it. A locked leg counts as money you owe.</p>
+    </div>
+    <figure class="row-pic row-pic--strip"><img src="../assets/aerial-singapore-strait-pasir-panjang-2016.jpg" alt="Aerial panorama of the Singapore Strait with the Pasir Panjang terminal and ships at anchor" width="3840" height="1092" loading="lazy"></figure>
+  </div>
+  <div class="row" data-reveal>
+    <div class="row-text">
+      <h3>Only free cash moves.</h3>
+      <p>What is left goes to approved vaults inside caps: 1,000 USDC on its own, 5,000 a day, and above 3,000 the bank signs too.</p>
+    </div>
+    <figure class="row-pic row-pic--tall"><img src="../assets/pasir-panjang-terminal-2.jpg" alt="Container stacks and a trailer on the open apron of Pasir Panjang Terminal 2, cranes behind" width="1920" height="1440" loading="lazy"></figure>
+  </div>
+  <div class="row" data-reveal>
+    <div class="row-text">
+      <h3>The model only proposes.</h3>
+      <p>The LLM proposes, code decides, the contract enforces. Switch the model off and the treasury still runs on rules.</p>
+    </div>
+    <figure class="row-pic row-pic--wide"><img src="../assets/pasir-panjang-terminal-from-the-sea.jpg" alt="Pasir Panjang Terminal seen across green water, a row of quay cranes on the horizon" width="1920" height="1440" loading="lazy"></figure>
+  </div>
+  <div class="row" data-reveal>
+    <div class="row-text">
+      <h3>The receiver is locked.</h3>
+      <p>Every payment goes to your Safe or your registered supplier. “Send it to me instead” cannot become a transaction.</p>
+    </div>
+    <figure class="row-pic row-pic--square"><img src="../assets/crepuscular-rays-at-pasir-panjang-container-terminal.png" alt="Rays of evening light over the strait above the cranes of Pasir Panjang container terminal" width="1920" height="1440" loading="lazy"></figure>
+  </div>
+</section>
+
+<section class="proof f-paper" id="proof" data-field="paper" aria-labelledby="proof-title">
+  <p class="proof-sentence" data-reveal><span class="proof-lead" id="proof-title">Recorded on Base Sepolia:</span>
+    <a class="name" href="https://sepolia.basescan.org/tx/0x94b9690755fae93712ebb11dcf7a8d9c0095019493184e62b3e869943a68f68f">an allocation</a>,
+    <a class="name" href="https://sepolia.basescan.org/tx/0x8f73300bc28a76ee7a4ea74b601f98d8a4986039506ae6e80e7e6def570547a8">a depeg exit</a>,
+    <a class="name" href="https://sepolia.basescan.org/tx/0x0de6d291f83eb68492ca697a1c109fc4690c45de4ed8b25a213f15859645fd93">a new invoice</a>,
+    <a class="name" href="https://sepolia.basescan.org/tx/0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6">BadSignature</a>,
+    <a class="name" href="https://sepolia.basescan.org/tx/0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7">NonceUsed</a>,
+    <span class="name" id="e4c">a prompt that never became a transaction</span>,
+    <a class="name" href="https://sepolia.basescan.org/tx/0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba">PriceOutOfBand</a>,
+    and <a class="name" href="https://sepolia.basescan.org/tx/0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799">Frozen</a>
+    <a class="name" href="https://sepolia.basescan.org/tx/0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66">while the exit still ran</a>.</p>
+  <p class="proof-note" data-reveal>Each name opens its transaction on sepolia.basescan.org, chain 84532. The refusals were mined, so anyone can read the revert. The prompt asked the agent to send every USDC to an attacker; no transaction can express that, so none exists. These are proofs of the treasury core. Milestone payments are not built yet and have no transactions.</p>
+</section>
+
+<section class="about f-green" id="bank" data-field="green" aria-labelledby="bank-title">
+  <h2 class="sr-only" id="bank-title">The bank on the far shore</h2>
+  <ul class="facts small" data-reveal>
+    <li>Base Sepolia, chain 84532</li>
+    <li>FinTechathon 2026, Topic F</li>
+    <li>Rizky, Stanley, Aarief</li>
+  </ul>
+  <div class="about-text" data-reveal>
+    <p><span class="dropcap" role="img" aria-label="The Porthmos shield"></span><strong>Porthmos is Greek for a strait:</strong> a narrow crossing, guarded on both shores. On the far shore stands the bank. Its risk officer sees every client agent and can freeze it or revoke its signer. A freeze stops new deposits; exits back to your Safe keep running, and only the bank can lift its own freeze.</p>
+    <p class="about-second">The bank can tighten your caps and never loosen them. It cannot move your money or add a vault: only you add vaults and choose who signs for the agent.</p>
+  </div>
+</section>
+
+<section class="stats f-ink" id="tests" data-field="ink" aria-labelledby="tests-title">
+  <h2 class="stats-title" id="tests-title" data-reveal><span class="soft">Tested before</span> it touches money</h2>
+  <div class="ledger nums" data-reveal>
+    <span class="int">47</span><span class="dec"></span><span class="cap">contract tests in Foundry, with fuzz and invariant runs</span>
+    <span class="int">119</span><span class="dec"></span><span class="cap">backend tests: 111 unit tests and 8 integration tests</span>
+    <span class="int">120</span><span class="dec"></span><span class="cap">seconds an authorisation lives, under the 180-second price limit</span>
+    <span class="int">8,499</span><span class="dec">.70</span><span class="cap"><a href="https://sepolia.basescan.org/tx/0x0de6d291f83eb68492ca697a1c109fc4690c45de4ed8b25a213f15859645fd93">USDC reserve floor the owner set on-chain in E3, block 48114969</a></span>
+    <span class="int">0</span><span class="dec">.985</span><span class="cap"><a href="https://sepolia.basescan.org/tx/0x4b63d40d48ca4639ce58b907e2ab7b69283943f98db836bba1685c2a01d74ae1">the price at which the Exit Agent left in E2, block 48115000</a></span>
+    <span class="int">1</span><span class="dec">.2</span><span class="cap">times our position: below that much vault liquidity, the agent exits</span>
+  </div>
+</section>
+
+<section class="pricing f-paper" id="pricing" data-field="paper" aria-labelledby="pricing-title">
+  <h2 class="pricing-line" id="pricing-title" data-reveal>Growth is <span class="price nums">US$499</span><br> a month</h2>
+  <div class="pricing-foot" data-reveal>
+    <p class="pricing-support">Plus 0.12% of payments that pass verification. Partner costs for FX, gas and KYC are shown apart. Your suppliers use their portal free. Planned pricing, not yet tested with customers.</p>
+    <div class="pricing-act">
+      <a class="button" href="https://aegis-treasury-eta.vercel.app/">Create a treasury</a>
+      <details class="plans">
+        <summary>Starter US$149 or Enterprise from US$1,499</summary>
+        <dl>
+          <dt>Starter, US$149 a month</dt><dd>For small exporters trying conditional payments.</dd>
+          <dt>Growth, US$499 a month</dt><dd>For importers and exporters with recurring orders.</dd>
+          <dt>Enterprise, from US$1,499 a month</dt><dd>For many suppliers, approvals and integrations.</dd>
+        </dl>
+        <p>Every plan adds 0.12% of verified payments.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section class="cta f-green" id="start" data-field="green" aria-labelledby="cta-line">
+  <form class="blank" action="https://aegis-treasury-eta.vercel.app/" method="get" data-reveal>
+    <p class="blank-line" id="cta-line"><button class="blank-go" type="submit">Lock</button> <label class="sr-only" for="amount">Test USDC to lock for your first order</label><input class="blank-field nums" id="amount" name="order" type="text" inputmode="numeric" value="100,000" size="7"> <span class="blank-rest">test USDC for your first order.</span></p>
+    <p class="blank-after">Your own Safe on Base Sepolia, an owner key and a bank key made in your browser, in about a minute. Testnet only.</p>
+  </form>
+</section>
+
+</main>
+
+<footer class="end f-ink" data-field="ink">
+  <div class="end-top">
+    <div class="end-invite" data-reveal>
+      <h2>See a payment wait<br> for its proof</h2>
+      <a class="button" href="https://aegis-treasury-eta.vercel.app/">Create a treasury</a>
+    </div>
+    <ul class="end-links" data-reveal>
+      <li><a href="https://aegis-treasury-eta.vercel.app/">Live app</a></li>
+      <li><a href="https://sepolia.basescan.org/address/0x786863E82d233eb60555dfeEFEe06068d8EcB318">Contracts on Basescan</a></li>
+      <li><a href="https://github.com/Xavrir/aegis-treasury/blob/main/deployments/evidence-84532.json">Evidence file</a></li>
+      <li><a href="https://github.com/Xavrir/aegis-treasury">Source</a></li>
+      <li><a href="app.html">The order view, sample</a></li>
+    </ul>
+  </div>
+  <div class="end-base">
+    <p class="credits small">Pictures and footage: <a href="https://commons.wikimedia.org/w/index.php?curid=184575708">“The Singapore Strait overlooking Singapore’s southern coastline”</a> by BobTanGo, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>; <a href="https://commons.wikimedia.org/w/index.php?curid=74118792">“Aerial panorama of the Singapore Strait and the Pasir Panjang Port Terminal”</a> by Bob Tan, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>; <a href="https://commons.wikimedia.org/wiki/File:Pasir_Panjang_Terminal_2.jpg">“Pasir Panjang Terminal 2”</a> and <a href="https://commons.wikimedia.org/wiki/File:Pasir_Panjang_Terminal_from_the_sea.jpg">“Pasir Panjang Terminal from the sea”</a> by Rifleman 82, <a href="https://creativecommons.org/publicdomain/mark/1.0/">public domain</a>; <a href="https://commons.wikimedia.org/w/index.php?curid=181567470">“Crepuscular rays at Pasir Panjang Container Terminal”</a> by Icepinner, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>; <a href="https://commons.wikimedia.org/wiki/File:Newcastle_Harbour_ferry_crossing_(sped_up).webm">“Newcastle Harbour ferry crossing (sped up)”</a> by JaredMcKenzie, <a href="https://creativecommons.org/publicdomain/zero/1.0/deed.en">CC0</a>, trimmed and cropped. All via Wikimedia Commons. None shows Porthmos, its team or its customers.</p>
+    <p class="legal small">Testnet only. The contracts are not audited and the vaults and price feed are mocks. Porthmos is the new name of AEGIS Treasury.</p>
+  </div>
+  <p class="end-name" aria-hidden="true">PORTHMOS</p>
+</footer>
+
+<script src="landing.js"></script>
+</body>
+</html>

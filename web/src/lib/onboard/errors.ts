@@ -31,11 +31,11 @@ const FAILED: Record<string, string> = {
   SafeNotDeployed: 'the Safe is not created yet',
   ThresholdNotOne: 'the Safe must need one signature',
   OwnerNotOnSafe: 'the owner key is not an owner of the Safe',
-  ModuleNotEnabled: 'the AEGIS module is not on',
+  ModuleNotEnabled: 'the Porthmos module is not on',
   RegistryOwnerMismatch: 'the registry lists a different owner',
   BadBank: 'the bank key is missing or equals the owner',
-  WrongAuthorizer: 'the authorizer is not the AEGIS key',
-  WrongExitKey: 'the exit key is not the AEGIS key',
+  WrongAuthorizer: 'the authorizer is not the Porthmos key',
+  WrongExitKey: 'the exit key is not the Porthmos key',
   AutoCapOutOfBounds: 'the auto cap is outside the allowed range',
   DailyCapOutOfBounds: 'the daily cap is outside the allowed range',
   MaxBandWidthOutOfBounds: 'the price band is outside the allowed range',
@@ -66,7 +66,7 @@ export function plainError(e: unknown, who = 'This key'): Plain {
     const known = API_CODES[e.code ?? '']
     if (known) return { code: e.code!, ...known }
     if (e.status === 429) return { code: 'RateLimited', ...API_CODES.RateLimited }
-    if (e.status === 0 || e.status >= 500) return { code: 'ServiceDown', message: 'The AEGIS service did not answer. Try again in a moment.', retry: true }
+    if (e.status === 0 || e.status >= 500) return { code: 'ServiceDown', message: 'The Porthmos service did not answer. Try again in a moment.', retry: true }
     return { code: e.code ?? `HTTP${e.status}`, message: `${first(e.message)}.`, retry: true }
   }
   if (e instanceof ReceiptTimeout) return { code: 'Slow', message: 'The network is slow to confirm. Retry: it checks the chain first, so nothing is sent twice.', retry: true }
@@ -84,6 +84,6 @@ export function plainError(e: unknown, who = 'This key'): Plain {
     if (/fetch|network|timed? ?out|HTTP request failed/i.test(e.message)) return { code: 'Network', message: 'Could not reach the network. Check the connection and retry.', retry: true }
     return { code: 'Chain', message: `${first(e.shortMessage || e.message)}.`, retry: true }
   }
-  if (e instanceof TypeError && /fetch/i.test(e.message)) return { code: 'Network', message: 'Could not reach the AEGIS service. Check the connection and retry.', retry: true }
+  if (e instanceof TypeError && /fetch/i.test(e.message)) return { code: 'Network', message: 'Could not reach the Porthmos service. Check the connection and retry.', retry: true }
   return { code: 'Error', message: e instanceof Error ? `${first(e.message)}.` : 'Something went wrong. Retry.', retry: true }
 }

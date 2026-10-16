@@ -1,6 +1,6 @@
-# AEGIS Treasury web
+# Porthmos web
 
-React + Vite + TypeScript front end for AEGIS Treasury (FinTechathon 2026, Topic F). It reads the AEGIS service API (`docs/INTERFACES.md` §2) and `deployments/<chainId>.json` (§1.6), and signs EIP-712 approvals with an injected wallet, or with the public Anvil demo keys on chain 31337 only.
+React + Vite + TypeScript front end for Porthmos, formerly AEGIS Treasury (FinTechathon 2026, Topic F). It reads the Porthmos service API (`docs/INTERFACES.md` §2) and `deployments/<chainId>.json` (§1.6), and signs EIP-712 approvals with an injected wallet, or with the public Anvil demo keys on chain 31337 only.
 
 Pages: Landing (story and live system), Treasury, Copilot, Risk, Audit, Bank desk.
 
@@ -110,7 +110,7 @@ AEGIS_API_TARGET=http://localhost:8790 VITE_TARGET_CHAIN_ID=84532 npx vite --por
 There is no password. The first visit to an app page (and the hero's "Try it as owner or bank") opens a seat chooser: "Business owner", "Bank risk officer", "Just look (read-only)". The header shows the seat and the mode side by side ("Viewing as: Owner ▾" and "Replay"), and a page that needs another seat shows an inline "Switch to …" (Bank desk gate, Copilot chat, the approval panel, owner-only Treasury actions).
 
 - **Replay seat**: the chooser sets a viewpoint with no keys, kept in `sessionStorage` with the scenario state. The copy says "viewing as". Approvals use the recorded illustrative signature where one exists (the waiting 1,250.00 deposit and the Kestrel tier 4 escalation), or are submitted as simulated and marked so.
-- **Live wallet**: connecting a wallet (wagmi, injected) reads `owner(safe)` and `bank(safe)` from the PolicyRegistry; the owner gets the owner seat, the bank gets the bank seat, any other wallet is read-only ("This wallet holds no AEGIS role"). If the registry cannot be read, the page falls back to `deployment.roles` and says so; the service checks the registry again. "Sign in" signs the service's session message with `personal_sign` (`src/lib/session.ts`, byte for byte the format in `service/README.md`: `AEGIS session`, role, checksummed address, chainId, ISO `issuedAt`) and posts `{role, address, signature, issuedAt}` to `/api/session`. Only after that does the header say "Signed in as".
+- **Live wallet**: connecting a wallet (wagmi, injected) reads `owner(safe)` and `bank(safe)` from the PolicyRegistry; the owner gets the owner seat, the bank gets the bank seat, any other wallet is read-only ("This wallet holds no Porthmos role"). If the registry cannot be read, the page falls back to `deployment.roles` and says so; the service checks the registry again. "Sign in" signs the service's session message with `personal_sign` (`src/lib/session.ts`, byte for byte the format in `service/README.md`: `AEGIS session`, role, checksummed address, chainId, ISO `issuedAt`) and posts `{role, address, signature, issuedAt}` to `/api/session`. Only after that does the header say "Signed in as".
 - **Local test keys** (owner = Anvil account 1, bank = Anvil account 2). Shown only when the chain is 31337, and loaded only from `src/lib/demo/keys.ts` through a dynamic import. They sign the same session message. With `VITE_TARGET_CHAIN_ID` set to another chain the import is folded away at build time, so the keys are not in the bundle. These are the public Foundry test keys and must never hold value.
 
 ## Contract with the service
@@ -140,9 +140,19 @@ Direction: "Colour chapters" from the `design-taste-frontend` skill (seed 147418
 
 The Stress lab runs in Replay (scenarios play in the browser) and, live, only on chain 31337.
 
-The landing page follows the skill fully. The five app pages keep its type, palette and spacing but use dashboard patterns: tables, chips, panels.
+The landing page (`/`) follows the skill and keeps its own look (`src/styles/landing.css`, plus the older `src/styles/app.css`, which now applies only when `html` lacks the `app-theme` class).
 
-Photographs and footage are from open collections, shown in greyscale, credited in the landing footer, and none shows AEGIS or its users:
+### App dashboard (Porthmos)
+
+Every route except `/` sets `html.app-theme` (in the `index.html` boot script and in `AppShell`), and `src/styles/dashboard.css` styles it: a left sidebar from 1024 px (treasury switcher with the seat and the Safe, grouped navigation, data source, theme, Terms) and a drawer below; page header with one primary action; KPI cards; bordered cards; tables with sticky headers; status pills by tone (released, held, waiting, frozen, refused, neutral); skeleton loading; empty states; toasts for mined or reverted transactions with a Basescan link.
+
+- Type: IBM Plex Sans (self-hosted from `@fontsource/ibm-plex-sans`, latin 400/500/600), 15 px body, tabular numerals for amounts.
+- Colour: brand green `#4EC397` and orange `#F99510` are accents only (active nav marker, chart fills, the primary button with dark ink). Text uses a darker green (`#16774F` light, `#5ED3A5` dark). Tokens and their dark values are at the top of `dashboard.css`; every text pair meets WCAG AA.
+- Theme: light by default; the sidebar switch offers Light, Dark and System, kept in `localStorage` as `porthmos.theme`.
+- Logo: `public/brand/porthmos-mark.png` (white ground keyed out), `porthmos-mark-mono-light.png` (dark theme), `porthmos-mark-mono-dark.png`, favicons `favicon-32.png`, `icon-192.png`, `apple-touch-icon.png`, and the original `porthmos-mark-white-ground.png`.
+- Kept names: the on-chain and service contract still say AEGIS or Aegis (`AegisModule` EIP-712 domain, `AegisExecuted`, the signed `AEGIS session` and `AEGIS onboarding` messages, the `X-Aegis-Session` header, `AEGIS_API_TARGET`, `aegis.*` storage keys such as `aegis.wallet.v1`, the `aegis-v2` Safe salt). Do not rename them in the web alone.
+
+Photographs and footage are from open collections, shown in greyscale, credited in the landing footer, and none shows Porthmos or its users:
 
 | File | Source | Licence |
 |---|---|---|

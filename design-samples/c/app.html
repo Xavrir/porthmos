@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PO-0417: leg 2 held</title>
+<meta name="description" content="Porthmos importer view of one TradeFlow order: three milestones, proof per leg, reserve and free cash, the agent's next action and the receipts. Sample data except the Base Sepolia receipts.">
+<meta name="theme-color" content="#161917">
+<link rel="icon" href="img/porthmos-mark.png">
+<link href="fonts/erode.css" rel="stylesheet">
+<link rel="stylesheet" href="porthmos.css">
+<script>document.documentElement.classList.add('js')</script>
+<style>
+  .wrap { padding-inline: var(--m); }
+  .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); }
+  section { padding-block: 104px; }
+  section + section { padding-top: 0; }
+  h2 { font-size: var(--s-head); margin-bottom: 40px; }
+
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px var(--m); }
+  .bar nav { display: flex; gap: clamp(16px, 2.4vw, 36px); font-size: var(--s-small); }
+  .bar nav a { min-height: 44px; display: inline-flex; align-items: center; }
+
+  .notice { background: var(--stone); color: var(--charcoal); padding: 14px var(--m); font-size: var(--s-small); }
+  .notice p { max-width: 82ch; }
+  .notice strong { font-weight: 600; }
+
+  .head { padding-top: 72px; grid-template-rows: auto 1fr; }
+  .head .main { grid-column: 1 / 8; grid-row: 1; }
+  .head .facts { grid-column: 1 / 8; grid-row: 2; align-self: start; }
+  .head h1 { font-size: max(48px, var(--s-big)); letter-spacing: -0.03em; line-height: 0.95; }
+  .head .sub { margin-top: 10px; font-size: var(--s-head); line-height: 1.05; letter-spacing: -0.02em; color: var(--muted); }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 28px; margin-top: 40px; max-width: 640px; }
+  .facts dt { color: var(--muted); }
+
+  .needs { grid-column: 8 / 13; grid-row: 1 / 3; align-self: start; }
+  .needs h2 { margin-bottom: 18px; }
+  [data-ui].proposals { display: grid; gap: 4px; }
+  [data-ui] .prop { background: var(--surface); padding: 20px 22px 18px; }
+  [data-ui] .prop .who { font-size: var(--s-small); color: var(--muted); margin-bottom: 8px; }
+  [data-ui] .prop .say { font-size: var(--s-lead); line-height: 1.35; font-weight: 500; }
+  [data-ui] .prop .slot { background: var(--charcoal); padding: 0 0.14em; white-space: nowrap; }
+  [data-ui] .prop .meta { margin-top: 10px; font-size: var(--s-small); color: var(--muted); max-width: 58ch; }
+  [data-ui] .prop .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-top: 14px; }
+  [data-ui] .prop .state { font-size: var(--s-small); font-weight: 600; }
+  [data-ui] .prop.done .state { color: var(--green); }
+  [data-ui] .prop.denied .state { color: var(--muted); }
+
+  .legs .leg + .leg { margin-top: 4px; }
+  [data-ui].leg { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); padding: 28px var(--m) 30px; margin-inline: calc(var(--m) * -1); background: var(--surface); }
+  [data-ui].leg.held { background: var(--stone); color: var(--charcoal); }
+  [data-ui].leg .name { grid-column: 1 / 4; }
+  [data-ui].leg .name b { display: block; font-size: var(--s-lead); font-weight: 500; line-height: 1.25; }
+  [data-ui].leg .name span { display: block; margin-top: 4px; font-size: var(--s-small); }
+  [data-ui].leg .next { margin-top: 18px; font-size: var(--s-small); max-width: 26ch; }
+  [data-ui].leg .next strong { display: block; font-weight: 600; }
+  [data-ui].leg .exch { grid-column: 4 / 10; }
+  [data-ui].leg .docs { font-size: var(--s-small); }
+  [data-ui].leg .docs li { display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; padding: 7px 0; }
+  [data-ui].leg .docs li + li { border-top: 1px solid rgba(241, 242, 238, 0.12); }
+  [data-ui].leg.held .docs li + li { border-top-color: rgba(22, 25, 23, 0.18); }
+  [data-ui].leg .docs .doc { font-weight: 600; }
+  [data-ui].leg .docs .when { text-align: right; white-space: nowrap; }
+  [data-ui].leg .docs .check { grid-column: 1 / -1; }
+  [data-ui].leg .docs .bad { font-weight: 600; }
+  [data-ui].leg .answer { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 20px; }
+  [data-ui].leg .answer .word { font-size: var(--s-big); font-weight: 500; letter-spacing: -0.03em; line-height: 0.95; }
+  [data-ui].leg.released .answer .word { color: var(--green); }
+  [data-ui].leg.waiting .answer .word { color: var(--muted); }
+  [data-ui].leg .answer p { font-size: var(--s-small); max-width: 46ch; }
+  [data-ui].leg .amt { grid-column: 10 / 13; text-align: right; }
+  [data-ui].leg .amt b { display: block; font-size: var(--s-head); font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
+  [data-ui].leg .amt span { display: block; margin-top: 8px; font-size: var(--s-small); }
+  .legs .sum { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 32px; margin-top: 20px; font-size: var(--s-small); color: var(--muted); }
+
+  .money .pair { display: grid; grid-template-columns: 1fr 1fr; column-gap: var(--gutter); }
+  .money .giant { font-size: clamp(64px, 11vw, 168px); line-height: 0.85; letter-spacing: -0.04em; font-weight: 500; margin-left: -0.04em; }
+  .money .cap { margin-top: 14px; max-width: 34ch; }
+  .money .cap b { font-weight: 600; }
+  [data-ui].ledger { margin-top: 64px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); }
+  [data-ui].ledger table { grid-column: 1 / 8; border-collapse: collapse; width: 100%; font-size: var(--s-body); }
+  [data-ui].ledger th, [data-ui].ledger td { padding: 9px 0; text-align: left; font-weight: 400; vertical-align: baseline; }
+  [data-ui].ledger td { text-align: right; padding-left: 24px; white-space: nowrap; }
+  [data-ui].ledger tr + tr > * { border-top: 1px solid rgba(241, 242, 238, 0.12); }
+  [data-ui].ledger .sub > * { color: var(--muted); }
+  [data-ui].ledger .sub th { padding-left: 1.2em; }
+  [data-ui].ledger .tot > * { font-weight: 600; }
+  [data-ui].ledger .free > * { color: var(--green); font-weight: 600; }
+  [data-ui].ledger .rule { grid-column: 9 / 13; font-size: var(--s-small); color: var(--muted); }
+  [data-ui].ledger .rule p + p { margin-top: 0.8em; }
+
+  .receipts .cols { display: grid; grid-template-columns: 5fr 7fr; column-gap: calc(var(--gutter) * 2); }
+  .receipts h3 { font-size: var(--s-lead); font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 6px; }
+  .receipts .lede { font-size: var(--s-small); color: var(--muted); margin-bottom: 20px; max-width: 52ch; }
+  [data-ui].rcpts { display: grid; gap: 4px; }
+  [data-ui].rcpts .r { background: var(--surface); padding: 16px 18px; display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: var(--s-small); }
+  [data-ui].rcpts .r .what { font-size: var(--s-body); font-weight: 500; }
+  [data-ui].rcpts .r .st { font-weight: 600; white-space: nowrap; text-align: right; }
+  [data-ui].rcpts .r .st.ok { color: var(--green); }
+  [data-ui].rcpts .r .st.sample { color: var(--muted); }
+  [data-ui].rcpts .r .more { grid-column: 1 / -1; color: var(--muted); }
+  [data-ui].rcpts .r a { color: var(--ink); }
+
+  .refusals { margin-top: 72px; }
+  .refusals ul { list-style: none; padding: 0; display: grid; grid-template-columns: 1fr 1fr; column-gap: var(--gutter); row-gap: 48px; }
+  .refusals li a { display: inline-block; font-size: var(--s-big); font-weight: 500; letter-spacing: -0.02em; line-height: 1; text-decoration: none; overflow-wrap: anywhere; transition: color var(--t-hover) ease; }
+  @media (hover: hover) and (pointer: fine) { .refusals li a:hover { color: var(--accent); } }
+  .refusals li p { margin-top: 10px; font-size: var(--s-small); color: var(--muted); max-width: 30ch; }
+
+  .end { padding: 48px var(--m) 40px; font-size: var(--s-small); color: var(--muted); }
+  .end p { max-width: 82ch; }
+
+  @media (max-width: 1100px) {
+    .head .main, .head .facts, .needs { grid-column: 1 / 13; grid-row: auto; }
+    .needs { margin-top: 48px; }
+    .head .facts { order: 3; margin-top: 56px; }
+    [data-ui].leg .name { grid-column: 1 / 13; margin-bottom: 18px; }
+    [data-ui].leg .exch { grid-column: 1 / 9; }
+    [data-ui].leg .amt { grid-column: 9 / 13; }
+    [data-ui].leg .next { max-width: none; }
+    [data-ui].ledger table, [data-ui].ledger .rule { grid-column: 1 / 13; }
+    [data-ui].ledger .rule { margin-top: 28px; }
+    .receipts .cols { grid-template-columns: 1fr; row-gap: 56px; }
+  }
+  @media (max-width: 640px) {
+    section { padding-block: 72px; }
+    .bar nav a:first-child { display: none; }
+    .head { padding-top: 48px; }
+    .head .sub { font-size: 24px; }
+    .facts { grid-template-columns: 1fr; gap: 0; }
+    .facts dd { margin-bottom: 10px; }
+    [data-ui].leg .exch, [data-ui].leg .amt { grid-column: 1 / 13; }
+    [data-ui].leg .amt { text-align: left; margin-top: 18px; order: -1; margin-bottom: 14px; }
+    [data-ui].leg .docs li { grid-template-columns: 1fr; }
+    [data-ui].leg .docs .when { text-align: left; }
+    .money .pair { grid-template-columns: 1fr; row-gap: 40px; }
+    .money .giant { font-size: 22vw; }
+    [data-ui].ledger td { padding-left: 12px; }
+    .refusals ul { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="index.html" aria-label="Porthmos, back to the landing page"><span class="mk"></span><span class="wm"></span></a>
+  <nav aria-label="App">
+    <a class="link" href="index.html">Landing page</a>
+    <a class="link" href="https://aegis-treasury-eta.vercel.app" rel="noopener">Live treasury app</a>
+  </nav>
+</header>
+
+<div class="notice" role="note">
+  <p><strong>Sample order.</strong> The TradeFlow milestone module is not built yet. The order, its documents, the reserve figures and every milestone payment below are sample data, and no milestone transaction exists. Only receipts marked “Base Sepolia” link to real transactions, made by the treasury core.</p>
+</div>
+
+<main>
+  <section class="head wrap grid" aria-labelledby="state-title">
+    <div class="main">
+      <h1 id="state-title" data-rise>Leg 2 held.</h1>
+      <p class="sub nums" data-rise style="--i:1">40,000.00 USDC stays locked.</p>
+    </div>
+    <dl class="facts" data-rise style="--i:2">
+        <dt>Order</dt><dd>PO-0417, chilled seafood</dd>
+        <dt>Container</dt><dd>One 40 ft reefer, set 0 to 4 °C</dd>
+        <dt>Route</dt><dd>Cat Lai, Ho Chi Minh City, to Pasir Panjang, Singapore</dd>
+        <dt>Value</dt><dd class="nums">100,000.00 USDC, locked 9 Oct 2026</dd>
+        <dt>Supplier</dt><dd>0x7a…c4, registered for this order</dd>
+        <dt>Released so far</dt><dd class="nums">20,000.00 of 100,000.00</dd>
+      </dl>
+
+    <aside class="needs" aria-labelledby="needs-title" data-rise style="--i:2">
+      <h2 id="needs-title">Needs you</h2>
+      <div data-ui class="proposals">
+        <article class="prop" data-prop="survey">
+          <p class="who">The agent proposes, 16 Oct, 04:25</p>
+          <p class="say">Ask for a cargo survey at <span class="slot">Pasir Panjang</span> and keep <span class="slot nums">40,000.00</span> locked.</p>
+          <p class="meta">No money moves. Once you approve, the request goes to your surveyor and leg 2 waits for the report. The reefer ran 3 h 10 min above 4 °C.</p>
+          <div class="acts">
+            <button class="button" type="button" data-act="approve">Approve</button>
+            <button class="text-button" type="button" data-act="deny">Deny</button>
+            <span class="state" aria-live="polite"></span>
+          </div>
+        </article>
+        <article class="prop" data-prop="deposit">
+          <p class="who">The agent proposes, 16 Oct, 04:26</p>
+          <p class="say">Deposit <span class="slot nums">1,000.00</span> of free cash into <span class="slot">Vault A</span>, tier T2.</p>
+          <p class="meta">Inside the 1,000.00 auto cap, so the Authorizer signs alone. Free cash after: 66,770.00. The signed authorization expires 120 seconds after signing.</p>
+          <div class="acts">
+            <button class="button" type="button" data-act="approve">Approve</button>
+            <button class="text-button" type="button" data-act="deny">Deny</button>
+            <span class="state" aria-live="polite"></span>
+          </div>
+        </article>
+      </div>
+    </aside>
+  </section>
+
+  <section class="legs wrap" aria-labelledby="legs-title">
+    <h2 id="legs-title" data-reveal>Three legs, by proof</h2>
+
+    <article data-ui class="leg released" data-reveal aria-label="Leg 1, handed to carrier, released">
+      <div class="name">
+        <b>Handed to carrier</b>
+        <span>Leg 1, 20% of the order</span>
+        <p class="next"><strong>Who acts next</strong>Nobody. This leg is done.</p>
+      </div>
+      <div class="exch">
+        <ul class="docs">
+          <li><span class="doc">Electronic bill of lading</span><span class="when">12 Oct, 09:58</span><span class="check">Issued by the carrier at Cat Lai. Signature valid.</span></li>
+          <li><span class="doc">Gate-in record</span><span class="when">12 Oct, 07:15</span><span class="check">Issued by the terminal at Cat Lai. Container number matches the bill of lading.</span></li>
+        </ul>
+        <div class="answer"><span class="word">Released</span><p>20,000.00 USDC to 0x7a…c4, the supplier registered for this order. Sample payment: there is no transaction.</p></div>
+      </div>
+      <div class="amt nums"><b>20,000.00</b><span>Released 12 Oct, 10:42</span></div>
+    </article>
+
+    <article data-ui class="leg held" data-reveal aria-label="Leg 2, arrived, held for out-of-range temperature">
+      <div class="name">
+        <b>Arrived</b>
+        <span>Leg 2, 40% of the order</span>
+        <p class="next" id="leg2-next"><strong>Who acts next</strong>You: approve or deny the survey. Then the surveyor at Pasir Panjang.</p>
+      </div>
+      <div class="exch">
+        <ul class="docs">
+          <li><span class="doc">Arrival notice</span><span class="when">16 Oct, 01:02</span><span class="check">Issued by the terminal at Pasir Panjang. Signature valid.</span></li>
+          <li><span class="doc">Reefer log, version 1</span><span class="when">16 Oct, 03:50</span><span class="check">Sent by the forwarder. The file was changed after the logger signed it. <span class="bad">Refused: BadSignature.</span> The same check refused a changed treasury authorization on Base Sepolia: <a class="link" href="https://sepolia.basescan.org/tx/0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6" rel="noopener">E4a, block 48158282</a>.</span></li>
+          <li><span class="doc">Reefer log, version 2</span><span class="when">16 Oct, 04:21</span><span class="check">From the container’s logger. Signature valid. Out of range: highest 6.8 °C at 02:40, above 4 °C from 01:10 to 04:20 (3 h 10 min).</span></li>
+        </ul>
+        <div class="answer"><span class="word">Held</span><p>40,000.00 USDC stays locked in the order. The set range is 0 to 4 °C. Leg 3 cannot start until leg 2 is settled.</p></div>
+      </div>
+      <div class="amt nums"><b>40,000.00</b><span>Held since 16 Oct, 04:21</span></div>
+    </article>
+
+    <article data-ui class="leg waiting" data-reveal aria-label="Leg 3, quality accepted, waiting">
+      <div class="name">
+        <b>Quality accepted</b>
+        <span>Leg 3, 40% of the order</span>
+        <p class="next"><strong>Who acts next</strong>The surveyor, after leg 2 is settled.</p>
+      </div>
+      <div class="exch">
+        <ul class="docs">
+          <li><span class="doc">Surveyor’s quality report</span><span class="when">not yet</span><span class="check">Nothing submitted. The report must be signed by the surveyor you named for this order.</span></li>
+        </ul>
+        <div class="answer"><span class="word">Waiting</span><p>40,000.00 USDC stays locked until the report checks out.</p></div>
+      </div>
+      <div class="amt nums"><b>40,000.00</b><span>Not due</span></div>
+    </article>
+
+    <p class="sum nums" data-reveal><span>Released 20,000.00</span><span>Held 40,000.00</span><span>Waiting 40,000.00</span><span>Total locked for PO-0417: 80,000.00 of 100,000.00</span></p>
+  </section>
+
+  <section class="money wrap" aria-labelledby="money-title">
+    <h2 id="money-title" data-reveal>Cash, committed and free</h2>
+    <div class="pair nums">
+      <div data-reveal>
+        <p class="giant">142,230</p>
+        <p class="cap"><b>Reserve.</b> What the next 30 days need, plus a buffer. The contract keeps it liquid; the agent cannot invest it.</p>
+      </div>
+      <div data-reveal style="--i:1">
+        <p class="giant">67,770</p>
+        <p class="cap"><b>Free.</b> The only money the agent may propose to put in an approved vault.</p>
+      </div>
+    </div>
+
+    <div data-ui class="ledger" data-reveal>
+      <table class="nums">
+        <caption class="sr-only">Treasury position in USDC, sample</caption>
+        <tbody>
+          <tr class="tot"><th scope="row">Cash in the Safe</th><td>210,000.00</td></tr>
+          <tr><th scope="row">Committed to PO-0417, legs 2 and 3</th><td>80,000.00</td></tr>
+          <tr class="sub"><th scope="row">Payroll, 31 Oct</th><td>42,500.00</td></tr>
+          <tr class="sub"><th scope="row">Forwarder invoice, 24 Oct</th><td>6,800.00</td></tr>
+          <tr><th scope="row">Owed in the next 30 days</th><td>129,300.00</td></tr>
+          <tr class="sub"><th scope="row">Buffer, 10% (above the 500.00 minimum)</th><td>12,930.00</td></tr>
+          <tr class="tot"><th scope="row">Reserve</th><td>142,230.00</td></tr>
+          <tr class="free"><th scope="row">Free cash</th><td>67,770.00</td></tr>
+          <tr class="sub"><th scope="row">In Vault A, outside cash</th><td>40,000.00</td></tr>
+        </tbody>
+      </table>
+      <div class="rule">
+        <p>The reserve is the largest shortfall of bills over income across the next 30 days, plus a buffer of 500.00 or 10% of the bills, whichever is larger. No income is expected in this window, so the shortfall is the full 129,300.00.</p>
+        <p>Money committed to an order counts as a bill. That is why the 80,000.00 still locked for PO-0417 sits inside the reserve and never in a vault.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="receipts wrap" aria-labelledby="rcpt-title">
+    <h2 id="rcpt-title" data-reveal>Receipts</h2>
+    <div class="cols">
+      <div data-reveal>
+        <h3>This order</h3>
+        <p class="lede">Sample. Milestone payments are not built, so these have no transaction and no link.</p>
+        <div data-ui class="rcpts nums">
+          <div class="r"><span class="what">Released 20,000.00 to 0x7a…c4</span><span class="st sample">Sample</span><span class="more">Leg 1, handed to carrier. 12 Oct 2026, 10:42.</span></div>
+          <div class="r"><span class="what">Held 40,000.00</span><span class="st sample">Sample</span><span class="more">Leg 2, reefer log out of range. 16 Oct 2026, 04:21.</span></div>
+          <div class="r"><span class="what">Locked 100,000.00 for PO-0417</span><span class="st sample">Sample</span><span class="more">Order funded by the importer. 9 Oct 2026, 14:20.</span></div>
+        </div>
+      </div>
+      <div data-reveal style="--i:1">
+        <h3>The treasury core, on Base Sepolia</h3>
+        <p class="lede">Real transactions on the reference treasury, Safe 0x2E1c…a0F, not on this order.</p>
+        <div data-ui class="rcpts nums">
+          <div class="r"><span class="what">Deposited 2,000.00 into Vault B</span><span class="st ok">Success</span><span class="more">E1, tier T3, the owner approved. Block 48114963. <a class="link" href="https://sepolia.basescan.org/tx/0x94b9690755fae93712ebb11dcf7a8d9c0095019493184e62b3e869943a68f68f" rel="noopener">0x94b9…f68f on Basescan</a></span></div>
+          <div class="r"><span class="what">Reserve floor set to 8,499.70</span><span class="st ok">Success</span><span class="more">E3, after a new invoice; signed by the owner. Block 48114969. <a class="link" href="https://sepolia.basescan.org/tx/0x0de6d291f83eb68492ca697a1c109fc4690c45de4ed8b25a213f15859645fd93" rel="noopener">0x0de6…fd93 on Basescan</a></span></div>
+          <div class="r"><span class="what">Exit Agent redeemed to the Safe</span><span class="st ok">Success</span><span class="more">E2, after the price fell to 0.985. Block 48115005. <a class="link" href="https://sepolia.basescan.org/tx/0x8f73300bc28a76ee7a4ea74b601f98d8a4986039506ae6e80e7e6def570547a8" rel="noopener">0x8f73…47a8 on Basescan</a></span></div>
+          <div class="r"><span class="what">Exit ran during a bank freeze</span><span class="st ok">Success</span><span class="more">E5, the exit-key redeem still executed. Block 48158300. <a class="link" href="https://sepolia.basescan.org/tx/0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66" rel="noopener">0xdf11…8a66 on Basescan</a></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="refusals" aria-labelledby="refused-title">
+      <h2 id="refused-title" data-reveal>Refused on-chain</h2>
+      <ul>
+        <li data-reveal><a href="https://sepolia.basescan.org/tx/0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6" rel="noopener">BadSignature</a><p>E4a. The amount was changed after signing. Reverted at block 48158282.</p></li>
+        <li data-reveal style="--i:1"><a href="https://sepolia.basescan.org/tx/0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7" rel="noopener">NonceUsed</a><p>E4b. A used authorization, sent again. Reverted at block 48158278.</p></li>
+        <li data-reveal style="--i:2"><a href="https://sepolia.basescan.org/tx/0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba" rel="noopener">PriceOutOfBand</a><p>E4d. Signed at 1.00, sent at 0.97. Reverted at block 48158288.</p></li>
+        <li data-reveal style="--i:3"><a href="https://sepolia.basescan.org/tx/0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799" rel="noopener">Frozen</a><p>E5. A deposit while the bank froze the treasury. Reverted at block 48158296.</p></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="end">
+  <p>Treasury evidence: deployments/evidence-84532.json, generated 15 Oct 2026, chain Base Sepolia (84532). Contracts are not audited; vaults and the price feed are mocks. Everything else on this page is a sample to show the design.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

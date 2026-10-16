@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ActionCardView, ApprovalPanel } from '../components/ActionCard'
-import { Chip, Empty, ErrorNote, ErrorTag, Figure, Hash, Loading } from '../components/bits'
+import { Chip, Empty, ErrorNote, ErrorTag, Figure, Hash, Kpis, Loading, PageHeader } from '../components/bits'
 import { DecisionChain } from '../components/DecisionChain'
 import { expectedSigner, RecordSheet } from '../components/RecordSheet'
 import { SwitchSeat, usePageTitle } from '../components/chrome'
@@ -107,21 +107,21 @@ export default function Copilot() {
 
   return (
     <main id="main" className="page">
-      <section className="page-band c-blue on-blue">
-        <div className="wrap band-grid">
-          <div className="band-head">
-            <h1>Copilot</h1>
-            <p className="band-lede">Ask in plain words. The agent holds no key and writes no <Term def={GLOSSARY_DEF.calldata}>calldata</Term>: it picks among options the deterministic engines build, and material actions wait for your signature.</p>
-          </div>
-          <div className="band-figures">
-            <Figure label="Waiting for you" value={pending.data ? String(pending.data.length) : '…'} note={pending.data?.[0] ? `${pending.data[0].actionCard.amount.display} into ${pending.data[0].actionCard.vault.name}` : 'No approvals due'} />
-            <Figure label="Last state" value={latest ? sentenceCase(latest) : '…'} />
-            <Figure label="Agent" value={mode === 'replay' || /determin/i.test(health?.llm ?? health?.llmMode ?? health?.agentMode ?? '') ? 'Deterministic' : (health?.llm ?? health?.llmMode ?? health?.agentMode ?? 'Model')} note="No safety property depends on the model" />
-          </div>
-        </div>
-      </section>
+      <div className="page-body">
+      <PageHeader
+        title="Copilot"
+        description={<>Ask in plain words. The agent holds no key and writes no <Term def={GLOSSARY_DEF.calldata}>calldata</Term>: it picks among options the deterministic engines build, and material actions wait for your signature.</>}
+        actions={pending.data?.[0] ? (
+          <button type="button" className="button" onClick={() => { setSelected(pending.data![0].requestId); setJump(pending.data![0].requestId) }}>Review the approval</button>
+        ) : null}
+      />
+      <Kpis label="Copilot figures">
+        <Figure label="Waiting for you" value={pending.data ? String(pending.data.length) : '…'} note={pending.data?.[0] ? `${pending.data[0].actionCard.amount.display} into ${pending.data[0].actionCard.vault.name}` : 'No approvals due'} />
+        <Figure label="Last state" value={latest ? sentenceCase(latest) : '…'} />
+        <Figure label="Agent" value={mode === 'replay' || /determin/i.test(health?.llm ?? health?.llmMode ?? health?.agentMode ?? '') ? 'Deterministic' : (health?.llm ?? health?.llmMode ?? health?.agentMode ?? 'Model')} note="No safety property depends on the model" />
+      </Kpis>
 
-      <div className={`page-body wrap copilot${isPending ? ' is-approving' : ''}`}>
+      <div className={`copilot${isPending ? ' is-approving' : ''}`}>
         <section className="chat" aria-labelledby="chat-title">
           <h2 id="chat-title" className="sr-only">Conversation</h2>
           {role !== 'owner' ? (
@@ -133,16 +133,16 @@ export default function Copilot() {
           <ol className="messages" ref={listRef} aria-live="polite" aria-relevant="additions">
             {messages === null ? <li><Loading what="the conversation" /></li> : messages.map((m) => (
               <li key={m.id} className={`msg msg-${m.who}`}>
-                <span className="msg-who">{m.who === 'owner' ? 'You' : 'AEGIS'} <span className="msg-time nums">{clock(m.at)}</span></span>
+                <span className="msg-who">{m.who === 'owner' ? 'You' : 'Porthmos'} <span className="msg-time nums">{clock(m.at)}</span></span>
                 <p>{m.text}</p>
                 {m.requestId ? (
                   <button type="button" className={`msg-inspect${selected === m.requestId ? ' is-on' : ''}`} onClick={() => setSelected(m.requestId!)} aria-pressed={selected === m.requestId}>
-                    {m.state ? <Chip state={m.requestId === r?.id && r ? r.state : m.state} /> : null} Inspect the decision
+                    {m.state ? <Chip state={m.requestId === r?.id && r ? r.state : m.state} /> : null} <span className="msg-inspect-label">Inspect the decision</span>
                   </button>
                 ) : null}
               </li>
             ))}
-            {chat.isPending ? <li className="msg msg-agent"><span className="msg-who">AEGIS</span><p>Reading the treasury and building options…</p></li> : null}
+            {chat.isPending ? <li className="msg msg-agent"><span className="msg-who">Porthmos</span><p>Reading the treasury and building options…</p></li> : null}
           </ol>
           <div className="suggest" aria-label="Try one of these">
             {SUGGESTIONS.map((s) => (
@@ -163,7 +163,7 @@ export default function Copilot() {
           <h2 id="insp-title" className="sr-only">Decision inspector</h2>
           {pending.data?.length ? (
             <div className="pending-list">
-              <h3>Waiting for your signature</h3>
+              <h3>Approval queue <Chip state="AWAITING_APPROVAL">{`${pending.data.length} waiting`}</Chip></h3>
               <ul>
                 {pending.data.map((p) => (
                   <li key={p.requestId}>
@@ -222,6 +222,7 @@ export default function Copilot() {
             </article>
           ) : <ErrorNote error={req.error} />}
         </section>
+      </div>
       </div>
     </main>
   )

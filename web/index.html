@@ -4,13 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffffff" />
-    <meta name="description" content="AEGIS Treasury: an AI treasury agent that keeps cash for what a business owes, earns on the rest, exits when risk rises, and executes only verifiably authorized decisions, under a bank risk desk that can freeze it." />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>AEGIS Treasury</title>
+    <meta name="description" content="Porthmos: an AI treasury agent that keeps cash for what a business owes, earns on the rest, exits when risk rises, and executes only verifiably authorized decisions, under a bank risk desk that can freeze it." />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/brand/icon-192.png" />
+    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
+    <title>Porthmos</title>
     <script>
       (function () {
         var r = document.documentElement
         r.classList.add('js')
+        if (location.pathname !== '/') {
+          r.classList.add('app-theme')
+          var pref = 'light'
+          try { pref = localStorage.getItem('porthmos.theme') || 'light' } catch (e) {}
+          r.dataset.theme = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'
+        }
         if (location.pathname === '/' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
           r.classList.add('motion-pending')
           setTimeout(function () { r.classList.remove('motion-pending') }, 2500)
@@ -20,7 +28,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <noscript>AEGIS Treasury needs JavaScript to read the treasury, sign approvals and replay the recorded run.</noscript>
+    <noscript>Porthmos needs JavaScript to read the treasury, sign approvals and replay the recorded run.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

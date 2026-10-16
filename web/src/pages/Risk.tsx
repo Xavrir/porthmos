@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { OracleChart, RiskRadar } from '../components/charts'
-import { Chip, ErrorNote, Figure, Hash, Loading } from '../components/bits'
+import { Chip, ErrorNote, Figure, Hash, Kpis, Loading, PageHeader } from '../components/bits'
 import { usePageTitle } from '../components/chrome'
 import { BreakIt } from '../components/BreakIt'
 import { useAegis } from '../lib/source'
@@ -43,22 +43,19 @@ export default function Risk() {
 
   return (
     <main id="main" className="page">
-      <section className="page-band c-red">
-        <div className="wrap band-grid">
-          <div className="band-head">
-            <h1>Risk</h1>
-            <p className="band-lede">Three hard triggers, checked every five blocks. Any one quarantines the vault and sends the Exit Agent in. It can only redeem back to the Safe.</p>
-          </div>
-          <div className="band-figures">
-            <Figure label="Oracle price" value={o ? o.price.display : '…'} note={o ? `${pct(Math.abs(price - 1), 2)} from 1.0000` : ''} tone={Math.abs(price - 1) > TRIGGERS.pegDeviation ? 'alert' : undefined} />
-            <Figure label="Price age" value={o ? `${o.ageSeconds} s` : '…'} note={`Limit ${o?.maxOracleAge ?? TRIGGERS.maxOracleAge} s, heartbeat 60 s`} tone={o?.stale ? 'alert' : undefined} />
-            <Figure label="Triggers firing" value={String(triggers.length)} note={triggers[0]?.t ?? 'None'} tone={triggers.length ? 'alert' : undefined} />
-            <Figure label="Quarantined" value={String(quarantined.length)} note={quarantined.map((v) => v.name).join(', ') || 'Both vaults open'} />
-          </div>
-        </div>
-      </section>
+      <div className="page-body">
+        <PageHeader
+          title="Risk"
+          description="Three hard triggers, checked every five blocks. Any one quarantines the vault and sends the Exit Agent in. It can only redeem back to the Safe."
+          actions={lab ? <a className="button quiet" href="#lab-title">Open the stress lab</a> : null}
+        />
+        <Kpis label="Risk figures">
+          <Figure label="Oracle price" value={o ? o.price.display : '…'} note={o ? `${pct(Math.abs(price - 1), 2)} from 1.0000` : ''} tone={Math.abs(price - 1) > TRIGGERS.pegDeviation ? 'alert' : undefined} />
+          <Figure label="Price age" value={o ? `${o.ageSeconds} s` : '…'} note={`Limit ${o?.maxOracleAge ?? TRIGGERS.maxOracleAge} s, heartbeat 60 s`} tone={o?.stale ? 'alert' : undefined} />
+          <Figure label="Triggers firing" value={String(triggers.length)} note={triggers[0]?.t ?? 'None'} tone={triggers.length ? 'alert' : undefined} />
+          <Figure label="Quarantined" value={String(quarantined.length)} note={quarantined.map((v) => v.name).join(', ') || 'Both vaults open'} />
+        </Kpis>
 
-      <div className="page-body wrap">
         <section className="block" aria-labelledby="oracle-title">
           <div className="block-head">
             <h2 id="oracle-title">Oracle</h2>
@@ -102,16 +99,16 @@ export default function Risk() {
         {mode === 'live' && tenant ? <BreakIt /> : null}
 
         <div className="cols">
-          <section className="block col-wide" aria-labelledby="lab-title">
+          <section className="block col-wide" aria-labelledby="lab-title" id="lab">
             <div className="block-head">
               <h2 id="lab-title">Stress lab</h2>
-              <p>{mode === 'replay' ? 'Each button plays a recorded scenario inside your browser; watch the system respond through the event stream.' : lab ? 'Local chain 31337 only. Each button calls /api/demo/scenario and you watch the system respond through the event stream.' : tenant ? 'Market scenarios move the shared price feed and vaults, so only the AEGIS team runs them here. When one runs, a banner shows it to every treasury.' : 'Scenario controls exist only on the local demo chain (31337).'}</p>
+              <p>{mode === 'replay' ? 'Each button plays a recorded scenario inside your browser; watch the system respond through the event stream.' : lab ? 'Local chain 31337 only. Each button calls /api/demo/scenario and you watch the system respond through the event stream.' : tenant ? 'Market scenarios move the shared price feed and vaults, so only the Porthmos team runs them here. When one runs, a banner shows it to every treasury.' : 'Scenario controls exist only on the local demo chain (31337).'}</p>
             </div>
             {lab ? (
               <div className="scenarios">
                 {SCENARIOS.map((s) => (
                   <div key={s.name} className="scenario">
-                    <button type="button" className={`button ${s.name === 'restore' ? 'quiet' : s.name === 'obligation' ? 'secondary' : 'danger'}`} disabled={run.isPending} onClick={() => run.mutate(s.name)}>
+                    <button type="button" className="button quiet" disabled={run.isPending} onClick={() => run.mutate(s.name)}>
                       {run.isPending && run.variables === s.name ? 'Running…' : s.label}
                     </button>
                     <p>{s.what}</p>
@@ -140,7 +137,7 @@ export default function Risk() {
             <h2 id="rules-title">Hard exit triggers</h2>
             <p>From the technical document. Quarantine is cleared only by the owner, after 24 hours with no trigger.</p>
           </div>
-          <div className="table-wrap">
+          <div className="table-wrap" tabIndex={0} role="region" aria-label="Exit triggers table, scrolls sideways on small screens">
             <table className="table">
               <thead><tr><th scope="col">Trigger</th><th scope="col">Threshold</th><th scope="col">Why</th></tr></thead>
               <tbody>

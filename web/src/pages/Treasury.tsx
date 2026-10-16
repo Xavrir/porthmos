@@ -2,8 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { decodeFunctionData, encodeFunctionData, parseAbi, type Hex } from 'viem'
 import { ReserveBar } from '../components/ReserveBar'
-import { Chip, Empty, ErrorNote, Figure, Hash, Loading } from '../components/bits'
-import { SwitchSeat, usePageTitle } from '../components/chrome'
+import { Chip, Empty, ErrorNote, Figure, Hash, Kpis, Loading, PageHeader } from '../components/bits'
+import { SwitchSeat, usePageTitle, useTreasuryName } from '../components/chrome'
 import { SignConfirm } from '../components/SignConfirm'
 import { TxStatus } from '../components/TxStatus'
 import { GLOSSARY_DEF, Term } from '../components/Glossary'
@@ -18,7 +18,8 @@ const FLOOR_ABI = parseAbi(['function setReserveFloor(address safe, uint256 floo
 
 export default function Treasury() {
   usePageTitle('Treasury')
-  const { api, mode, chainId, deployment, tenant } = useAegis()
+  const { api, mode, chainId, deployment } = useAegis()
+  const name = useTreasuryName()
   const { role, address, sendTx, isLocal, identity } = useIdentity()
   const [confirmFloor, setConfirmFloor] = useState(false)
   const qc = useQueryClient()
@@ -90,23 +91,24 @@ export default function Treasury() {
 
   return (
     <main id="main" className="page">
-      <section className="page-band c-surface">
-        <div className="wrap band-grid">
-          <div className="band-head">
-            <h1>Treasury</h1>
-            <p className="band-lede">{tenant && mode === 'live' ? 'Your treasury' : 'Harbour Lane Imports'}{mode === 'replay' ? ' (sample client)' : ''}. Cash for what the business owes stays in the Safe; only the surplus goes to work.</p>
-            {tr ? <p className="band-meta">Safe <Hash value={tr.safe} kind="address" label="Safe address" /> on {chainName(chainId)}</p> : null}
-          </div>
-          <div className="band-figures">
-            <Figure label="Total" value={tr ? `${tr.balances.total.display}` : '…'} note="USDC across the Safe and vaults" />
-            <Figure label="Reserve floor, on-chain" value={tr ? tr.reserve.onchainFloor.display : '…'} note={floorNote} tone={tr && !tr.reserve.inSync ? 'alert' : undefined} />
-            <Figure label="Deployable" value={tr ? tr.deployable.display : '…'} note="Above the higher of floor and schedule, after fees" />
-            <Figure label="Deposited today" value={tr ? money(today) : '…'} note={tr ? `of ${tr.policy.dailyCap.display} daily cap` : ''} />
-          </div>
-        </div>
-      </section>
+      <div className="page-body">
+        <PageHeader
+          title="Treasury"
+          description={<>{name}{mode === 'replay' ? ' (sample client)' : ''}. Cash for what the business owes stays in the Safe; only the surplus goes to work.</>}
+          meta={tr ? <>Safe <Hash value={tr.safe} kind="address" label="Safe address" /> on {chainName(chainId)}</> : null}
+          actions={tr && !tr.reserve.inSync ? (
+            <button type="button" className="button" disabled={role !== 'owner' || signFloor.isPending || confirmFloor} onClick={askFloor}>{signFloor.isPending ? 'Signing…' : 'Sign the new floor'}</button>
+          ) : (
+            <button type="button" className="button" onClick={() => { const el = document.getElementById('ob-label'); el?.scrollIntoView({ block: 'center' }); el?.focus({ preventScroll: true }) }}>Add an obligation</button>
+          )}
+        />
+        <Kpis label="Treasury figures">
+          <Figure label="Total balance" value={tr ? `${tr.balances.total.display}` : '…'} note="USDC across the Safe and vaults" />
+          <Figure label="Reserve floor, on-chain" value={tr ? tr.reserve.onchainFloor.display : '…'} note={floorNote} tone={tr && !tr.reserve.inSync ? 'alert' : undefined} />
+          <Figure label="Free to deploy" value={tr ? tr.deployable.display : '…'} note="Above the higher of floor and schedule, after fees" />
+          <Figure label="Deposited today" value={tr ? money(today) : '…'} note={tr ? `of ${tr.policy.dailyCap.display} daily cap` : ''} />
+        </Kpis>
 
-      <div className="page-body wrap">
         <section className="block" aria-labelledby="split-title">
           <div className="block-head">
             <h2 id="split-title">Reserve and deployable capital</h2>
@@ -147,7 +149,7 @@ export default function Treasury() {
                         <td>{o.label}</td>
                         <td className="nums">{day(o.dueDate)}</td>
                         <td className="r nums">{o.confirmedInflow ? '+' : ''}{o.amount.display}</td>
-                        <td>{o.settled ? <Chip state="EXPLAINED">Settled</Chip> : o.confirmedInflow ? <Chip state="CONFIRMED">Confirmed inflow</Chip> : <Chip state="HELD">Obligation</Chip>}</td>
+                        <td>{o.settled ? <Chip state="EXPLAINED">Settled</Chip> : o.confirmedInflow ? <Chip state="CONFIRMED">Confirmed inflow</Chip> : <Chip state="HELD" tone="wait">Due</Chip>}</td>
                         <td className="r">{!o.settled ? <button type="button" className="button small quiet" disabled={role !== 'owner' || settle.isPending} onClick={() => settle.mutate(o.id)}>Settle</button> : null}</td>
                       </tr>
                     ))}
@@ -161,7 +163,7 @@ export default function Treasury() {
             <form className="form" onSubmit={submit} aria-labelledby="add-title">
               <h3 id="add-title">Add an obligation</h3>
               <div className="form-grid">
-                <label>Label<input className="field" required value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Supplier invoice" /></label>
+                <label>Label<input id="ob-label" className="field" required value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Supplier invoice" /></label>
                 <label>Amount, USDC<input className="field nums" required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,6})?" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="1200.00" /></label>
                 <label>Due date<input className="field" required type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></label>
                 <label className="check"><input type="checkbox" checked={form.confirmedInflow} onChange={(e) => setForm({ ...form, confirmedInflow: e.target.checked })} /> <span>Confirmed inflow, not a payment</span></label>
@@ -193,8 +195,8 @@ export default function Treasury() {
                 <div><dt>Reserve floor</dt><dd className="nums">{tr.reserve.onchainFloor.display}</dd></div>
                 <div><dt>Price band width</dt><dd className="nums">{tr.policy.maxBandWidth ? fromUnits(tr.policy.maxBandWidth, 8).toFixed(4) : '0.0200'}</dd></div>
                 <div><dt>Oracle age limit</dt><dd className="nums">{tr.policy.maxOracleAge ?? 180} s</dd></div>
-                <div><dt>Owner freeze</dt><dd>{tr.policy.frozen.owner ? <Chip state="REVERTED">On</Chip> : 'Off'}</dd></div>
-                <div><dt>Bank freeze</dt><dd>{tr.policy.frozen.bank ? <Chip state="POLICY_CHANGED">On</Chip> : 'Off'}</dd></div>
+                <div><dt>Owner freeze</dt><dd>{tr.policy.frozen.owner ? <Chip state="POLICY_CHANGED">Frozen</Chip> : 'Off'}</dd></div>
+                <div><dt>Bank freeze</dt><dd>{tr.policy.frozen.bank ? <Chip state="POLICY_CHANGED">Frozen</Chip> : 'Off'}</dd></div>
                 <div><dt>Authorizer</dt><dd>{tr.policy.authorizerRevoked ? <Chip state="REVERTED">Revoked</Chip> : 'Active'}</dd></div>
               </dl>
             ) : <Loading what="policy" />}

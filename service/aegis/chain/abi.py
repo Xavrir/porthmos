@@ -1,4 +1,5 @@
-"""Minimal hand-written ABI for the calls the service makes, per docs/INTERFACES.md 1.1 to 1.5.
+"""Minimal hand-written ABI for the calls the service makes, per docs/INTERFACES.md 1.1 to 1.5 and the TradeEscrow
+interface in TECHNICAL-DOCUMENT 04.
 
 When Foundry artifacts exist in contracts/out they are preferred; any function, event or error
 missing from them falls back to these definitions.
@@ -24,10 +25,27 @@ APPROVAL_TUPLE = (
     "uint256 approvalNonce)"
 )
 
+TERMS_TUPLE = (
+    "(uint256 amount,address issuer,uint8 kind,bool requireDoc,bool checkTemp,int32 minTempCenti,"
+    "int32 maxTempCenti,uint64 deadline)"
+)
+ORDER_TUPLE = (
+    "(address buyer,address supplier,uint64 createdAt,uint8 nextIndex,uint8 status,uint256 total,uint256 released,"
+    "bytes32 termsHash)"
+)
+PROOF_TUPLE = (
+    "(uint256 orderId,uint8 index,uint8 kind,bytes32 docHash,int32 minTempCenti,int32 maxTempCenti,uint32 samples,"
+    "uint64 issuedAt)"
+)
+AUTH_TUPLE = (
+    "(uint256 orderId,uint8 index,uint256 amount,bytes32 proofHash,uint64 policyVersion,uint256 nonce,uint64 expiry)"
+)
+
 SPEC: dict[str, list[str]] = {
     "MockUSDC": [
         "function balanceOf(address owner) view returns (uint256)",
         "function allowance(address owner,address spender) view returns (uint256)",
+        "function approve(address spender,uint256 amount) returns (bool)",
         "function mint(address to,uint256 amount)",
         "function transfer(address to,uint256 amount) returns (bool)",
     ],
@@ -124,6 +142,35 @@ SPEC: dict[str, list[str]] = {
         "function usedNonce(address safe,uint256 nonce) view returns (bool)",
         "event AegisExecuted(address indexed safe,bytes32 indexed darHash,uint8 op,address indexed vault,uint256 assets,uint256 shares,uint8 tier,bytes32 evidenceHash)",
     ],
+    "TradeEscrow": [
+        f"function createOrder(address supplier,uint256 total,bytes32 termsHash,{TERMS_TUPLE}[3] ms) "
+        "returns (uint256 orderId)",
+        f"function release(uint256 orderId,uint8 index,{PROOF_TUPLE} proof,bytes issuerSig,{AUTH_TUPLE} auth,"
+        "bytes authSig)",
+        "function waive(uint256 orderId,uint8 index)",
+        "function refund(uint256 orderId)",
+        f"function checkRelease(uint256 orderId,uint8 index,{PROOF_TUPLE} proof,{AUTH_TUPLE} auth) view "
+        "returns (bool ok,bytes4 errorSelector)",
+        f"function getOrder(uint256 orderId) view returns ({ORDER_TUPLE})",
+        f"function getMilestone(uint256 orderId,uint8 index) view returns ({TERMS_TUPLE},uint8)",
+        f"function hashProof({PROOF_TUPLE} proof) view returns (bytes32)",
+        f"function proofStructHash({PROOF_TUPLE} proof) pure returns (bytes32)",
+        f"function hashAuthorization({AUTH_TUPLE} auth) view returns (bytes32)",
+        "function committedOf(address buyer) view returns (uint256)",
+        "function usedNonce(address buyer,uint256 nonce) view returns (bool)",
+        "function nextOrderId() view returns (uint256)",
+        "function escrowedTotal() view returns (uint256)",
+        "function registry() view returns (address)",
+        "function token() view returns (address)",
+        "event OrderCreated(uint256 indexed orderId,address indexed buyer,address indexed supplier,uint256 total,"
+        "bytes32 termsHash)",
+        "event MilestoneReleased(uint256 indexed orderId,uint8 index,address indexed supplier,uint256 amount,"
+        "bytes32 proofHash,bytes32 authHash,bool waived)",
+        "event OrderRefunded(uint256 indexed orderId,address indexed buyer,uint256 amount)",
+    ],
+    "MultiSendCallOnly": [
+        "function multiSend(bytes transactions) payable",
+    ],
 }
 
 MODULE_ERRORS = [
@@ -132,11 +179,20 @@ MODULE_ERRORS = [
     "ApprovalExpired", "StaleOracle", "PriceOutOfBand", "BandTooWide", "ReserveFloorBreached",
     "DailyCapExceeded", "NoPosition", "SlippageExceeded", "ExecutionFailed",
 ]
-EXTRA_ERRORS = ["DepositDisabled", "RedeemDisabled", "NoRound"]
+ESCROW_ERRORS = [
+    "Unauthorized", "NotRegistered", "Frozen", "BadSupplier", "BadIssuer", "BadMilestone", "AmountMismatch",
+    "BadDeadline", "OrderNotActive", "OutOfOrder", "ProofMismatch", "BadSignature", "BadProofTime", "ConditionNotMet",
+    "AuthorizationMismatch", "PolicyVersionMismatch", "Expired", "NonceUsed", "DeadlineNotPassed",
+]
+EXTRA_ERRORS = ["DepositDisabled", "RedeemDisabled", "NoRound", "ReentrancyGuardReentrantCall",
+                "ECDSAInvalidSignature"]
 
 ERROR_SELECTORS: dict[bytes, str] = {
-    keccak(text=f"{name}()")[:4]: name for name in MODULE_ERRORS + EXTRA_ERRORS
+    keccak(text=f"{name}()")[:4]: name for name in MODULE_ERRORS + ESCROW_ERRORS + EXTRA_ERRORS
 }
+ERROR_SELECTORS[keccak(text="SafeERC20FailedOperation(address)")[:4]] = "SafeERC20FailedOperation"
+ERROR_SELECTORS[keccak(text="ECDSAInvalidSignatureLength(uint256)")[:4]] = "ECDSAInvalidSignatureLength"
+ERROR_SELECTORS[keccak(text="ECDSAInvalidSignatureS(bytes32)")[:4]] = "ECDSAInvalidSignatureS"
 SELECTOR_BY_NAME: dict[str, bytes] = {v: k for k, v in ERROR_SELECTORS.items()}
 
 
@@ -169,10 +225,13 @@ def _param(text: str) -> dict:
                 if depth == 0:
                     inner, rest = text[1:i], text[i + 1 :].strip()
                     break
+        suffix = ""
+        if rest.startswith("["):
+            suffix, rest = rest[: rest.index("]") + 1], rest[rest.index("]") + 1 :].strip()
         tokens = rest.split()
         name = tokens[-1] if tokens and tokens[-1] != "indexed" else ""
         return {
-            "type": "tuple",
+            "type": "tuple" + suffix,
             "name": name,
             "components": [_param(p) for p in _split_params(inner)],
             "indexed": "indexed" in tokens,

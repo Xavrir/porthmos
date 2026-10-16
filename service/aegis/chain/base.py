@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from aegis.eip712 import DAR, Approval
+from aegis.tradeflow.typed import MilestoneProof, MilestoneTerms, Order, ReleaseAuthorization
 
 
 @dataclass
@@ -199,6 +200,38 @@ class ChainClient(ABC):
 
     @abstractmethod
     def wait_receipt(self, tx_hash: str, timeout: float = 30.0) -> Receipt | None: ...
+
+    @abstractmethod
+    def escrow_order(self, order_id: int) -> Order:
+        """TradeEscrow.getOrder; an unknown id has status NONE."""
+
+    @abstractmethod
+    def escrow_milestones(self, order_id: int) -> list[tuple[MilestoneTerms, int]]:
+        """TradeEscrow.getMilestone for indexes 0 to 2: (terms, on-chain status)."""
+
+    @abstractmethod
+    def escrow_committed_of(self, safe: str) -> int: ...
+
+    @abstractmethod
+    def escrow_used_nonce(self, buyer: str, nonce: int) -> bool: ...
+
+    @abstractmethod
+    def escrow_check_release(self, order_id: int, index: int, proof: MilestoneProof,
+                             auth: ReleaseAuthorization) -> SimResult:
+        """TradeEscrow.checkRelease: every release check except the two signatures; error is the selector name."""
+
+    @abstractmethod
+    def sim_release(self, order_id: int, index: int, proof: MilestoneProof, issuer_sig: str,
+                    auth: ReleaseAuthorization, auth_sig: str, sender: str) -> SimResult:
+        """Final signed eth_call of release()."""
+
+    @abstractmethod
+    def submit_release(self, key: str, order_id: int, index: int, proof: MilestoneProof, issuer_sig: str,
+                       auth: ReleaseAuthorization, auth_sig: str, gas: int | None = None) -> str: ...
+
+    @abstractmethod
+    def escrow_events(self, from_block: int, to_block: int) -> list[dict]:
+        """OrderCreated, MilestoneReleased and OrderRefunded in [from_block, to_block], in log order."""
 
     def address_of(self, key: str) -> str:
         from eth_account import Account

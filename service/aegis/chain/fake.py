@@ -9,12 +9,12 @@ from __future__ import annotations
 import secrets
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from eth_utils import to_checksum_address
 
 from aegis.chain.base import ChainClient, CheckResult, PolicyState, Receipt, Round, SimResult
-from aegis.config import ANVIL_KEYS, PRICE_ONE, UINT256_MAX, USDC, Addresses, VaultMeta
+from aegis.config import ANVIL_KEYS, PRICE_ONE, UINT256_MAX, USDC, Addresses, VaultMeta, anvil_mnemonic_keys
 from aegis.eip712 import (
     DAR,
     OP_DEPOSIT,
@@ -29,6 +29,21 @@ from aegis.eip712 import (
     recover_digest,
     to_bytes32,
 )
+from aegis.tradeflow.checks import conditions_hold
+from aegis.tradeflow.typed import (
+    ACTIVE,
+    MilestoneProof,
+    MilestoneTerms,
+    Order,
+    ReleaseAuthorization,
+    auth_digest,
+    proof_digest,
+    proof_struct_hash,
+)
+
+DEMO_ISSUER_INDEX = {"carrier": 10, "sensor": 11, "surveyor": 12}
+ORDER_COMPLETED, ORDER_REFUNDED = 2, 3
+M_RELEASED, M_WAIVED, M_REFUNDED = 1, 2, 3
 
 
 class Revert(Exception):
@@ -123,6 +138,14 @@ class FakeChain(ChainClient):
         self.admin = addr_of("admin")
         self.eth: dict[str, int] = {}
         self.safe_accounts: dict[str, dict] = {}
+        self.escrow_address = to_checksum_address("0x" + "e5" * 20)
+        self.multisend_address = to_checksum_address("0x" + "f6" * 20)
+        self.orders: dict[int, dict] = {}
+        self.next_order_id = 1
+        self.committed: dict[str, int] = {}
+        self.escrowed_total = 0
+        self.escrow_nonces: set[tuple[str, int]] = set()
+        self.escrow_logs: list[dict] = []
 
     def add_vault(self, address: str, name: str) -> FakeVault:
         v = FakeVault(to_checksum_address(address), name)
@@ -183,8 +206,9 @@ class FakeChain(ChainClient):
         return "0x" + secrets.token_hex(32)
 
     @classmethod
-    def demo(cls, safe_usdc: int = 10_000 * USDC) -> tuple["FakeChain", Addresses]:
-        """A chain shaped like deployments/31337.json params: two vaults, one registered Safe."""
+    def demo(cls, safe_usdc: int = 10_000 * USDC, tradeflow: bool = True) -> tuple["FakeChain", Addresses]:
+        """A chain shaped like deployments/31337.json params: two vaults, one registered Safe, and TradeEscrow with
+        demo issuers taken from the Anvil mnemonic unless tradeflow is False."""
         chain = cls()
         safe = to_checksum_address("0x" + "5a" * 20)
         va = chain.add_vault("0x" + "a0" * 20, "Vault A")
@@ -208,6 +232,11 @@ class FakeChain(ChainClient):
             vaults=[VaultMeta(va.address, "Vault A", 0.045, 0.001), VaultMeta(vb.address, "Vault B", 0.060, 0.001)],
             roles={r: addr_of(r) for r in ("owner", "bank", "authorizer", "exitKey", "executor", "keeper")},
         )
+        if tradeflow:
+            keys = anvil_mnemonic_keys()
+            addresses.trade_escrow = chain.escrow_address
+            addresses.multi_send_call_only = chain.multisend_address
+            addresses.issuers = {role: keys[i][0] for role, i in DEMO_ISSUER_INDEX.items()}
         return chain, addresses
 
     def block_number(self) -> int:
@@ -574,7 +603,7 @@ class FakeChain(ChainClient):
     def code_size(self, who: str) -> int:
         w = who.lower()
         known = {self.module_address.lower(), self.registry_address.lower(), self.usdc_address.lower(),
-                 self.feed_address.lower()}
+                 self.feed_address.lower(), self.escrow_address.lower(), self.multisend_address.lower()}
         return 1 if (w in self.safe_accounts or w in self.vaults or w in known) else 0
 
     def send_value(self, key: str, to: str, value: int) -> str:
@@ -616,3 +645,205 @@ class FakeChain(ChainClient):
 
     def wait_receipt(self, tx_hash: str, timeout: float = 30.0) -> Receipt | None:
         return self.receipts.get(tx_hash)
+
+    def _escrow_finish(self, tx: str, status: int, events: list[dict], reason: str | None) -> str:
+        self.mine()
+        self.receipts[tx] = Receipt(tx, status, self.block, list(events), reason)
+        for e in events:
+            e.update({"txHash": tx, "blockNumber": self.block, "logIndex": len(self.escrow_logs)})
+            self.escrow_logs.append(e)
+        return tx
+
+    def _escrow_tx(self, fn) -> str:
+        with self.lock:
+            tx = self._txhash()
+            try:
+                events = fn()
+            except Revert as r:
+                return self._escrow_finish(tx, 0, [], r.name)
+            return self._escrow_finish(tx, 1, events, None)
+
+    def create_order(self, buyer: str, supplier: str, total: int, terms_hash: str | bytes,
+                     ms: list[MilestoneTerms]) -> tuple[str, int | None]:
+        """Stands in for the owner's MultiSendCallOnly Safe transaction: approve(escrow, total) + createOrder."""
+        created: list[int] = []
+
+        def run() -> list[dict]:
+            p = self.policies.get(buyer.lower())
+            if p is None or p.owner.lower() == ZERO_ADDRESS:
+                raise Revert("NotRegistered")
+            if p.owner_frozen or p.bank_frozen:
+                raise Revert("Frozen")
+            if supplier.lower() in (ZERO_ADDRESS, buyer.lower(), self.escrow_address.lower(),
+                                    self.usdc_address.lower()):
+                raise Revert("BadSupplier")
+            for i, m in enumerate(ms):
+                if m.amount == 0 or m.kind != i or (m.checkTemp and m.minTempCenti > m.maxTempCenti):
+                    raise Revert("BadMilestone")
+            for m in ms:
+                if m.issuer.lower() in (ZERO_ADDRESS, supplier.lower()):
+                    raise Revert("BadIssuer")
+            if sum(m.amount for m in ms) != total:
+                raise Revert("AmountMismatch")
+            if not (self.now < ms[0].deadline <= ms[1].deadline <= ms[2].deadline):
+                raise Revert("BadDeadline")
+            if self.usdc.get(buyer.lower(), 0) < total:
+                raise Revert("ERC20InsufficientBalance")
+            oid = self.next_order_id
+            self.next_order_id += 1
+            order = Order(oid, to_checksum_address(buyer), to_checksum_address(supplier), self.now, 0, ACTIVE, total,
+                          0, to_bytes32(terms_hash))
+            self.orders[oid] = {"order": order, "terms": list(ms), "status": [0, 0, 0]}
+            self.committed[buyer.lower()] = self.committed.get(buyer.lower(), 0) + total
+            self.escrowed_total += total
+            self.usdc[buyer.lower()] -= total
+            self.mint(self.escrow_address, total)
+            created.append(oid)
+            return [{"event": "OrderCreated", "orderId": oid, "buyer": order.buyer, "supplier": order.supplier,
+                     "total": total, "termsHash": hex32(order.termsHash)}]
+
+        tx = self._escrow_tx(run)
+        return tx, (created[0] if created else None)
+
+    def _release_checks(self, order_id: int, index: int, proof: MilestoneProof, issuer_sig: str | None,
+                        auth: ReleaseAuthorization, auth_sig: str | None) -> None:
+        rec = self.orders.get(order_id)
+        if rec is None or rec["order"].status != ACTIVE:
+            raise Revert("OrderNotActive")
+        o = rec["order"]
+        if index != o.nextIndex:
+            raise Revert("OutOfOrder")
+        t = rec["terms"][index]
+        p = self.policies[o.buyer.lower()]
+        if p.owner_frozen or p.bank_frozen:
+            raise Revert("Frozen")
+        if proof.orderId != order_id or proof.index != index or proof.kind != t.kind:
+            raise Revert("ProofMismatch")
+        if issuer_sig is not None:
+            signer = recover_digest(proof_digest(self.chain_id, self.escrow_address, proof), issuer_sig)
+            if signer is None or signer.lower() != t.issuer.lower():
+                raise Revert("BadSignature")
+        if not (o.createdAt <= proof.issuedAt <= self.now):
+            raise Revert("BadProofTime")
+        if not conditions_hold(t, proof):
+            raise Revert("ConditionNotMet")
+        if auth_sig is not None:
+            signer = (recover_digest(auth_digest(self.chain_id, self.escrow_address, auth), auth_sig) or "").lower()
+            if signer in ("", ZERO_ADDRESS) or signer != p.authorizer.lower() or signer == p.exit_key.lower():
+                raise Revert("BadSignature")
+        if (auth.orderId, auth.index, auth.amount, to_bytes32(auth.proofHash)) != (
+                order_id, index, t.amount, proof_struct_hash(proof)):
+            raise Revert("AuthorizationMismatch")
+        if auth.policyVersion != p.version:
+            raise Revert("PolicyVersionMismatch")
+        if self.now > auth.expiry:
+            raise Revert("Expired")
+        if (o.buyer.lower(), auth.nonce) in self.escrow_nonces:
+            raise Revert("NonceUsed")
+
+    def _pay(self, order_id: int, index: int, status: int) -> dict:
+        rec = self.orders[order_id]
+        o, t = rec["order"], rec["terms"][index]
+        rec["status"][index] = status
+        nxt = o.nextIndex + 1
+        rec["order"] = replace(o, nextIndex=nxt, released=o.released + t.amount,
+                               status=ORDER_COMPLETED if nxt == 3 else o.status)
+        self.committed[o.buyer.lower()] -= t.amount
+        self.escrowed_total -= t.amount
+        self.usdc[self.escrow_address.lower()] -= t.amount
+        self.mint(o.supplier, t.amount)
+        return {"event": "MilestoneReleased", "orderId": order_id, "index": index, "supplier": o.supplier,
+                "amount": t.amount}
+
+    def escrow_order(self, order_id: int) -> Order:
+        rec = self.orders.get(int(order_id))
+        if rec is None:
+            return Order(int(order_id), ZERO_ADDRESS, ZERO_ADDRESS, 0, 0, 0, 0, 0, ZERO32)
+        return rec["order"]
+
+    def escrow_milestones(self, order_id: int) -> list[tuple[MilestoneTerms, int]]:
+        rec = self.orders.get(int(order_id))
+        if rec is None:
+            empty = MilestoneTerms(0, ZERO_ADDRESS, 0, False, False, 0, 0, 0)
+            return [(empty, 0)] * 3
+        return list(zip(rec["terms"], rec["status"]))
+
+    def escrow_committed_of(self, safe: str) -> int:
+        return self.committed.get(safe.lower(), 0)
+
+    def escrow_used_nonce(self, buyer: str, nonce: int) -> bool:
+        return (buyer.lower(), nonce) in self.escrow_nonces
+
+    def escrow_check_release(self, order_id, index, proof, auth) -> SimResult:
+        with self.lock:
+            try:
+                self._release_checks(order_id, index, proof, None, auth, None)
+            except Revert as r:
+                return SimResult(False, r.name)
+            return SimResult(True)
+
+    def sim_release(self, order_id, index, proof, issuer_sig, auth, auth_sig, sender) -> SimResult:
+        with self.lock:
+            try:
+                self._release_checks(order_id, index, proof, issuer_sig or "", auth, auth_sig or "")
+            except Revert as r:
+                return SimResult(False, r.name)
+            return SimResult(True)
+
+    def submit_release(self, key, order_id, index, proof, issuer_sig, auth, auth_sig, gas=None) -> str:
+        def run() -> list[dict]:
+            self._release_checks(order_id, index, proof, issuer_sig or "", auth, auth_sig or "")
+            buyer = self.orders[order_id]["order"].buyer
+            self.escrow_nonces.add((buyer.lower(), auth.nonce))
+            ev = self._pay(order_id, index, M_RELEASED)
+            return [{**ev, "proofHash": hex32(proof_struct_hash(proof)),
+                     "authHash": hex32(auth_digest(self.chain_id, self.escrow_address, auth)), "waived": False}]
+
+        return self._escrow_tx(run)
+
+    def escrow_waive(self, sender: str, order_id: int, index: int) -> str:
+        """Stands in for the owner's Safe transaction calling waive(orderId, index)."""
+
+        def run() -> list[dict]:
+            rec = self.orders.get(order_id)
+            if rec is None or sender.lower() != rec["order"].buyer.lower():
+                raise Revert("Unauthorized")
+            o = rec["order"]
+            if o.status != ACTIVE:
+                raise Revert("OrderNotActive")
+            if index != o.nextIndex:
+                raise Revert("OutOfOrder")
+            p = self.policies[o.buyer.lower()]
+            if p.owner_frozen or p.bank_frozen:
+                raise Revert("Frozen")
+            ev = self._pay(order_id, index, M_WAIVED)
+            return [{**ev, "proofHash": hex32(ZERO32), "authHash": hex32(ZERO32), "waived": True}]
+
+        return self._escrow_tx(run)
+
+    def escrow_refund(self, sender: str, order_id: int) -> str:
+        """Stands in for the owner's Safe transaction calling refund(orderId)."""
+
+        def run() -> list[dict]:
+            rec = self.orders.get(order_id)
+            if rec is None or sender.lower() != rec["order"].buyer.lower():
+                raise Revert("Unauthorized")
+            o = rec["order"]
+            if o.status != ACTIVE:
+                raise Revert("OrderNotActive")
+            if self.now <= rec["terms"][o.nextIndex].deadline:
+                raise Revert("DeadlineNotPassed")
+            amount_left = o.total - o.released
+            for i in range(o.nextIndex, 3):
+                rec["status"][i] = M_REFUNDED
+            rec["order"] = replace(o, status=ORDER_REFUNDED)
+            self.committed[o.buyer.lower()] -= amount_left
+            self.escrowed_total -= amount_left
+            self.usdc[self.escrow_address.lower()] -= amount_left
+            self.mint(o.buyer, amount_left)
+            return [{"event": "OrderRefunded", "orderId": order_id, "buyer": o.buyer, "amount": amount_left}]
+
+        return self._escrow_tx(run)
+
+    def escrow_events(self, from_block: int, to_block: int) -> list[dict]:
+        return [dict(e) for e in self.escrow_logs if from_block <= e["blockNumber"] <= to_block]

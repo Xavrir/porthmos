@@ -51,3 +51,35 @@ def enable_module_exec_data(safe: str, module: str, owner: str) -> bytes:
     inner = SAFE.encode("enableModule", to_checksum_address(module))
     return SAFE.encode("execTransaction", to_checksum_address(safe), 0, inner, 0, 0, 0, 0, ZERO_ADDRESS,
                        ZERO_ADDRESS, prevalidated_signature(owner))
+
+
+MULTISEND = Contract("MultiSendCallOnly")
+ESCROW = Contract("TradeEscrow")
+TOKEN = Contract("MockUSDC")
+
+
+def multisend_payload(calls: list[tuple[str, bytes]]) -> bytes:
+    """MultiSendCallOnly packing: operation (uint8, 0 = call), to, value, data length, data."""
+    out = b""
+    for to, data in calls:
+        out += b"\x00" + _addr_bytes(to) + (0).to_bytes(32, "big") + len(data).to_bytes(32, "big") + data
+    return out
+
+
+def fund_order_exec_data(safe: str, owner: str, multisend: str, token: str, escrow: str, supplier: str, total: int,
+                         terms_hash: bytes, terms: list) -> bytes:
+    """The owner's one Safe transaction that funds an order (TECHNICAL-DOCUMENT 02, Funding path): a delegatecall to
+    MultiSendCallOnly batching approve(escrow, total) and createOrder. The web encodes this itself (C1); this copy
+    serves the integration tests and the evidence script, which act as the owner."""
+    approve = TOKEN.encode("approve", to_checksum_address(escrow), total)
+    create = ESCROW.encode("createOrder", to_checksum_address(supplier), total, terms_hash,
+                           [t.as_tuple() for t in terms])
+    batch = MULTISEND.encode("multiSend", multisend_payload([(token, approve), (escrow, create)]))
+    return SAFE.encode("execTransaction", to_checksum_address(multisend), 0, batch, 1, 0, 0, 0, ZERO_ADDRESS,
+                       ZERO_ADDRESS, prevalidated_signature(owner))
+
+
+def owner_call_exec_data(target: str, data: bytes, owner: str) -> bytes:
+    """A plain call from the Safe (for example TradeEscrow.waive or refund), signed by its threshold-1 owner."""
+    return SAFE.encode("execTransaction", to_checksum_address(target), 0, data, 0, 0, 0, 0, ZERO_ADDRESS,
+                       ZERO_ADDRESS, prevalidated_signature(owner))

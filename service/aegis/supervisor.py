@@ -16,13 +16,14 @@ from dataclasses import dataclass
 
 log = logging.getLogger("aegis.supervisor")
 
+ISSUER_KEYS = ("ISSUER_CARRIER_KEY", "ISSUER_SENSOR_KEY", "ISSUER_SURVEYOR_KEY")
 SECRETS = ("AUTHORIZER_KEY", "EXIT_KEY", "EXECUTOR_KEY", "KEEPER_KEY", "ADMIN_KEY", "DEPLOYER_KEY", "ATTACKER_KEY",
-           "LLM_API_KEY", "ADMIN_TOKEN")
+           "LLM_API_KEY", "ADMIN_TOKEN", "INTERNAL_TOKEN", *ISSUER_KEYS)
 OWNED = {
-    "authorizer": ("AUTHORIZER_KEY",),
-    "api": ("ADMIN_KEY", "DEPLOYER_KEY", "ATTACKER_KEY", "LLM_API_KEY", "ADMIN_TOKEN"),
+    "authorizer": ("AUTHORIZER_KEY", "INTERNAL_TOKEN"),
+    "api": ("ADMIN_KEY", "DEPLOYER_KEY", "ATTACKER_KEY", "LLM_API_KEY", "ADMIN_TOKEN", "INTERNAL_TOKEN", *ISSUER_KEYS),
     "executor": ("EXECUTOR_KEY",),
-    "exit_agent": ("EXIT_KEY",),
+    "exit_agent": ("EXIT_KEY", "INTERNAL_TOKEN"),
     "keeper": ("KEEPER_KEY",),
 }
 ORDER = ("authorizer", "api", "executor", "exit_agent", "keeper")

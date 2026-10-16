@@ -1,4 +1,5 @@
-"""Executor: relays signed DARs and pays gas. It holds no authority and cannot alter a DAR."""
+"""Executor: relays signed DARs and milestone releases and pays gas. It holds no authority and cannot alter what was
+signed."""
 
 from __future__ import annotations
 
@@ -10,6 +11,9 @@ from eth_account import Account
 from aegis.core import simulator
 from aegis.eip712 import DAR, OP_DEPOSIT, Approval
 from aegis.services import Services
+from aegis.tradeflow.typed import MilestoneProof, ReleaseAuthorization
+
+OP_RELEASE = 2
 
 RECEIPT_TIMEOUT = 60.0
 STALE_CLAIM = 30.0
@@ -38,8 +42,36 @@ def update(services: Services, sub_id: int, **fields) -> None:
         k: row[k] for k in ("status", "tx_hash", "dar_hash", "source")}})
 
 
+def send_release(services: Services, sub: dict, key: str, sender_label: str) -> None:
+    """checkRelease, then a final signed eth_call of release(); a failure is reported to the milestone workflow as
+    status 'failed' with the error selector, a mined revert as 'reverted'."""
+    chain = services.chain
+    r = json.loads(sub["dar"])
+    order_id, index = int(r["orderId"]), int(r["index"])
+    proof, auth = MilestoneProof.from_json(r["proof"]), ReleaseAuthorization.from_json(r["auth"])
+    check = chain.escrow_check_release(order_id, index, proof, auth)
+    if not check.ok:
+        update(services, sub["id"], status="failed", error=check.error or "CheckFailed")
+        return
+    sender = Account.from_key(key).address
+    pre = chain.sim_release(order_id, index, proof, r["issuerSig"], auth, r["authSig"], sender)
+    if not pre.ok:
+        update(services, sub["id"], status="failed", error=pre.error)
+        return
+    try:
+        tx = chain.submit_release(key, order_id, index, proof, r["issuerSig"], auth, r["authSig"])
+    except Exception as e:
+        update(services, sub["id"], status="failed", error=f"SendFailed: {getattr(e, 'reason', e)}")
+        return
+    update(services, sub["id"], status="sent", tx_hash=tx, claimed_by=sender_label)
+    record_receipt(services, sub["id"], tx)
+
+
 def send_submission(services: Services, sub: dict, key: str, sender_label: str) -> None:
     """Preflight with a final signed eth_call, broadcast, then record the receipt."""
+    if sub["op"] == OP_RELEASE:
+        send_release(services, sub, key, sender_label)
+        return
     chain = services.chain
     dar = DAR.from_json(json.loads(sub["dar"]))
     sigs = json.loads(sub["sigs"])

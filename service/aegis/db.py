@@ -59,6 +59,35 @@ CREATE TABLE IF NOT EXISTS rate_events (
   bucket TEXT NOT NULL, key TEXT NOT NULL, at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS rate_events_key ON rate_events(bucket, key, at);
+CREATE TABLE IF NOT EXISTS tf_orders (
+  order_id INTEGER PRIMARY KEY, buyer TEXT NOT NULL, supplier TEXT NOT NULL, total TEXT NOT NULL,
+  terms_hash TEXT NOT NULL, created_at INTEGER NOT NULL, created_tx TEXT, created_block INTEGER,
+  status TEXT NOT NULL, served INTEGER NOT NULL DEFAULT 1, refund_tx TEXT, obligation_id TEXT, seen_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tf_orders_buyer ON tf_orders(buyer);
+CREATE TABLE IF NOT EXISTS tf_milestones (
+  order_id INTEGER NOT NULL, idx INTEGER NOT NULL, buyer TEXT NOT NULL, state TEXT NOT NULL, reason TEXT,
+  request_id TEXT, data TEXT NOT NULL, updated_at REAL NOT NULL, PRIMARY KEY (order_id, idx)
+);
+CREATE INDEX IF NOT EXISTS tf_milestones_state ON tf_milestones(state);
+CREATE TABLE IF NOT EXISTS tf_proofs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, idx INTEGER NOT NULL, proof_hash TEXT NOT NULL,
+  proof TEXT NOT NULL, signature TEXT NOT NULL, document_hash TEXT, source TEXT NOT NULL, received_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tf_proofs_milestone ON tf_proofs(order_id, idx);
+CREATE TABLE IF NOT EXISTS tf_transitions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, idx INTEGER NOT NULL, request_id TEXT,
+  from_state TEXT, to_state TEXT NOT NULL, at REAL NOT NULL, note TEXT
+);
+CREATE INDEX IF NOT EXISTS tf_transitions_milestone ON tf_transitions(order_id, idx);
+CREATE TABLE IF NOT EXISTS tf_confirmations (
+  order_id INTEGER NOT NULL, idx INTEGER NOT NULL, proof_hash TEXT NOT NULL, expiry INTEGER NOT NULL,
+  signature TEXT NOT NULL, signer TEXT NOT NULL, at REAL NOT NULL, PRIMARY KEY (order_id, idx, proof_hash)
+);
+CREATE TABLE IF NOT EXISTS signed_releases (
+  auth_hash TEXT PRIMARY KEY, request_id TEXT, safe TEXT NOT NULL, order_id TEXT NOT NULL, idx INTEGER NOT NULL,
+  nonce TEXT NOT NULL, signed_at REAL NOT NULL, auth TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS signed_dars (
   dar_hash TEXT PRIMARY KEY, request_id TEXT, safe TEXT NOT NULL, nonce TEXT NOT NULL, signed_at REAL NOT NULL,
   dar TEXT NOT NULL

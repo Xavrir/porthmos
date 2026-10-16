@@ -86,7 +86,7 @@ class Attacks:
         return dar, {"auth": signed["signature"]}, Approval.empty()
 
     def _replay(self, safe: str) -> tuple[DAR, dict, Approval]:
-        sub = self.s.db.one("SELECT * FROM submissions WHERE safe=? AND status='confirmed' "
+        sub = self.s.db.one("SELECT * FROM submissions WHERE safe=? AND status='confirmed' AND op IN (0, 1) "
                             "ORDER BY (op=0) DESC, id DESC LIMIT 1", (safe.lower(),))
         if sub is None:
             raise WorkflowError(409, "NothingToReplay", "this treasury has no executed DAR yet")

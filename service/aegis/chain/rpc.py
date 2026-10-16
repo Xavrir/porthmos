@@ -14,6 +14,7 @@ from aegis.chain.abi import Contract, decode_revert, error_name
 from aegis.chain.base import ChainClient, CheckResult, PolicyState, Receipt, Round, SimResult
 from aegis.config import UINT256_MAX, Settings
 from aegis.eip712 import DAR, Approval, hex32, to_bytes32
+from aegis.tradeflow.typed import MilestoneTerms, Order
 
 LOG_WINDOW = int(os.environ.get("LOG_WINDOW", "5000"))
 
@@ -62,6 +63,7 @@ class RpcChain(ChainClient):
         self.module = Contract("AegisModule", out)
         self.safe = Contract("Safe", out)
         self.factory = Contract("SafeProxyFactory", out)
+        self.escrow = Contract("TradeEscrow", out)
         self._http = httpx.Client(timeout=15)
         self._ids = itertools.count(1)
         self._send_locks: dict[str, threading.Lock] = {}
@@ -302,9 +304,15 @@ class RpcChain(ChainClient):
         block = int(rec["blockNumber"], 16)
         executed = []
         topic = "0x" + self.module.topic("AegisExecuted").hex()
+        released = "0x" + self.escrow.topic("MilestoneReleased").hex()
+        escrow = (self.addr.trade_escrow or "").lower()
         for log in rec.get("logs", []):
-            if log["address"].lower() == self.addr.module.lower() and log["topics"] and log["topics"][0] == topic:
+            if not log["topics"]:
+                continue
+            if log["address"].lower() == self.addr.module.lower() and log["topics"][0] == topic:
                 executed.append(self._decode_executed(log))
+            elif escrow and log["address"].lower() == escrow and log["topics"][0] == released:
+                executed.append(self._decode_escrow(log))
         reason = None
         if status == 0:
             reason = self._replay_reason(tx_hash, block)
@@ -391,6 +399,85 @@ class RpcChain(ChainClient):
     def admin_increase_time(self, seconds: int) -> None:
         self._rpc("evm_increaseTime", [seconds])
         self._rpc("evm_mine", [])
+
+    def _escrow_address(self) -> str:
+        if not self.addr.trade_escrow:
+            raise RuntimeError("TradeFlow is not configured: no tradeEscrow in the deployments file")
+        return self.addr.trade_escrow
+
+    def escrow_order(self, order_id: int) -> Order:
+        return Order.from_tuple(int(order_id), self._view(self.escrow, self._escrow_address(), "getOrder",
+                                                          int(order_id)))
+
+    def escrow_milestones(self, order_id: int) -> list[tuple[MilestoneTerms, int]]:
+        out = []
+        for i in range(3):
+            terms, status = self._view(self.escrow, self._escrow_address(), "getMilestone", int(order_id), i)
+            out.append((MilestoneTerms.from_tuple(terms), int(status)))
+        return out
+
+    def escrow_committed_of(self, safe: str) -> int:
+        return self._view(self.escrow, self._escrow_address(), "committedOf", to_checksum_address(safe))
+
+    def escrow_used_nonce(self, buyer: str, nonce: int) -> bool:
+        return self._view(self.escrow, self._escrow_address(), "usedNonce", to_checksum_address(buyer), nonce)
+
+    def escrow_check_release(self, order_id, index, proof, auth) -> SimResult:
+        try:
+            ok, selector = self._view(self.escrow, self._escrow_address(), "checkRelease", int(order_id), index,
+                                      proof.as_tuple(), auth.as_tuple())
+        except CallReverted as e:
+            return SimResult(False, e.reason)
+        return SimResult(bool(ok), None if ok else error_name(selector))
+
+    def _release_data(self, order_id, index, proof, issuer_sig, auth, auth_sig) -> bytes:
+        return self.escrow.encode("release", int(order_id), index, proof.as_tuple(), _sig(issuer_sig),
+                                  auth.as_tuple(), _sig(auth_sig))
+
+    def sim_release(self, order_id, index, proof, issuer_sig, auth, auth_sig, sender) -> SimResult:
+        try:
+            self._eth_call(self._escrow_address(),
+                           self._release_data(order_id, index, proof, issuer_sig, auth, auth_sig), sender=sender)
+        except CallReverted as e:
+            return SimResult(False, e.reason)
+        return SimResult(True)
+
+    def submit_release(self, key, order_id, index, proof, issuer_sig, auth, auth_sig, gas=None) -> str:
+        return self._send(key, self._escrow_address(),
+                          self._release_data(order_id, index, proof, issuer_sig, auth, auth_sig), gas=gas)
+
+    def _decode_escrow(self, log: dict) -> dict:
+        topics = [bytes.fromhex(t[2:]) for t in log["topics"]]
+        data = bytes.fromhex(log["data"][2:])
+        base = {"txHash": log["transactionHash"], "blockNumber": int(log["blockNumber"], 16),
+                "logIndex": int(log["logIndex"], 16)}
+        t0 = log["topics"][0]
+        if t0 == "0x" + self.escrow.topic("OrderCreated").hex():
+            d = self.escrow.decode_log("OrderCreated", topics, data)
+            return {"event": "OrderCreated", "orderId": int(d["orderId"]), "buyer": to_checksum_address(d["buyer"]),
+                    "supplier": to_checksum_address(d["supplier"]), "total": int(d["total"]),
+                    "termsHash": hex32(d["termsHash"]), **base}
+        if t0 == "0x" + self.escrow.topic("MilestoneReleased").hex():
+            d = self.escrow.decode_log("MilestoneReleased", topics, data)
+            return {"event": "MilestoneReleased", "orderId": int(d["orderId"]), "index": int(d["index"]),
+                    "supplier": to_checksum_address(d["supplier"]), "amount": int(d["amount"]),
+                    "proofHash": hex32(d["proofHash"]), "authHash": hex32(d["authHash"]), "waived": bool(d["waived"]),
+                    **base}
+        d = self.escrow.decode_log("OrderRefunded", topics, data)
+        return {"event": "OrderRefunded", "orderId": int(d["orderId"]), "buyer": to_checksum_address(d["buyer"]),
+                "amount": int(d["amount"]), **base}
+
+    def escrow_events(self, from_block: int, to_block: int) -> list[dict]:
+        topics0 = ["0x" + self.escrow.topic(e).hex() for e in ("OrderCreated", "MilestoneReleased", "OrderRefunded")]
+        start = max(from_block, self.addr.trade_escrow_block)
+        logs = []
+        while start <= to_block:
+            end = min(to_block, start + LOG_WINDOW - 1)
+            logs.extend(self._rpc("eth_getLogs", [{"fromBlock": hex(start), "toBlock": hex(end),
+                                                   "address": to_checksum_address(self._escrow_address()),
+                                                   "topics": [topics0]}]))
+            start = end + 1
+        return [self._decode_escrow(log) for log in logs]
 
     def wait_receipt(self, tx_hash: str, timeout: float = 30.0) -> Receipt | None:
         deadline = time.time() + timeout

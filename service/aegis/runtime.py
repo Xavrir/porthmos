@@ -17,6 +17,7 @@ from aegis.core.reserve import required_reserve
 from aegis.db import Database
 from aegis.services import Services
 from aegis.sessions import SessionManager
+from aegis.tradeflow.milestones import TradeFlow
 from aegis.workflow import Workflow
 
 log = logging.getLogger("aegis")
@@ -63,6 +64,7 @@ class Runtime:
         self.workflow = workflow
         self.authorizer = authorizer
         self.sessions = SessionManager(services)
+        self.tradeflow = TradeFlow(services, workflow.agent, authorizer) if settings.tradeflow_enabled else None
         self.in_process = in_process
         self.executor = None
         self.exit_agent = None
@@ -138,6 +140,8 @@ class Runtime:
         if self.keeper is not None and self._every("keeper", self.settings.params.keeper_interval):
             self.keeper.tick()
         self.workflow.apply_submission_results()
+        if self.tradeflow is not None:
+            self.tradeflow.tick()
         self.tail_events()
         if self._every("expire", 10):
             self.workflow.expire_approvals()

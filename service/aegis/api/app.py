@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
+from aegis.api import tradeflow as tradeflow_api
 from aegis.attacks import Attacks
 from aegis.config import PRICE_ONE
 from aegis.core.pipeline import Snapshot
@@ -163,7 +164,7 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
 
     def treasury_view(snap: Snapshot) -> dict:
         st, p, plan = snap.state, snap.state.policy, snap.plan
-        return {
+        out = {
             "safe": st.safe,
             "block": st.block,
             "timestamp": st.timestamp,
@@ -185,6 +186,11 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
             "plan": {"defaultOptionId": plan.default_id, "holdReason": plan.hold_reason,
                      "default": plan.default.to_json() if plan.default else None},
         }
+        if rt.tradeflow is not None:
+            # Committed escrow has left the Safe: it is shown for the full position, never added to L or R.
+            out["figures"] = {"cash": amount(st.liquid), "committed": amount(rt.tradeflow.committed(st.safe)),
+                              "free": amount(plan.deployable)}
+        return out
 
     @app.get("/api/health")
     def health():
@@ -197,7 +203,8 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
                "agentMode": agent.mode, "llmMode": llm_mode, "demo": rt.settings.demo_mode,
                "referenceSafe": refs[0] if refs else None, "tenantCount": s.tenants.activated_count(),
                "onboardingOpen": onboarding.is_open(), "module": rt.settings.addresses.module,
-               "inProcessWorkers": rt.in_process, "time": int(time.time())}
+               "inProcessWorkers": rt.in_process, "tradeflow": {"enabled": rt.tradeflow is not None},
+               "time": int(time.time())}
         out["keeper"] = {"paused": bool(s.db.kv_get(PAUSE_KEY, False)), "lastPoke": s.db.kv_get(LAST_POKE_KEY)}
         try:
             out["block"] = rt.chain.block_number()
@@ -346,6 +353,7 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
     @app.get("/api/bank/clients")
     def bank_clients(sess: Session = Depends(bank_dep)):
         clients = []
+        escrow_events = rt.chain.escrow_events(0, rt.chain.block_number()) if rt.tradeflow is not None else []
         for safe in bank_safes(sess):
             snap = snap_for(safe)
             p = snap.state.policy
@@ -367,6 +375,10 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
                 "limits": {"autoCap": amount(p.auto_cap), "dailyCap": amount(p.daily_cap),
                            "bankLimit": amount(p.bank_limit)},
             })
+            if rt.tradeflow is not None:
+                tf = rt.tradeflow.bank_summary(safe, escrow_events)
+                clients[-1]["tradeflow"] = tf
+                clients[-1]["mismatches"] += tf["reconciliation"]["mismatches"]
         return {"clients": clients}
 
     @app.get("/api/market")
@@ -438,6 +450,9 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
             raise WorkflowError(400, "BadRequest")
         dropped = rt.workflow.drop_pending_deposits(body.safe, body.vault)
         return {"dropped": dropped}
+
+    tradeflow_api.register(app, rt, session_dep, owner_dep, visible_safes,
+                           lambda request: onboarding.ip_hash(client_ip(request)))
 
     @app.get("/api/stream")
     async def stream(request: Request, session: str | None = None,

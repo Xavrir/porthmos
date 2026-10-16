@@ -17,13 +17,15 @@ if ! curl -s -m 3 -X POST -H 'content-type: application/json' \
   exit 1
 fi
 mkdir -p var/log
-KEYS=(AUTHORIZER_KEY EXIT_KEY EXECUTOR_KEY KEEPER_KEY ADMIN_KEY)
+KEYS=(AUTHORIZER_KEY EXIT_KEY EXECUTOR_KEY KEEPER_KEY ADMIN_KEY ISSUER_CARRIER_KEY ISSUER_SENSOR_KEY
+      ISSUER_SURVEYOR_KEY INTERNAL_TOKEN)
 pids=()
 
 start() {
-  local name=$1 keep=$2
+  local name=$1
+  shift
   local unset_args=()
-  for k in "${KEYS[@]}"; do [ "$k" = "$keep" ] || unset_args+=(-u "$k"); done
+  for k in "${KEYS[@]}"; do [[ " $* " == *" $k "* ]] || unset_args+=(-u "$k"); done
   env "${unset_args[@]}" uv run python -m aegis "$name" >"var/log/$name.log" 2>&1 &
   pids+=($!)
   echo "started $name (pid $!), log var/log/$name.log"
@@ -32,11 +34,11 @@ start() {
 cleanup() { kill "${pids[@]}" 2>/dev/null || true; wait 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
-start authorizer AUTHORIZER_KEY
+start authorizer AUTHORIZER_KEY INTERNAL_TOKEN
 sleep 2
-start api ADMIN_KEY
+start api ADMIN_KEY ISSUER_CARRIER_KEY ISSUER_SENSOR_KEY ISSUER_SURVEYOR_KEY INTERNAL_TOKEN
 start executor EXECUTOR_KEY
-start exit_agent EXIT_KEY
+start exit_agent EXIT_KEY INTERNAL_TOKEN
 start keeper KEEPER_KEY
 echo "API on http://127.0.0.1:${API_PORT:-8787} (Ctrl-C stops all)"
 wait

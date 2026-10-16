@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 SERVICE_DIR = Path(__file__).resolve().parent.parent
@@ -22,6 +23,9 @@ ANVIL_KEYS = {
     "keeper": "0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e",
     "attacker": "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
 }
+ANVIL_MNEMONIC = "test test test test test test test test test test test junk"
+MNEMONIC_SCAN = 40
+ISSUER_ROLES = ("carrier", "sensor", "surveyor")
 
 
 def _env(name: str, default: str | None = None) -> str | None:
@@ -96,6 +100,10 @@ class Addresses:
     safe_singleton: str = ""
     safe_proxy_factory: str = ""
     fallback_handler: str = CANONICAL_FALLBACK_HANDLER
+    trade_escrow: str = ""
+    multi_send_call_only: str = ""
+    trade_escrow_block: int = 0
+    issuers: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -127,6 +135,20 @@ class Limits:
     llm_per_hour: int = 300
     llm_per_tenant_hour: int = 60
     attacks_per_tenant_hour: int = 6
+
+
+@dataclass
+class TradeFlowLimits:
+    """TradeFlow abuse limits and timings (TECHNICAL-DOCUMENT 02, TradeFlow API additions)."""
+
+    demo_proofs_per_tenant_hour: int = 12
+    proofs_per_order_hour: int = 30
+    rejects_per_ip_hour: int = 30
+    max_active_orders: int = 5
+    max_document_bytes: int = 1_048_576
+    auth_expiry: int = 120
+    confirmation_expiry: int = 24 * 3600
+    max_resigns: int = 2
 
 
 @dataclass
@@ -162,6 +184,11 @@ class Settings:
     trust_proxy: bool = False
     ip_salt: str = ""
     tenant_refresh: float = 3.0
+    tradeflow: TradeFlowLimits = field(default_factory=TradeFlowLimits)
+
+    @property
+    def tradeflow_enabled(self) -> bool:
+        return bool(self.addresses.trade_escrow)
 
     @property
     def llm_enabled(self) -> bool:
@@ -188,6 +215,7 @@ KEY_ENV = {
     "attacker": ("ATTACKER_KEY",),
 }
 ANVIL_FALLBACK = {"faucet": "admin"}
+ISSUER_KEY_ENV = {"carrier": "ISSUER_CARRIER_KEY", "sensor": "ISSUER_SENSOR_KEY", "surveyor": "ISSUER_SURVEYOR_KEY"}
 
 
 def load_key(role: str, chain_id: int) -> str:
@@ -206,6 +234,34 @@ def load_key(role: str, chain_id: int) -> str:
 
 def has_key(role: str, chain_id: int) -> bool:
     return chain_id == 31337 or any(_env(name) for name in KEY_ENV[role])
+
+
+@lru_cache(maxsize=None)
+def anvil_mnemonic_keys() -> tuple[tuple[str, str], ...]:
+    """(address, key) for the first MNEMONIC_SCAN accounts of the public Anvil mnemonic."""
+    from eth_account import Account
+    from eth_account.hdaccount import key_from_seed, seed_from_mnemonic
+
+    seed = seed_from_mnemonic(ANVIL_MNEMONIC, "")
+    out = []
+    for i in range(MNEMONIC_SCAN):
+        key = "0x" + key_from_seed(seed, f"m/44'/60'/0'/0/{i}").hex()
+        out.append((Account.from_key(key).address, key))
+    return tuple(out)
+
+
+def load_issuer_key(role: str, chain_id: int, expected: str | None) -> str | None:
+    """A demo issuer key, read at the point of use so a missing key disables demo proofs and nothing else.
+
+    On 31337 the deployment picks issuer addresses from the Anvil mnemonic; the key is the mnemonic account whose
+    address matches the deployments file.
+    """
+    value = _env(ISSUER_KEY_ENV[role])
+    if value is not None:
+        return value
+    if chain_id == 31337 and expected:
+        return next((k for a, k in anvil_mnemonic_keys() if a.lower() == expected.lower()), None)
+    return None
 
 
 def load_deployments(path: Path) -> dict | None:
@@ -239,6 +295,10 @@ def addresses_from_deployments(dep: dict) -> Addresses:
         safe_singleton=dep.get("safeSingleton", ""),
         safe_proxy_factory=dep.get("safeProxyFactory", ""),
         fallback_handler=dep.get("fallbackHandler") or CANONICAL_FALLBACK_HANDLER,
+        trade_escrow=dep.get("tradeEscrow") or "",
+        multi_send_call_only=dep.get("multiSendCallOnly") or "",
+        trade_escrow_block=int(dep.get("tradeEscrowBlock") or 0),
+        issuers={k: v for k, v in (dep.get("issuers") or {}).items() if k in ISSUER_ROLES and v},
     )
 
 

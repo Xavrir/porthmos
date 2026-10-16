@@ -106,6 +106,9 @@ def run_scenario(rt: Runtime, name: str, safe: str | None, by: str, vault: str |
         txs.append(chain.poke(admin))
         result["txs"] = txs
         result["note"] = "Quarantine stays until the owner clears it after the 24 h cooldown."
+    # Callers read the new market state right after this returns; on a chain with block time it is not mined yet.
+    for tx in [result["tx"]] if "tx" in result else result.get("txs", []):
+        chain.wait_receipt(tx, timeout=30)
     market_wide = name in MARKET_SCENARIOS
     if market_wide:
         s.db.kv_set(SCENARIO_KEY, None if name == "restore" else {"name": name, "at": int(time.time()), "by": by})

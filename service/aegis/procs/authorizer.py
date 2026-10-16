@@ -1,7 +1,10 @@
-"""Authorizer process: holds AUTHORIZER_KEY and signs a DAR only after re-verifying it independently.
+"""Authorizer process: holds AUTHORIZER_KEY and signs a DAR or a ReleaseAuthorization only after re-verifying it
+independently.
 
-It recomputes the reserve from the submitted schedule, the plan, the validator decision, the policy
-tier and the simulation against its own chain reads. It never trusts the API's claimed results alone.
+For a DAR it recomputes the reserve from the submitted schedule, the plan, the validator decision, the policy
+tier and the simulation against its own chain reads. For a release it re-runs the milestone checks against its own
+reads of TradeEscrow and PolicyRegistry. It never trusts the API's claimed results alone, and it signs nothing for a
+Safe whose registry authorizer is not its own address (AuthorizerNotCurrent).
 """
 
 from __future__ import annotations
@@ -33,6 +36,16 @@ from aegis.eip712 import (
 )
 from aegis.errors import AuthorizerRefused
 from aegis.tenants import TenantStore
+from aegis.tradeflow.checks import conditions_hold, confirmation_failure, proof_time_ok
+from aegis.tradeflow.typed import (
+    PENDING,
+    MilestoneProof,
+    ReleaseAuthorization,
+    ReleaseConfirmation,
+    auth_digest,
+    proof_digest,
+    proof_struct_hash,
+)
 
 CLOCK_SKEW = 15
 INERT_MIN_AGE = 3600
@@ -57,6 +70,7 @@ class Authorizer:
             raise AuthorizerRefused(f"MalformedRequest: {e}") from None
         if dar.safe.lower() not in {x.lower() for x in self.tenants.safes()}:
             raise AuthorizerRefused("UnknownSafe")
+        self._require_current(dar.safe)
         if dar.op != OP_DEPOSIT:
             raise AuthorizerRefused("WrongOp")
         if dar.expiry + INERT_MIN_AGE > self.chain.head_timestamp():
@@ -84,6 +98,7 @@ class Authorizer:
         known = {x.lower() for x in self.tenants.safes()}
         if dar.safe.lower() not in known or dar.safe.lower() != str(payload.get("safe", "")).lower():
             raise AuthorizerRefused("UnknownSafe")
+        self._require_current(dar.safe)
         claimed = payload.get("serviceResults") or {}
         for stage in ("validation", "policy", "simulation"):
             if not (claimed.get(stage) or {}).get("ok"):
@@ -170,6 +185,93 @@ class Authorizer:
         return {"signature": signature, "darHash": dar_hash, "signer": self.address}
 
 
+    def _require_current(self, safe: str) -> None:
+        current = self.chain.policy(safe, []).authorizer
+        if current.lower() != self.address.lower():
+            raise AuthorizerRefused(f"AuthorizerNotCurrent: registry authorizer is {current}")
+
+    def sign_release(self, payload: dict) -> dict:
+        try:
+            return self._sign_release(payload)
+        except AuthorizerRefused:
+            raise
+        except (KeyError, TypeError, ValueError) as e:
+            raise AuthorizerRefused(f"MalformedRequest: {e}") from None
+
+    def _sign_release(self, payload: dict) -> dict:
+        """POST /sign-release (TECHNICAL-DOCUMENT 02, Authorizer checks for a release), in that order."""
+        s = self.settings
+        escrow = s.addresses.trade_escrow
+        if not escrow:
+            raise AuthorizerRefused("TradeFlowDisabled")
+        safe = str(payload["safe"])
+        order_id = int(payload["orderId"])
+        index = int(payload["index"])
+        proof = MilestoneProof.from_json(payload["proof"])
+        auth = ReleaseAuthorization.from_json(payload["authorization"])
+        issuer_sig = str(payload["issuerSignature"])
+        if safe.lower() not in {x.lower() for x in self.tenants.safes()}:
+            raise AuthorizerRefused("UnknownSafe")
+        order = self.chain.escrow_order(order_id)
+        if not order.exists or order.buyer.lower() != safe.lower():
+            raise AuthorizerRefused("WrongBuyer")
+        self._require_current(order.buyer)
+        if not order.active:
+            raise AuthorizerRefused("OrderNotActive")
+        if not 0 <= index <= 2 or index != order.nextIndex:
+            raise AuthorizerRefused("OutOfOrder")
+        terms, status = self.chain.escrow_milestones(order_id)[index]
+        if status != PENDING:
+            raise AuthorizerRefused("OutOfOrder")
+        pol = self.chain.policy(order.buyer, [])
+        if pol.owner_frozen or pol.bank_frozen:
+            raise AuthorizerRefused("Frozen")
+        if (proof.orderId, proof.index, proof.kind) != (order_id, index, terms.kind):
+            raise AuthorizerRefused("ProofMismatch")
+        if (auth.orderId, auth.index) != (order_id, index):
+            raise AuthorizerRefused("AuthorizationMismatch")
+        signer = recover_digest(proof_digest(s.chain_id, escrow, proof), issuer_sig)
+        if signer is None or signer.lower() != terms.issuer.lower():
+            raise AuthorizerRefused("BadIssuerSignature")
+        now = self.chain.block_timestamp()
+        if not proof_time_ok(order, proof, now):
+            raise AuthorizerRefused("BadProofTime")
+        if not conditions_hold(terms, proof):
+            raise AuthorizerRefused("ConditionNotMet")
+        if auth.amount != terms.amount:
+            raise AuthorizerRefused("AmountMismatch")
+        proof_hash = proof_struct_hash(proof)
+        if to_bytes32(auth.proofHash) != proof_hash:
+            raise AuthorizerRefused("ProofHashMismatch")
+        if auth.policyVersion != pol.policy_version:
+            raise AuthorizerRefused("PolicyVersionMismatch")
+        if not (now < auth.expiry <= now + s.tradeflow.auth_expiry + CLOCK_SKEW):
+            raise AuthorizerRefused("ExpiryOutOfRange")
+        if self.chain.escrow_used_nonce(order.buyer, auth.nonce) or self.db.one(
+                "SELECT 1 AS x FROM signed_releases WHERE safe=? AND nonce=?", (safe.lower(), str(auth.nonce))):
+            raise AuthorizerRefused("NonceUsed")
+        late = now > terms.deadline
+        if late or payload.get("priorHold"):
+            c = payload.get("confirmation") or None
+            conf = ReleaseConfirmation.from_json(c) if c else None
+            failure = confirmation_failure(conf, (c or {}).get("signature"), order_id, index, proof_hash, pol.owner,
+                                           now, s.chain_id, escrow)
+            if failure:
+                why = "the pending deadline has passed" if late else "the API reported an earlier hold"
+                raise AuthorizerRefused(f"{failure}: {why}")
+        check = self.chain.escrow_check_release(order_id, index, proof, auth)
+        if not check.ok:
+            raise AuthorizerRefused(f"CheckReleaseFailed: {check.error}")
+        digest = auth_digest(s.chain_id, escrow, auth)
+        auth_hash = hex32(digest)
+        signature = sign_digest(self._key, digest)
+        self.db.execute("INSERT INTO signed_releases(auth_hash, request_id, safe, order_id, idx, nonce, signed_at, auth) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (auth_hash, payload.get("requestId"), safe.lower(),
+                                                            str(order_id), index, str(auth.nonce), time.time(),
+                                                            str(payload["authorization"])))
+        return {"signature": signature, "authHash": auth_hash, "signer": self.address}
+
+
 class HttpAuthorizerClient:
     """Used by the API process; the key lives only in the Authorizer process."""
 
@@ -191,6 +293,9 @@ class HttpAuthorizerClient:
 
     def sign_inert(self, payload: dict) -> dict:
         return self._post("/sign-inert", payload)
+
+    def sign_release(self, payload: dict) -> dict:
+        return self._post("/sign-release", payload)
 
     def _post(self, path: str, payload: dict) -> dict:
         try:
@@ -221,6 +326,14 @@ def create_app(authorizer: Authorizer, token: str) -> FastAPI:
         guard(x_aegis_internal)
         try:
             return authorizer.sign(body)
+        except AuthorizerRefused as e:
+            raise HTTPException(409, str(e)) from None
+
+    @app.post("/sign-release")
+    def sign_release(body: dict, x_aegis_internal: str | None = Header(default=None)):
+        guard(x_aegis_internal)
+        try:
+            return authorizer.sign_release(body)
         except AuthorizerRefused as e:
             raise HTTPException(409, str(e)) from None
 

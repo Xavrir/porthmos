@@ -21,8 +21,11 @@ test-integration:
 anvil:
 	anvil --block-time 2
 
+# Deploy.s.sol rewrites deployments/31337.json, so TradeFlow is redeployed and merged back every time (TD v0.4, C10).
 deploy:
 	cd ../contracts && forge script script/Deploy.s.sol --rpc-url $(RPC_URL) --broadcast
+	cd ../contracts && forge script script/DeployTradeEscrow.s.sol --rpc-url $(RPC_URL) --broadcast
+	uv run python scripts/merge_deployment.py --chain-id 31337 --rpc-url $(RPC_URL)
 
 clean:
 	rm -rf var

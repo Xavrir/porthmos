@@ -14,6 +14,7 @@ vaults with a module deposit stay redeemable.
 | `src/MockUSDC.sol` | 6-decimal ERC-20. `mint` is open on chain 31337; owner or registered minter elsewhere |
 | `src/MockPriceFeed.sol` | Chainlink `AggregatorV3Interface`, 8 decimals. `setPrice` (admin), `poke` (admin or keeper) |
 | `src/MockVault.sol` | OpenZeppelin ERC-4626 with `setLiquidityCap`, `accrue`, `setRevertMode` for stress scenarios |
+| `src/TradeEscrow.sol` | TradeFlow escrow [Design v0.3]: three-milestone orders funded by a registered Safe; a release needs an issuer `MilestoneProof` and an Authorizer `ReleaseAuthorization` (EIP-712 domain `TradeEscrow`/`1`); pays only the fixed supplier, refunds only to the buyer Safe |
 
 Dependencies are vendored in `lib/` (installed with `forge install --no-git`): forge-std, OpenZeppelin
 Contracts v5.4.0, Safe smart account v1.4.1. Solidity 0.8.28.
@@ -37,6 +38,10 @@ through an owner-signed Safe transaction.
 | `test/invariant/ContainmentInvariant.t.sol` | F1: adversary with bank, authorizer, exit and executor keys plus a malicious vault the owner never added |
 | `test/invariant/ReserveFloorInvariant.t.sol` | F2: no deposit sequence leaves the Safe below the reserve floor |
 | `test/Eip712.t.sol` | `hashDAR`/`hashApproval` equal the standard `eth_signTypedData_v4` digest |
+| `test/TradeEscrow.t.sol` | TradeFlow T2 to T28, T30, T31: every `createOrder`, `release`, `waive`, `refund` check and error, check order, `checkRelease` parity, fuzz cases |
+| `test/TradeEscrowFunding.t.sol` | T1: funding through a real Safe, delegatecall to MultiSendCallOnly (approve + createOrder), atomicity |
+| `test/TradeEscrowEip712.t.sol` | T29: `hashProof`/`hashAuthorization` equal the `eth_signTypedData_v4` digest, including negative temperatures |
+| `test/invariant/TradeEscrowInvariant.t.sol` | T32 to T35: escrow balance, payees, no double payment, refund timing and `committedOf`, with an adversary holding the Authorizer, Exit, issuer and Executor keys |
 
 ## Deploy to local Anvil
 
@@ -57,6 +62,23 @@ cat ../deployments/31337.json
    reserve floor. Bank sets `bankLimit`. Values are those in INTERFACES.md 1.6.
 5. Mints 10,000 USDC to the Safe and seeds 50,000 USDC of liquidity into each vault.
 6. Writes `deployments/<chainId>.json`.
+
+TradeFlow is a second script. `Deploy.s.sol` rewrites the whole deployments file, so TradeFlow keys go to a sidecar
+and a merge adds them back (TD v0.4, C10). `cd service && make deploy` runs all three steps on 31337:
+
+```bash
+forge script script/DeployTradeEscrow.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+cd ../service && uv run python scripts/merge_deployment.py --chain-id 31337 --rpc-url http://127.0.0.1:8545
+```
+
+`DeployTradeEscrow.s.sol` reads `registry` and `usdc` from `deployments/<chainId>.json`, deploys TradeEscrow, and on
+31337 only deploys MultiSendCallOnly from `lib/safe-smart-account` (elsewhere it requires code at the canonical
+`0x9641d764fc13c8B624c04430C7356C1C7C8102e2`). Demo issuer addresses are Anvil accounts 8 (carrier), 9 (sensor) and
+10 (surveyor) on 31337, and `ISSUER_CARRIER_ADDRESS`, `ISSUER_SENSOR_ADDRESS`, `ISSUER_SURVEYOR_ADDRESS` elsewhere.
+It writes `deployments/<chainId>.tradeflow.json`. `tradeEscrowBlock` is the last block mined before the broadcast,
+a lower bound for log scans. The merge adds `tradeEscrow`, `multiSendCallOnly`, `tradeEscrowBlock` and `issuers` as two
+lines before `"abis"`, and fails without writing if any other byte, key or value would change, if the sidecar was
+deployed against another registry or token, or (with `--rpc-url`) if an address has no code.
 
 Roles use the public Anvil accounts: 0 deployer/admin, 1 owner, 2 bank, 3 authorizer, 4 exit key, 5 executor,
 6 keeper, 7 attacker. On a fresh Anvil the addresses are the same on every run. To deploy again on the same Anvil

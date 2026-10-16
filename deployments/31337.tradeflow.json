@@ -1,0 +1,8 @@
+{
+  "chainId": 31337,
+  "deployedAgainst": {"registry": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853", "usdc": "0x5FbDB2315678afecb367f032d93F642f64180aa3"},
+  "tradeEscrow": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+  "multiSendCallOnly": "0xc6e7DF5E7b4f2A278906862b61205850344D4e7d",
+  "tradeEscrowBlock": 34,
+  "issuers": {"carrier": "0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f", "sensor": "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720", "surveyor": "0xBcd4042DE499D14e55001CcbB24a551F3b954096"}
+}

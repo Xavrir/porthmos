@@ -1,5 +1,5 @@
 import { keccak256, toHex, type Address, type Hex } from 'viem'
-import { placeholderTx, recordedSlot } from './hashes'
+import { recordedSlot } from './hashes'
 import type { ChainEvent, LedgerRow, Obligation, RequestRecord } from '../lib/types'
 import { REPLAY_DEPLOYMENT } from './recorded'
 
@@ -14,7 +14,6 @@ export const blockAt = (ts: number) => E1_BLOCK + Math.round((ts - E1_TS) / 2)
 export const ZERO_HASH = ('0x' + '0'.repeat(64)) as Hex
 
 export const at = (iso: string) => Date.parse(iso) / 1000
-export const txHash = (label: string) => placeholderTx(label)
 
 export type VaultKey = 'A' | 'B'
 
@@ -30,18 +29,6 @@ export type VaultModel = {
   maxRedeemCap: number
   utilisation: number
   allowed: boolean
-}
-
-export type ClientModel = {
-  safe: Address
-  name: string
-  riskScore: number
-  frozen: { owner: boolean; bank: boolean }
-  authorizerRevoked: boolean
-  total: number
-  policyVersion: number
-  lastActivity: number
-  mismatches: number
 }
 
 export type PendingModel = {
@@ -65,7 +52,6 @@ export type Model = {
   requests: Record<string, RequestRecord>
   ledger: LedgerRow[]
   events: ChainEvent[]
-  clients: ClientModel[]
   pending: PendingModel[]
   block: number
   scenario: string | null

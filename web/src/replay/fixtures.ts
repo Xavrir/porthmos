@@ -1,7 +1,7 @@
 import type { Address, Hex } from 'viem'
 import { amount } from '../lib/format'
 import type { ActionCard, ChainEvent, ErrorName, LedgerRow, Obligation, SignedRecord, StateTransition, Tier, WorkflowState } from '../lib/types'
-import { D, E1_DAR_HASH, E1_TS, ZERO_HASH, at, blockAt, hashRow, seedHistory, txHash, type Model } from './model'
+import { D, E1_DAR_HASH, E1_TS, ZERO_HASH, at, blockAt, hashRow, seedHistory, type Model } from './model'
 import { recordedSlot, txForSlot } from './hashes'
 import { RECORDED, SELECTORS } from './recorded'
 
@@ -12,20 +12,7 @@ export function recorded(id: RecordedId): SignedRecord {
   return { primaryType: r.primaryType, message: { ...r.message }, signature: r.signature, signer: r.signer, digest: r.digest }
 }
 
-const KESTREL: Address = D.kestrelSafe as Address
-const TIDEWATER: Address = '0x4Bf8d7d1Fa35b6C5e10c6B6E5C3F3a4Cbd2E91A7'
-const ORCHARD: Address = '0x1cE04E7C2A9b4bE0f7a3a3D8E6c5B0F0aA3d72c4'
-const PINECREST: Address = '0x8D2a4fC0e3F6C9a5b1E7d0A4c3B2f1E0d9C8b7A6'
-
-export const OTHER_CLIENT_NAMES: Record<string, string> = {
-  [KESTREL.toLowerCase()]: 'Kestrel Components',
-  [TIDEWATER.toLowerCase()]: 'Tidewater Logistics',
-  [ORCHARD.toLowerCase()]: 'Orchard Street Studio',
-  [PINECREST.toLowerCase()]: 'Pinecrest Clinics',
-}
-export const DEMO_CLIENT = 'Harbour Lane Imports'
-export const TIDEWATER_SAFE = TIDEWATER
-export const KESTREL_SAFE = KESTREL
+export const DEMO_CLIENT = 'Reference treasury'
 
 export const BASE_OBLIGATIONS: Obligation[] = [
   { id: 'obl-payroll', label: 'Payroll', amount: amount(2400), dueDate: '2026-10-25' },
@@ -37,7 +24,7 @@ export const BASE_OBLIGATIONS: Obligation[] = [
 type Builder = {
   model: Model
   row: (r: Omit<LedgerRow, 'seq' | 'prevHash' | 'rowHash'>) => LedgerRow
-  event: (e: Omit<ChainEvent, 'blockNumber' | 'logIndex'>, blockNumber?: number) => ChainEvent
+  event: (e: Omit<ChainEvent, 'blockNumber' | 'logIndex' | 'txHash'> & { txHash?: Hex }, blockNumber?: number) => ChainEvent | null
   policy: (ts: number, selector: keyof typeof SELECTORS, by: string, summary: string, recordedAs?: string) => void
 }
 
@@ -49,15 +36,17 @@ export function builder(model: Model): Builder {
     model.ledger.push(full)
     return full
   }
+  // Replay shows on-chain events only for transactions recorded on Base Sepolia; the rest stay ledger-only.
   const event: Builder['event'] = (e, blockNumber) => {
-    const full: ChainEvent = { ...e, blockNumber: blockNumber ?? blockAt(e.timestamp), logIndex: 0 }
+    if (!e.txHash) return null
+    const full: ChainEvent = { ...e, txHash: e.txHash, blockNumber: blockNumber ?? blockAt(e.timestamp), logIndex: 0 }
     model.events.push(full)
     return full
   }
   const policy: Builder['policy'] = (ts, selector, by, summary, recordedAs) => {
     model.policy.version += 1
     const rec = recordedAs ? recordedSlot(recordedAs) : undefined
-    const h = rec?.hash ?? txHash(`policy-v${model.policy.version}`)
+    const h = rec?.hash
     event({ name: 'PolicyChanged', txHash: h, timestamp: ts, args: { safe: D.safe, version: model.policy.version, selector: SELECTORS[selector], by } }, rec?.block)
     row({ ts, kind: 'policy', state: 'POLICY_CHANGED', summary: `${summary} (policy v${model.policy.version})`, txHash: h })
   }
@@ -123,7 +112,6 @@ export function buildBaseModel(): Model {
     requests: {},
     ledger: [],
     events: [],
-    clients: [],
     pending: [],
     block: 0,
     scenario: null,
@@ -156,7 +144,7 @@ export function buildBaseModel(): Model {
     id: 'req-a1500', createdAt: at('2026-10-13T02:02:00Z'), message: aMsg, origin: 'owner', state: 'EXPLAINED',
     history: lifecycle(at('2026-10-13T02:02:00Z'), tA, { OPTION_SELECTED: 'Smaller than the default: allowed without escalation', POLICY_CHECKED: 'First deposit into Vault A: tier 3', AWAITING_APPROVAL: 'Waiting for the owner' }, true),
     actionCard: depositCard({ requestId: 'req-a1500', vault: 'A', amount: 1500, tier: 3, reason: 'First deposit into Vault A, so the owner must approve, whatever the amount.', reserveAfter: 8500, sharesOut: 1500, approval: apA }),
-    dar: darA, approvals: [apA], txHash: txHash('a1500'),
+    dar: darA, approvals: [apA],
     options: [
       { id: 'opt-1', label: 'Default: Vault B 3,000.00, Vault A 2,350.00', legs: [{ vault: 'Vault B', amount: '3,000.00' }, { vault: 'Vault A', amount: '2,350.00' }], isDefault: true },
       { id: 'opt-2', label: 'Smaller: Vault A 1,500.00', legs: [{ vault: 'Vault A', amount: '1,500.00' }], chosen: true },
@@ -167,8 +155,8 @@ export function buildBaseModel(): Model {
   model.safeUsdc -= 1500
   model.vaults.A.shares = 1500
   model.vaults.A.everDeposited = true
-  event({ name: 'AegisExecuted', txHash: txHash('a1500'), timestamp: tA, args: { safe: D.safe, darHash: darA.digest!, op: 0, vault: D.vaultA, assets: '1500000000', shares: '1500000000', tier: 3, evidenceHash: String(darA.message.evidenceHash) } })
-  row({ ts: tA, requestId: 'req-a1500', kind: 'execution', state: 'CONFIRMED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(1500), tier: 3, txHash: txHash('a1500'), evidenceHash: darA.message.evidenceHash as Hex, summary: 'Deposit 1,500.00 into Vault A with the owner’s approval (first deposit, tier 3)' })
+  event({ name: 'AegisExecuted', timestamp: tA, args: { safe: D.safe, darHash: darA.digest!, op: 0, vault: D.vaultA, assets: '1500000000', shares: '1500000000', tier: 3, evidenceHash: String(darA.message.evidenceHash) } })
+  row({ ts: tA, requestId: 'req-a1500', kind: 'execution', state: 'CONFIRMED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(1500), tier: 3, evidenceHash: darA.message.evidenceHash as Hex, summary: 'Deposit 1,500.00 into Vault A with the owner’s approval (first deposit, tier 3)' })
 
   const tInj = at('2026-10-13T07:20:00Z')
   model.requests['req-e4c'] = {
@@ -184,28 +172,28 @@ export function buildBaseModel(): Model {
   model.requests['req-e4a'] = {
     id: 'req-e4a', createdAt: tE4a - 30, origin: 'attack_script', state: 'REVERTED', message: 'Attack script: change the amount of a signed record from 900.00 to 4,000.00 and submit it.',
     history: history([['DAR_SIGNED', tE4a - 30, 'Signed for 900.00 into Vault A'], ['SUBMITTED', tE4a, 'Amount edited to 4,000.00 after signing'], ['REVERTED', tE4a + 2, 'BadSignature']]),
-    dar: { ...e4a, message: { ...e4a.message, amount: '4000000000' } }, txHash: txHash('e4a'), revertReason: 'BadSignature',
+    dar: { ...e4a, message: { ...e4a.message, amount: '4000000000' } }, revertReason: 'BadSignature',
     explanation: 'The signature covers every field. With the amount changed, it recovers to a different address than the authorizer.',
   }
-  row({ ts: tE4a + 2, requestId: 'req-e4a', kind: 'rejection', state: 'REVERTED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(4000), tier: 2, txHash: txHash('e4a'), revertReason: 'BadSignature', summary: 'Signed for 900.00, submitted as 4,000.00. Refused with BadSignature.' })
+  row({ ts: tE4a + 2, requestId: 'req-e4a', kind: 'rejection', state: 'REVERTED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(4000), tier: 2, revertReason: 'BadSignature', summary: 'Signed for 900.00, submitted as 4,000.00. Refused with BadSignature.' })
 
   const tE4b = at('2026-10-13T07:33:10Z')
   model.requests['req-e4b'] = {
     id: 'req-e4b', createdAt: tE4b, origin: 'attack_script', state: 'REVERTED', message: 'Attack script: submit the executed 1,500.00 Vault A record a second time.',
     history: history([['SUBMITTED', tE4b, 'Copy of the record from 13 Oct, 10:05'], ['REVERTED', tE4b + 2, 'NonceUsed']]),
-    dar: darA, txHash: txHash('e4b'), revertReason: 'NonceUsed', explanation: 'Each record carries a random nonce that the module marks as used. A copy is refused.',
+    dar: darA, revertReason: 'NonceUsed', explanation: 'Each record carries a random nonce that the module marks as used. A copy is refused.',
   }
-  row({ ts: tE4b + 2, requestId: 'req-e4b', kind: 'rejection', state: 'REVERTED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(1500), tier: 3, txHash: txHash('e4b'), revertReason: 'NonceUsed', summary: 'Replay of the executed Vault A record. Refused with NonceUsed.' })
+  row({ ts: tE4b + 2, requestId: 'req-e4b', kind: 'rejection', state: 'REVERTED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(1500), tier: 3, revertReason: 'NonceUsed', summary: 'Replay of the executed Vault A record. Refused with NonceUsed.' })
 
   const tE4d = at('2026-10-13T07:40:30Z')
   const e4d = recorded('dar-e4d')
   model.requests['req-e4d'] = {
     id: 'req-e4d', createdAt: tE4d - 40, origin: 'owner', state: 'EXPLAINED', message: 'Top up Vault A with 500.',
     history: history([['DAR_SIGNED', tE4d - 40, 'Band 0.9990 to 1.0010 at price 1.0000'], ['SUBMITTED', tE4d, 'Price moved to 1.0015 before inclusion'], ['REVERTED', tE4d + 2, 'PriceOutOfBand'], ['EXPLAINED', tE4d + 3]]),
-    dar: e4d, txHash: txHash('e4d'), revertReason: 'PriceOutOfBand',
+    dar: e4d, revertReason: 'PriceOutOfBand',
     explanation: 'The record was valid when signed. The price moved outside its band before execution, so the contract refused it. Nothing moved.',
   }
-  row({ ts: tE4d + 2, requestId: 'req-e4d', kind: 'rejection', state: 'REVERTED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(500), tier: 2, txHash: txHash('e4d'), revertReason: 'PriceOutOfBand', summary: 'Signed at 1.0000 for a 0.9990 to 1.0010 band; executed at 1.0015. Refused with PriceOutOfBand.' })
+  row({ ts: tE4d + 2, requestId: 'req-e4d', kind: 'rejection', state: 'REVERTED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(500), tier: 2, revertReason: 'PriceOutOfBand', summary: 'Signed at 1.0000 for a 0.9990 to 1.0010 band; executed at 1.0015. Refused with PriceOutOfBand.' })
 
   model.obligations.push({ ...BASE_OBLIGATIONS.find((o) => o.id === 'obl-hosting')! })
   row({ ts: at('2026-10-14T01:00:00Z'), kind: 'obligation', state: 'EXPLAINED', summary: 'Obligation added: Hosting, 200.00 due 5 Nov. Required reserve now 4,500.00.' })
@@ -225,7 +213,7 @@ export function buildBaseModel(): Model {
   const e1Msg = 'Keep payroll safe and put the surplus to work.'
   const apE1 = recorded('apr-e1')
   const darE1 = recorded('dar-e1')
-  const e1Hash = txForSlot('e1-deposit', 'e1')
+  const e1Hash = txForSlot('e1-deposit')
   model.requests['req-e1'] = {
     id: 'req-e1', createdAt: tE1 - 70, message: e1Msg, origin: 'owner', state: 'EXPLAINED',
     history: lifecycle(tE1 - 70, tE1, { OPTION_SELECTED: 'Default option', POLICY_CHECKED: 'First deposit into Vault B: tier 3', AWAITING_APPROVAL: 'Waiting for the owner', APPROVED: 'Owner signed the EIP-712 approval' }, true),
@@ -250,22 +238,22 @@ export function buildBaseModel(): Model {
   model.requests['req-e5d'] = {
     id: 'req-e5d', createdAt: tE5 - 30, origin: 'owner', state: 'REVERTED', message: 'Deposit 800 into Vault A.',
     history: history([['DAR_SIGNED', tE5 - 30], ['SUBMITTED', tE5, 'Submitted by the attack script with a fixed gas limit'], ['REVERTED', tE5 + 2, 'Frozen']]),
-    dar: e5d, txHash: txHash('e5d'), revertReason: 'Frozen', explanation: 'The bank’s freeze stops every deposit, whoever signs it.',
+    dar: e5d, revertReason: 'Frozen', explanation: 'The bank’s freeze stops every deposit, whoever signs it.',
   }
-  row({ ts: tE5 + 2, requestId: 'req-e5d', kind: 'rejection', state: 'REVERTED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(800), tier: 2, txHash: txHash('e5d'), revertReason: 'Frozen', summary: 'Deposit 800.00 during the bank freeze. Refused with Frozen.' })
+  row({ ts: tE5 + 2, requestId: 'req-e5d', kind: 'rejection', state: 'REVERTED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(800), tier: 2, revertReason: 'Frozen', summary: 'Deposit 800.00 during the bank freeze. Refused with Frozen.' })
   const tE5x = at('2026-10-15T01:13:40Z')
   const e5x = recorded('dar-e5-exit')
   const e5assets = 300.36
   model.requests['req-e5x'] = {
     id: 'req-e5x', createdAt: tE5x - 10, origin: 'exit_agent', state: 'CONFIRMED', message: 'Exit Agent: redeem 300 shares of Vault A during the freeze.',
     history: history([['DAR_SIGNED', tE5x - 10, 'Signed by the exit key'], ['SUBMITTED', tE5x - 8], ['CONFIRMED', tE5x]]),
-    dar: e5x, txHash: txHash('e5x'), explanation: 'Redemptions to the Safe skip freezes on purpose, so a freeze never traps funds.',
+    dar: e5x, explanation: 'Redemptions to the Safe skip freezes on purpose, so a freeze never traps funds.',
   }
   model.vaults.A.shares -= 300
   model.vaults.A.sharePrice = 1.0012
   model.safeUsdc += e5assets
-  event({ name: 'AegisExecuted', txHash: txHash('e5x'), timestamp: tE5x, args: { safe: D.safe, darHash: e5x.digest!, op: 1, vault: D.vaultA, assets: '300360000', shares: '300000000', tier: 1, evidenceHash: String(e5x.message.evidenceHash) } })
-  row({ ts: tE5x, requestId: 'req-e5x', kind: 'execution', state: 'CONFIRMED', op: 'REDEEM', vault: 'Vault A', amount: amount(e5assets), tier: 1, txHash: txHash('e5x'), evidenceHash: e5x.message.evidenceHash as Hex, summary: 'Exit Agent redeemed 300 shares of Vault A for 300.36 while frozen' })
+  event({ name: 'AegisExecuted', timestamp: tE5x, args: { safe: D.safe, darHash: e5x.digest!, op: 1, vault: D.vaultA, assets: '300360000', shares: '300000000', tier: 1, evidenceHash: String(e5x.message.evidenceHash) } })
+  row({ ts: tE5x, requestId: 'req-e5x', kind: 'execution', state: 'CONFIRMED', op: 'REDEEM', vault: 'Vault A', amount: amount(e5assets), tier: 1, evidenceHash: e5x.message.evidenceHash as Hex, summary: 'Exit Agent redeemed 300 shares of Vault A for 300.36 while frozen' })
   policy(at('2026-10-15T01:25:00Z'), 'bankUnfreeze', bank, 'Bank lifted its freeze')
 
   const tD2 = at('2026-10-15T05:41:00Z')
@@ -285,14 +273,14 @@ export function buildBaseModel(): Model {
       ['SIMULATED', tD2 + 6], ['DAR_SIGNED', tD2 + 7], ['SUBMITTED', tD2 + 8], ['CONFIRMED', tD2a], ['EXPLAINED', tD2a + 1],
     ]),
     actionCard: depositCard({ requestId: 'req-d2-a', vault: 'A', amount: 1000, tier: 2, reason: 'Routine top-up within the 1,000.00 auto cap.', reserveAfter: 5800.36, sharesOut: 997.61 }),
-    dar: darD2a, txHash: txHash('d2a'), options: d2options, explanation: 'Deposited 1,000.00 into Vault A on my own authority (tier 2). The Vault B leg needs your approval.',
+    dar: darD2a, options: d2options, explanation: 'Deposited 1,000.00 into Vault A on my own authority (tier 2). The Vault B leg needs your approval.',
   }
   model.vaults.A.sharePrice = 1.0024
   model.vaults.A.shares += 997.61
   model.safeUsdc -= 1000
   model.depositedToday = 1000
-  event({ name: 'AegisExecuted', txHash: txHash('d2a'), timestamp: tD2a, args: { safe: D.safe, darHash: darD2a.digest!, op: 0, vault: D.vaultA, assets: '1000000000', shares: '997610000', tier: 2, evidenceHash: String(darD2a.message.evidenceHash) } })
-  row({ ts: tD2a, requestId: 'req-d2-a', kind: 'execution', state: 'CONFIRMED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(1000), tier: 2, txHash: txHash('d2a'), evidenceHash: darD2a.message.evidenceHash as Hex, summary: 'Deposit 1,000.00 into Vault A on the agent’s own authority (tier 2)' })
+  event({ name: 'AegisExecuted', timestamp: tD2a, args: { safe: D.safe, darHash: darD2a.digest!, op: 0, vault: D.vaultA, assets: '1000000000', shares: '997610000', tier: 2, evidenceHash: String(darD2a.message.evidenceHash) } })
+  row({ ts: tD2a, requestId: 'req-d2-a', kind: 'execution', state: 'CONFIRMED', op: 'DEPOSIT', vault: 'Vault A', amount: amount(1000), tier: 2, evidenceHash: darD2a.message.evidenceHash as Hex, summary: 'Deposit 1,000.00 into Vault A on the agent’s own authority (tier 2)' })
 
   const apPending = recorded('apr-d2-b1250')
   const tD2b = at('2026-10-15T05:42:40Z')
@@ -310,22 +298,6 @@ export function buildBaseModel(): Model {
 
   model.vaults.A.sharePrice = 1.0031
   model.vaults.B.sharePrice = 1.0004
-
-  const apK = recorded('apr-kestrel-t4')
-  model.requests['req-kestrel-t4'] = {
-    id: 'req-kestrel-t4', createdAt: at('2026-10-15T04:12:00Z'), origin: 'owner', state: 'AWAITING_APPROVAL', message: 'Kestrel Components: deposit 3,600.00 into Vault A.',
-    history: history([['POLICY_CHECKED', at('2026-10-15T04:12:30Z'), '3,600.00 is above the 3,000.00 bank limit: tier 4'], ['SIMULATED', at('2026-10-15T04:12:31Z')], ['AWAITING_APPROVAL', at('2026-10-15T04:13:00Z'), 'Owner signed; waiting for the bank']]),
-    actionCard: { ...depositCard({ requestId: 'req-kestrel-t4', vault: 'A', amount: 3600, tier: 4, reason: 'Above the bank limit of 3,000.00. The owner has signed; the bank must sign too.', reserveAfter: 31400, sharesOut: 3585.3, approval: apK }) },
-    approvals: [apK],
-  }
-  model.pending.push({ requestId: 'req-kestrel-t4', role: 'bank', safe: KESTREL, client: 'Kestrel Components', createdAt: at('2026-10-15T04:13:00Z'), expiresAt: Number(apK.message.approvalExpiry) })
-
-  model.clients = [
-    { safe: KESTREL, name: 'Kestrel Components', riskScore: 0.31, frozen: { owner: false, bank: false }, authorizerRevoked: false, total: 48200, policyVersion: 7, lastActivity: at('2026-10-15T04:13:00Z'), mismatches: 0 },
-    { safe: TIDEWATER, name: 'Tidewater Logistics', riskScore: 0.64, frozen: { owner: false, bank: true }, authorizerRevoked: true, total: 21750, policyVersion: 19, lastActivity: at('2026-10-15T03:02:00Z'), mismatches: 1 },
-    { safe: ORCHARD, name: 'Orchard Street Studio', riskScore: 0.12, frozen: { owner: false, bank: false }, authorizerRevoked: false, total: 6400, policyVersion: 9, lastActivity: at('2026-10-14T09:48:00Z'), mismatches: 0 },
-    { safe: PINECREST, name: 'Pinecrest Clinics', riskScore: 0.27, frozen: { owner: true, bank: false }, authorizerRevoked: false, total: 132000, policyVersion: 23, lastActivity: at('2026-10-15T05:20:00Z'), mismatches: 0 },
-  ]
 
   return model
 }

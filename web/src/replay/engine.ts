@@ -9,8 +9,8 @@ import type {
   PendingApproval, ReconciliationRow, RequestRecord, RiskReport, Role, ScenarioName, Session, SignedRecord, StreamEvent, Tier,
   TreasuryState, VaultRisk, WorkflowState,
 } from '../lib/types'
-import { builder, buildBaseModel, DEMO_CLIENT, depositCard, KESTREL_SAFE, recorded, TIDEWATER_SAFE, type RecordedId } from './fixtures'
-import { D, EPOCH, blockAt, txHash, type Model, type VaultKey } from './model'
+import { builder, buildBaseModel, DEMO_CLIENT, depositCard, recorded, type RecordedId } from './fixtures'
+import { D, EPOCH, blockAt, type Model, type VaultKey } from './model'
 import { recordedSlot } from './hashes'
 import { REPLAY_APPROVAL_SIGNATURES } from './recorded'
 
@@ -287,7 +287,7 @@ export class ReplayApi implements AegisApi {
   private holdIfFloorOutOfSync() {
     if (this.model.floor >= this.required().required) return
     for (const r of Object.values(this.model.requests)) {
-      if (r.state === 'AWAITING_APPROVAL' && r.actionCard?.op === 'DEPOSIT' && r.id !== 'req-kestrel-t4') {
+      if (r.state === 'AWAITING_APPROVAL' && r.actionCard?.op === 'DEPOSIT') {
         this.transition(r, 'STATE_LOADED', 'Obligation schedule changed')
         this.transition(r, 'HELD', 'FloorOutOfSync: the on-chain floor is below the new required reserve')
       }
@@ -312,7 +312,7 @@ export class ReplayApi implements AegisApi {
     const row = this.model.ledger[this.model.ledger.length - 1]
     const ev = this.model.events[this.model.events.length - 1]
     if (row) this.emit({ type: 'ledger', data: row })
-    if (ev) this.emit({ type: 'execution', data: ev })
+    if (ev && row && ev.timestamp === row.ts) this.emit({ type: 'execution', data: ev })
     this.emit({ type: 'policy', data: { version: this.model.policy.version, frozen: { ...this.model.policy.frozen } } })
   }
 
@@ -320,7 +320,7 @@ export class ReplayApi implements AegisApi {
     const m = this.model
     const need = m.floor + m.fees - m.safeUsdc
     for (const r of Object.values(m.requests)) {
-      if ((r.state === 'HELD' || r.state === 'AWAITING_APPROVAL') && r.actionCard?.op === 'DEPOSIT' && r.id !== 'req-kestrel-t4') {
+      if ((r.state === 'HELD' || r.state === 'AWAITING_APPROVAL') && r.actionCard?.op === 'DEPOSIT') {
         this.transition(r, 'CANCELLED', 'No longer fits above the new reserve floor')
         this.dropPending(r.id)
         const { row } = builder(m)
@@ -400,13 +400,13 @@ export class ReplayApi implements AegisApi {
     v.shares = Math.max(0, Math.round((v.shares - shares) * 100) / 100)
     m.safeUsdc = Math.round((m.safeUsdc + assets) * 100) / 100
     const rec3 = slot ? recordedSlot(slot) : undefined
-    const h = rec3?.hash ?? txHash(`redeem-${r.id}`)
+    const h = rec3?.hash
     r.txHash = h
     const b = builder(m)
     const ev = b.event({ name: 'AegisExecuted', txHash: h, timestamp: this.now(), args: { safe: D.safe, darHash: r.dar.digest ?? keccak256(toHex(r.id)), op: 1, vault: v.address, assets: toUnits(assets).toString(), shares: toUnits(shares).toString(), tier: 1, evidenceHash: keccak256(toHex('ev-' + r.id)) } }, rec3?.block ?? blockAt(this.now()))
     const row = b.row({ ts: this.now(), requestId: r.id, kind: 'execution', state: 'CONFIRMED', op: 'REDEEM', vault: v.name, amount: amount(assets), tier: 1, txHash: h, summary: `${signer === 'exitKey' ? 'Exit Agent redeemed' : 'Redeemed'} ${money(shares)} shares of ${v.name} for ${money(assets)}: ${why}` })
     this.transition(r, 'CONFIRMED', `Received ${money(assets)} (minimum ${money(minOut)})`)
-    this.emit({ type: 'execution', data: ev })
+    if (ev) this.emit({ type: 'execution', data: ev })
     this.emit({ type: 'ledger', data: row })
     this.emitState()
     await wait(300)
@@ -477,7 +477,7 @@ export class ReplayApi implements AegisApi {
       this.transition(r, 'STATE_LOADED')
       this.transition(r, 'RISK_EVALUATED')
       const idle = Math.floor((m.safeUsdc - m.floor - m.fees) * 100) / 100
-      const pending = Object.values(m.requests).find((q) => q.state === 'AWAITING_APPROVAL' && q.id !== 'req-kestrel-t4')
+      const pending = Object.values(m.requests).find((q) => q.state === 'AWAITING_APPROVAL')
       if (!t.reserve.inSync) {
         this.transition(r, 'HELD', 'FloorOutOfSync')
         r.explanation = `The schedule needs a reserve of ${t.reserve.required.display}, but the on-chain floor is ${t.reserve.onchainFloor.display}. Sign the floor update on the Treasury page first; until then I hold.`
@@ -621,14 +621,12 @@ export class ReplayApi implements AegisApi {
     v.everDeposited = true
     m.safeUsdc = Math.round((m.safeUsdc - value) * 100) / 100
     m.depositedToday += value
-    const h = txHash(`deposit-${r.id}`)
-    r.txHash = h
-    const b = builder(m)
-    const ev = b.event({ name: 'AegisExecuted', txHash: h, timestamp: this.now(), args: { safe: D.safe, darHash: r.dar.digest ?? keccak256(toHex(r.id)), op: 0, vault: v.address, assets: toUnits(value).toString(), shares: toUnits(shares).toString(), tier: r.actionCard?.tier ?? 2, evidenceHash: (r.dar.message.evidenceHash as string) ?? keccak256(toHex('ev-' + r.id)) } })
-    const row = b.row({ ts: this.now(), requestId: r.id, kind: 'execution', state: 'CONFIRMED', op: 'DEPOSIT', vault: v.name, amount: amount(value), tier: r.actionCard?.tier, txHash: h, evidenceHash: r.dar.message.evidenceHash as Hex | undefined, summary: `Deposit ${money(value)} into ${v.name}${(r.actionCard?.tier ?? 2) >= 3 ? ' with the owner’s approval' : ' on the agent’s own authority'} (tier ${r.actionCard?.tier})` })
+        const b = builder(m)
+    const ev = b.event({ name: 'AegisExecuted', timestamp: this.now(), args: { safe: D.safe, darHash: r.dar.digest ?? keccak256(toHex(r.id)), op: 0, vault: v.address, assets: toUnits(value).toString(), shares: toUnits(shares).toString(), tier: r.actionCard?.tier ?? 2, evidenceHash: (r.dar.message.evidenceHash as string) ?? keccak256(toHex('ev-' + r.id)) } })
+    const row = b.row({ ts: this.now(), requestId: r.id, kind: 'execution', state: 'CONFIRMED', op: 'DEPOSIT', vault: v.name, amount: amount(value), tier: r.actionCard?.tier, evidenceHash: r.dar.message.evidenceHash as Hex | undefined, summary: `Deposit ${money(value)} into ${v.name}${(r.actionCard?.tier ?? 2) >= 3 ? ' with the owner’s approval' : ' on the agent’s own authority'} (tier ${r.actionCard?.tier})` })
     this.dropPending(r.id)
     this.transition(r, 'CONFIRMED', `Received ${money(shares)} shares; approval reset to zero`)
-    this.emit({ type: 'execution', data: ev })
+    if (ev) this.emit({ type: 'execution', data: ev })
     this.emit({ type: 'ledger', data: row })
     this.emitState()
     await wait(300)
@@ -646,7 +644,7 @@ export class ReplayApi implements AegisApi {
 
   private liveCard(r: RequestRecord): ActionCard {
     const card = structuredClone(r.actionCard!)
-    if (r.state !== 'AWAITING_APPROVAL' || card.op !== 'DEPOSIT' || r.id === 'req-kestrel-t4') return card
+    if (r.state !== 'AWAITING_APPROVAL' || card.op !== 'DEPOSIT' ) return card
     const value = fromUnits(card.amount.raw)
     const k: VaultKey = lower(card.vault.address) === lower(D.vaultA) ? 'A' : 'B'
     card.policyChecks = this.policyChecks(k, value)
@@ -657,11 +655,11 @@ export class ReplayApi implements AegisApi {
   }
 
   async listRequests(): Promise<RequestRecord[]> {
-    return Object.values(this.model.requests).filter((r) => r.id !== 'req-kestrel-t4').sort((a, b) => b.createdAt - a.createdAt).map((r) => structuredClone(r))
+    return Object.values(this.model.requests).sort((a, b) => b.createdAt - a.createdAt).map((r) => structuredClone(r))
   }
 
   private recordedFor(id: string): { signature: Hex; signer: Address; nonce: string } | null {
-    const key = id === 'req-d2-b' ? 'apr-d2-b1250' : id === 'req-kestrel-t4' ? 'apr-kestrel-t4' : null
+    const key = id === 'req-d2-b' ? 'apr-d2-b1250' : null
     if (!key) return null
     const r = REPLAY_APPROVAL_SIGNATURES[key]
     return { signature: r.signature as Hex, signer: r.signer as Address, nonce: String(recorded(key).message.approvalNonce) }
@@ -697,20 +695,6 @@ export class ReplayApi implements AegisApi {
     const signed: SignedRecord = { primaryType: 'Approval', message: body.approval, signature: simulated ? null : body.signature, signer, replayUnsigned: simulated }
     r.approvals = [signed, ...(r.approvals?.slice(1) ?? [])]
     const who = simulated ? `${role} approval simulated in replay` : `${role === 'bank' ? 'Bank' : 'Owner'} signed (${signer.slice(0, 6)}…${signer.slice(-4)})`
-    if (id === 'req-kestrel-t4') {
-      this.transition(r, 'APPROVED', who)
-      this.dropPending(id)
-      const c = this.model.clients.find((x) => lower(x.safe) === lower(KESTREL_SAFE))
-      void (async () => {
-        await wait(700); this.transition(r, 'FINAL_REVALIDATION')
-        await wait(700); this.transition(r, 'DAR_SIGNED')
-        await wait(900); this.transition(r, 'SUBMITTED')
-        await wait(1200); r.txHash = txHash('kestrel-t4'); this.transition(r, 'CONFIRMED', 'Deposit 3,600.00 into Vault A for Kestrel Components')
-        if (c) c.lastActivity = this.now()
-        this.transition(r, 'EXPLAINED')
-      })()
-      return structuredClone(r)
-    }
     this.transition(r, 'APPROVED', who)
     this.dropPending(id)
     this.emit({ type: 'state', data: { requestId: id, state: 'APPROVED', note: 'No longer waiting for a signature' } })
@@ -781,42 +765,18 @@ export class ReplayApi implements AegisApi {
       mismatches: (await this.reconciliation(D.safe as Address)).filter((x) => x.status !== 'match').length, total: t.balances.total, policyVersion: this.model.policy.version,
       lastActivity: this.model.ledger[this.model.ledger.length - 1]?.ts,
     }
-    const others = this.model.clients.map((c) => ({
-      safe: c.safe, name: c.name, riskScore: c.riskScore, frozen: { ...c.frozen }, authorizerRevoked: c.authorizerRevoked,
-      pendingEscalations: this.model.pending.filter((p) => lower(p.safe) === lower(c.safe)).length, mismatches: c.mismatches, total: amount(c.total), policyVersion: c.policyVersion, lastActivity: c.lastActivity,
-    }))
-    return [own, ...others]
+    return [own]
   }
 
   async reconciliation(safe: Address): Promise<ReconciliationRow[]> {
     if (lower(safe) === lower(D.safe)) return reconcile(this.model.ledger, this.model.events)
-    if (lower(safe) === lower(TIDEWATER_SAFE)) {
-      return [
-        { key: 'tw-1', ledger: { seq: 41, summary: 'Deposit 1,200.00 into Vault B (tier 3)', amount: amount(1200), txHash: txHash('tw-1'), hashOk: true }, chain: { name: 'AegisExecuted', txHash: txHash('tw-1'), blockNumber: 1204, amount: amount(1200) }, status: 'match' },
-        { key: 'tw-2', ledger: { seq: 44, summary: 'Deposit 900.00 into Vault A (tier 2)', amount: amount(900), txHash: txHash('tw-2'), hashOk: false }, chain: { name: 'AegisExecuted', txHash: txHash('tw-2'), blockNumber: 1219, amount: amount(1900) }, status: 'amount-mismatch' },
-        { key: 'tw-3', ledger: { seq: 45, summary: 'Exit Agent redeemed 400.00 from Vault A', amount: amount(400), txHash: txHash('tw-3'), hashOk: false }, chain: { name: 'AegisExecuted', txHash: txHash('tw-3'), blockNumber: 1223, amount: amount(400) }, status: 'hash-broken' },
-      ]
-    }
-    return [
-      { key: safe + '-1', ledger: { seq: 12, summary: 'Deposit 2,000.00 into Vault A (tier 3)', amount: amount(2000), txHash: txHash(safe + '1'), hashOk: true }, chain: { name: 'AegisExecuted', txHash: txHash(safe + '1'), blockNumber: 902, amount: amount(2000) }, status: 'match' },
-      { key: safe + '-2', ledger: { seq: 17, summary: 'Deposit 750.00 into Vault B (tier 2)', amount: amount(750), txHash: txHash(safe + '2'), hashOk: true }, chain: { name: 'AegisExecuted', txHash: txHash(safe + '2'), blockNumber: 951, amount: amount(750) }, status: 'match' },
-    ]
+    return []
   }
 
   async simulateBankAction(action: BankAction, safe: Address, actor: Address) {
     if (lower(actor) !== lower(D.roles.bank)) throw new ApiError(`Unauthorized: ${action} is a bank-only call and ${actor} is not the bank.`, 403)
     const now = this.now()
-    if (lower(safe) !== lower(D.safe)) {
-      const c = this.model.clients.find((x) => lower(x.safe) === lower(safe))
-      if (!c) throw new ApiError('Unknown Safe', 404)
-      if (action === 'bankFreeze') c.frozen.bank = true
-      if (action === 'bankUnfreeze') c.frozen.bank = false
-      if (action === 'revokeAuthorizer') { c.authorizerRevoked = true; c.frozen.bank = true }
-      c.policyVersion += 1
-      c.lastActivity = now
-      this.emit({ type: 'notice', data: { level: 'info', text: `${c.name}: ${label(action)} (policy v${c.policyVersion}).` } })
-      return
-    }
+    if (lower(safe) !== lower(D.safe)) throw new ApiError('Unknown Safe', 404)
     const p = this.model.policy
     if (action === 'bankUnfreeze' && !p.frozen.bank) throw new ApiError('The bank has not frozen this Safe.', 409)
     const b = builder(this.model)
@@ -871,13 +831,13 @@ export class ReplayApi implements AegisApi {
       const b = builder(m)
       m.policy.version += 1
       const qs = quarantineSlots[k] ? recordedSlot(quarantineSlots[k]!) : undefined
-      const h = qs?.hash ?? txHash(`quarantine-${k}-${this.now()}`)
+      const h = qs?.hash
       const ev = b.event({ name: 'Quarantined', txHash: h, timestamp: this.now(), args: { safe: D.safe, vault: v.address, by: D.roles.exitKey } }, qs?.block ?? blockAt(this.now()))
       const row = b.row({ ts: this.now(), kind: 'risk', state: 'QUARANTINED', vault: v.name, txHash: h, summary: `${why}: ${v.name} quarantined by the exit key (policy v${m.policy.version}). Deposits into it now revert VaultQuarantined.` })
-      this.emit({ type: 'execution', data: ev })
+      if (ev) this.emit({ type: 'execution', data: ev })
       this.emit({ type: 'ledger', data: row })
       for (const r of Object.values(m.requests)) {
-        if (r.state === 'AWAITING_APPROVAL' && r.actionCard?.op === 'DEPOSIT' && lower(r.actionCard.vault.address) === lower(v.address) && r.id !== 'req-kestrel-t4') {
+        if (r.state === 'AWAITING_APPROVAL' && r.actionCard?.op === 'DEPOSIT' && lower(r.actionCard.vault.address) === lower(v.address)) {
           this.transition(r, 'CANCELLED', `${v.name} quarantined: pending deposit dropped`)
           this.dropPending(r.id)
           this.emit({ type: 'ledger', data: b.row({ ts: this.now(), requestId: r.id, kind: 'cancel', state: 'CANCELLED', op: 'DEPOSIT', vault: v.name, amount: r.actionCard.amount, summary: `Pending deposit of ${r.actionCard.amount.display} into ${v.name} dropped after quarantine.` }) })
@@ -952,9 +912,6 @@ function round3(n: number) {
   return Math.round(n * 1000) / 1000
 }
 
-function label(a: BankAction) {
-  return a === 'bankFreeze' ? 'deposits frozen by the bank' : a === 'bankUnfreeze' ? 'bank freeze lifted' : 'authorizer revoked and deposits frozen'
-}
 
 function RECORDED_AMOUNT(id: RecordedId): number {
   return fromUnits(String(recorded(id).message.amount))

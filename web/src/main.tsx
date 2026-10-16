@@ -25,7 +25,8 @@ const queryClient = new QueryClient({
 
 startReveal()
 
-createRoot(document.getElementById('root')!).render(
+// Not "root": some embedding browsers inject a #root background rule (rgb(20, 25, 36)) that beats our own styles.
+createRoot(document.getElementById('porthmos')!).render(
   <StrictMode>
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>

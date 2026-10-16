@@ -77,3 +77,65 @@ export function treasuryNow(t: TreasuryState, fallbackTs: number) {
 export function latestTs(rows: readonly LedgerRow[] | undefined): number {
   return rows?.length ? Math.max(...rows.map((r) => r.ts)) : Math.floor(Date.now() / 1000)
 }
+
+export type HoldingPoint = { t: number; values: Record<string, number> }
+export const CASH = 'cash'
+
+// Same walk as balanceSeries, kept per vault so a stacked chart can show where the money sat.
+export function holdingSeries(rows: readonly LedgerRow[], now: { t: number; cash: number; vaults: { key: string; value: number }[] }): HoldingPoint[] {
+  const flows = rows
+    .filter((r) => r.kind === 'execution' && r.amount && r.vault && (r.op === 'DEPOSIT' || r.op === 'REDEEM'))
+    .map((r) => ({ t: r.ts, vault: r.vault!, delta: (r.op === 'DEPOSIT' ? 1 : -1) * num(r.amount) }))
+    .sort((a, b) => a.t - b.t)
+  if (!flows.length) return []
+  const values: Record<string, number> = { [CASH]: now.cash }
+  for (const v of now.vaults) values[v.key] = v.value
+  const last = flows[flows.length - 1].t
+  const end = Math.max(now.t, last)
+  const points: HoldingPoint[] = [{ t: end, values: { ...values } }]
+  for (let i = flows.length - 1; i >= 0; i--) {
+    const f = flows[i]
+    points.push({ t: f.t, values: { ...values } })
+    values[CASH] += f.delta
+    values[f.vault] = Math.max(0, (values[f.vault] ?? 0) - f.delta)
+  }
+  points.push({ t: flows[0].t - Math.max(3600, (end - flows[0].t) * 0.05), values: { ...values } })
+  return points.reverse()
+}
+
+const STEPS = [900, 1800, 3600, 7200, 10800, 21600, 43200, 86400]
+
+// A balance holds between executions, so each sample takes the last known value at or before it.
+export function resample(points: readonly HoldingPoint[], target = 96): HoldingPoint[] {
+  if (points.length < 2) return [...points]
+  const t0 = points[0].t
+  const t1 = points[points.length - 1].t
+  const step = STEPS.find((s) => (t1 - t0) / s <= target) ?? 86400
+  const out: HoldingPoint[] = []
+  let k = 0
+  for (let t = Math.ceil(t0 / step) * step; t < t1; t += step) {
+    while (k + 1 < points.length && points[k + 1].t <= t) k++
+    out.push({ t, values: points[k].values })
+  }
+  return [points[0], ...out.filter((p) => p.t > t0), points[points.length - 1]]
+}
+
+const TICK_STEPS = [300, 600, 900, 1800, 3600, 3 * 3600, 6 * 3600, 12 * 3600, 86400, 2 * 86400, 7 * 86400]
+
+// Ticks fall on UTC+8 hour and day boundaries, the zone every time in the app is shown in.
+export function timeTicks(t0: number, t1: number, max = 6): number[] {
+  const span = Math.max(1, t1 - t0)
+  const step = TICK_STEPS.find((s) => span / s <= max) ?? 7 * 86400
+  const first = Math.ceil((t0 + DAY_OFFSET) / step) * step - DAY_OFFSET
+  const out: number[] = []
+  for (let t = first; t <= t1; t += step) out.push(t)
+  return out
+}
+
+// Cuts a step history to [start, end], opening with the balance that held at start.
+export function since(points: readonly HoldingPoint[], start: number): HoldingPoint[] {
+  if (!points.length || start <= points[0].t) return [...points]
+  let k = 0
+  while (k + 1 < points.length && points[k + 1].t <= start) k++
+  return [{ t: start, values: points[k].values }, ...points.filter((p) => p.t > start)]
+}

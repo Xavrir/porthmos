@@ -3,22 +3,24 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type Address, type Hex } from 'viem'
 import { ReserveBar } from '../components/ReserveBar'
-import { Chip, ErrorNote, Figure, Hash, Kpis, Loading, PageHeader, type Tone, type Trend } from '../components/bits'
-import { SwitchSeat, usePageTitle, useTreasuryName } from '../components/chrome'
+import { Chip, ErrorNote, Figure, Hash, InfoTip, Kpis, Loading, PageHeader, Section, type Tone, type Trend } from '../components/bits'
+import { SwitchSeat, usePageTitle } from '../components/chrome'
 import { SignConfirm } from '../components/SignConfirm'
 import { TxStatus } from '../components/TxStatus'
-import { GLOSSARY_DEF, Term } from '../components/Glossary'
-import { BalanceChart } from '../components/charts'
+import { GLOSSARY_DEF } from '../components/Glossary'
+import { StackedAreaChart, type AreaSeries, type Slot } from '../components/charts'
 import { DataTable, type Column } from '../components/DataTable'
+import { MenuButton } from '../components/Menu'
 import { CopyButton, DetailDrawer, DrawerSection, KeyValues, useHashParam } from '../components/Drawer'
 import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
 import { useLedger, useObligations, useRisk, useTreasury } from '../lib/queries'
-import { day, fromUnits, money, num, pct, shortHex } from '../lib/format'
-import { balanceSeries, dailyTotals, delta, latestTs, treasuryNow, vaultFlows } from '../lib/history'
+import { day, fromUnits, money, num, pct, shortHex, stamp } from '../lib/format'
+import { CASH, delta, holdingSeries, latestTs, resample, since } from '../lib/history'
 import { buildFloorTx, guardedSend, pinnedFor, sendFloorUpdate, type FloorPlan } from '../lib/txguard'
-import { chainName, explorerAddress } from '../lib/wallet'
+import { explorerAddress } from '../lib/wallet'
 import { toast } from '../lib/toast'
+import { Icon } from '../components/icons'
 import type { Obligation, TreasuryState, TxRequest } from '../lib/types'
 
 type ObStatus = 'due' | 'inflow' | 'settled'
@@ -50,10 +52,16 @@ function signed(v: number) {
   return `${v >= 0 ? '+' : '−'}${money(Math.abs(v))}`
 }
 
+const SPARK_POINTS = 24
+const RANGES = [
+  { key: '1d', label: 'Last 24 hours', seconds: 86400 },
+  { key: '3d', label: 'Last 3 days', seconds: 3 * 86400 },
+  { key: 'all', label: 'All time', seconds: Infinity },
+] as const
+
 export default function Treasury() {
   usePageTitle('Treasury')
   const { api, mode, chainId, tenant } = useAegis()
-  const name = useTreasuryName()
   const { role, address, sendTx, isLocal, identity } = useIdentity()
   const qc = useQueryClient()
   const t = useTreasury()
@@ -67,6 +75,9 @@ export default function Treasury() {
   const [status, setStatus] = useState('')
   const [obOpen, openOb, closeOb] = useHashParam('ob')
   const [posOpen, openPos, closePos] = useHashParam('pos')
+  const [addOpen, openAdd, closeAdd] = useHashParam('add')
+  const [polOpen, openPol, closePol] = useHashParam('policy')
+  const [range, setRange] = useState<(typeof RANGES)[number]['key']>('all')
   const tr = t.data
   const sessionSafe = tenant?.safe ?? pinnedFor(chainId)?.safe ?? null
 
@@ -74,17 +85,19 @@ export default function Treasury() {
     mutationFn: () => api.addObligation(form),
     onSuccess: (res) => {
       setFloorTx(res.floorUpdate)
-      setStatus(`Added ${res.obligation.label}, ${res.obligation.amount.display} due ${day(res.obligation.dueDate)}. The reserve was recomputed; check the floor above.`)
+      setStatus(`Added ${res.obligation.label}, ${res.obligation.amount.display} due ${day(res.obligation.dueDate)}. The reserve was recomputed.`)
+      toast({ tone: 'ok', title: `Added ${res.obligation.label}`, text: `${res.obligation.amount.display} due ${day(res.obligation.dueDate)}` }, 5000)
       setForm({ label: '', amount: '', dueDate: '', confirmedInflow: false })
       qc.invalidateQueries({ queryKey: ['obligations'] })
       qc.invalidateQueries({ queryKey: ['treasury'] })
+      if (!(res.floorUpdate && mode === 'live')) closeAdd()
     },
   })
   const settle = useMutation({
     mutationFn: (id: string) => api.settleObligation(id),
     onSuccess: (_res, id) => {
       const ob = obs.data?.find((o) => o.id === id)
-      setStatus(`Settled ${ob?.label ?? 'the obligation'}${ob ? `, ${ob.amount.display}` : ''}. It no longer counts toward the reserve. The on-chain floor stays where the owner signed it.`)
+      setStatus(`Settled ${ob?.label ?? 'the obligation'}${ob ? `, ${ob.amount.display}` : ''}. The on-chain floor stays where the owner signed it.`)
       toast({ tone: 'ok', title: `Settled ${ob?.label ?? 'the obligation'}`, text: 'It no longer counts toward the reserve.' }, 5000)
       qc.invalidateQueries({ queryKey: ['obligations'] }); qc.invalidateQueries({ queryKey: ['treasury'] })
     },
@@ -126,28 +139,29 @@ export default function Treasury() {
 
   const submit = (e: FormEvent) => { e.preventDefault(); add.mutate() }
   const today = tr ? num(tr.depositedToday) : 0
-  const floorNote = !tr ? '' : !tr.reserve.inSync
+  const cap = tr ? num(tr.policy.dailyCap) : 0
+  const outOfSync = !!tr && !tr.reserve.inSync
+  const floorNote = !tr ? '' : outOfSync
     ? `Schedule needs ${tr.reserve.required.display}`
-    : Math.abs(num(tr.reserve.onchainFloor) - num(tr.reserve.required)) < 0.005
-      ? 'Matches the schedule'
-      : `Covers the schedule (needs ${tr.reserve.required.display})`
+    : Math.abs(num(tr.reserve.onchainFloor) - num(tr.reserve.required)) < 0.005 ? 'Matches schedule' : `Schedule needs ${tr.reserve.required.display}`
 
+  const vaultSeries: AreaSeries[] = (tr?.balances.vaults ?? []).slice(0, 3).map((v, i) => ({ key: v.name, label: v.name, slot: (i + 2) as Slot }))
+  const series: AreaSeries[] = [{ key: CASH, label: 'Cash in Safe', slot: 1 }, ...vaultSeries]
   const history = useMemo(() => {
     const rows = ledger.data ?? []
-    const flows = vaultFlows(rows)
-    const nowTs = tr?.updatedAt ?? latestTs(rows)
-    const series = tr ? balanceSeries(flows, treasuryNow(tr, nowTs)) : []
-    const daily = dailyTotals(flows.filter((f) => f.delta > 0).map((f) => ({ t: f.t, v: f.delta })), 7, nowTs, 0)
-    return { flows, series, daily }
-  }, [ledger.data, tr])
+    if (!tr) return { changes: [], points: [] }
+    const end = tr.updatedAt ?? latestTs(rows)
+    const all = holdingSeries(rows, { t: end, cash: num(tr.balances.safeUsdc), vaults: tr.balances.vaults.map((v) => ({ key: v.name, value: num(v.assets) })) })
+    const seconds = RANGES.find((r) => r.key === range)!.seconds
+    const changes = Number.isFinite(seconds) ? since(all, end - seconds) : all
+    return { changes, points: resample(changes) }
+  }, [ledger.data, tr, range])
   const vaultsNow = tr ? tr.balances.vaults.reduce((a, v) => a + num(v.assets), 0) : 0
-  const vaultTrend: Trend | undefined = history.series.length ? (() => {
-    const d = delta(history.series[0].vaults, vaultsNow)
+  const inVaults = (p: { values: Record<string, number> }) => vaultSeries.reduce((a, s) => a + (p.values[s.key] ?? 0), 0)
+  const spark = history.points.length ? resample(history.changes, SPARK_POINTS).map(inVaults) : undefined
+  const vaultTrend: Trend | undefined = history.changes.length ? (() => {
+    const d = delta(inVaults(history.changes[0]), vaultsNow)
     return { text: d.pct === null ? signed(d.abs) : `${d.abs >= 0 ? '+' : '−'}${pct(Math.abs(d.pct), 1)}`, dir: d.dir }
-  })() : undefined
-  const dayTrend: Trend | undefined = history.flows.length && Math.abs(history.daily[6] - today) < 0.005 ? (() => {
-    const d = delta(history.daily[5], history.daily[6])
-    return { text: signed(d.abs), dir: d.dir }
   })() : undefined
 
   const obRows = obs.data ?? []
@@ -156,103 +170,124 @@ export default function Treasury() {
   const posSel = positions.find((p) => p.key.toLowerCase() === posOpen?.toLowerCase()) ?? null
   const vaultRisk = posSel ? risk.data?.vaults.find((v) => v.address.toLowerCase() === posSel.address.toLowerCase()) : undefined
   const canSettle = role === 'owner' && !settle.isPending
+  const frozen = tr ? tr.policy.frozen.owner || tr.policy.frozen.bank : false
 
   const obColumns: Column<Obligation>[] = [
     { key: 'label', header: 'Item', primary: true, cell: (o) => o.label },
     { key: 'due', header: 'Due', cell: (o) => <span className="nums nowrap">{day(o.dueDate)}</span> },
-    { key: 'amount', header: 'Amount', align: 'right', cell: (o) => <span className="nums">{o.confirmedInflow ? '+' : ''}{o.amount.display}</span> },
+    { key: 'amount', header: 'Amount, USDC', align: 'right', cell: (o) => <span className="nums">{o.confirmedInflow ? '+' : ''}{o.amount.display}</span> },
     { key: 'kind', header: 'Status', cell: (o) => <ObChip o={o} /> },
   ]
   const posColumns: Column<Position>[] = [
     { key: 'name', header: 'Holding', primary: true, cell: (p) => p.name },
     { key: 'address', header: 'Address', hideNarrow: true, cell: (p) => <Hash value={p.address} kind="address" label={p.name} /> },
-    { key: 'shares', header: 'Shares', align: 'right', hideNarrow: true, cell: (p) => <span className="nums">{p.shares ?? 'n/a'}</span> },
+    { key: 'shares', header: 'Shares', align: 'right', hideNarrow: true, cell: (p) => <span className="nums">{p.shares ?? ''}</span> },
     { key: 'value', header: 'Value, USDC', align: 'right', cell: (p) => <span className="nums">{p.value}</span> },
     { key: 'status', header: 'Status', cell: (p) => <Chip state={p.label} tone={p.tone}>{p.label}</Chip> },
   ]
+  const floorButton = (
+    <button type="button" className="button" disabled={role !== 'owner' || signFloor.isPending || prepare.isPending || !!plan} onClick={askFloor}>
+      {signFloor.isPending || prepare.isPending ? 'Preparing…' : 'Sign the new floor'}
+    </button>
+  )
+  const addButton = (primary: boolean) => <button type="button" className={`button${primary ? '' : ' quiet'}`} onClick={() => openAdd('obligation')}><Icon name="plus" />Add obligation</button>
 
   return (
     <main id="main" className="page">
       <div className="page-body">
         <PageHeader
           title="Treasury"
-          description={<>{name}{mode === 'replay' ? ' (sample client)' : ''}. Cash for what the business owes stays in the Safe; only the surplus goes to work.</>}
-          meta={tr ? <>Safe <Hash value={tr.safe} kind="address" label="Safe address" /> on {chainName(chainId)}</> : null}
-          actions={tr && !tr.reserve.inSync ? (
-            <button type="button" className="button" disabled={role !== 'owner' || signFloor.isPending || prepare.isPending || !!plan} onClick={askFloor}>{signFloor.isPending || prepare.isPending ? 'Preparing…' : 'Sign the new floor'}</button>
-          ) : (
-            <button type="button" className="button" onClick={() => { const el = document.getElementById('ob-label'); el?.scrollIntoView({ block: 'center' }); el?.focus({ preventScroll: true }) }}>Add an obligation</button>
-          )}
+          info="Cash for what the business owes stays in the Safe. Only the surplus goes to work in vaults the owner added."
+          actions={outOfSync ? <>{addButton(false)}{floorButton}</> : addButton(true)}
         />
-        <Kpis label="Treasury figures">
-          <Figure label="Total balance" value={tr ? tr.balances.total.display : '…'} note="USDC across the Safe and vaults" />
-          <Figure label="Reserve floor, on-chain" value={tr ? tr.reserve.onchainFloor.display : '…'} note={floorNote} tone={tr && !tr.reserve.inSync ? 'alert' : undefined} />
-          <Figure label="Free to deploy" value={tr ? tr.deployable.display : '…'} note="Above the higher of floor and schedule, after fees" />
-          <Figure label="In vaults" value={tr ? money(vaultsNow) : '…'} spark={history.series.length ? history.series.map((p) => p.vaults) : undefined} trend={vaultTrend}
-            note={history.series.length ? `Since ${day(history.series[0].t)}, from executions` : 'No executions yet'} />
-          <Figure label="Deposited today" value={tr ? money(today) : '…'} spark={history.flows.length ? history.daily : undefined} trend={dayTrend}
-            note={tr ? `${dayTrend ? `vs ${money(history.daily[5])} the day before (UTC). ` : ''}Cap ${tr.policy.dailyCap.display}` : ''} />
-        </Kpis>
 
-        {tr && !tr.reserve.inSync ? (
+        {outOfSync && tr ? (
           <section className="alert-block" role="alert" aria-labelledby="sync-title">
-            <h2 id="sync-title">The floor is out of date</h2>
-            <p>The approved schedule needs a reserve of {tr.reserve.required.display}, but the floor on-chain is {tr.reserve.onchainFloor.display}. The planner holds every action with <code>FloorOutOfSync</code> until the owner signs <code>setReserveFloor</code>.</p>
-            <div className="row-actions">
-              <button type="button" className="button secondary" disabled={role !== 'owner' || signFloor.isPending || prepare.isPending || !!plan} onClick={askFloor}>
-                {signFloor.isPending || prepare.isPending ? 'Preparing…' : `Sign floor of ${tr.reserve.required.display}`}
-              </button>
-              {role !== 'owner' ? <><span>Only the owner can sign this (role matrix).</span><SwitchSeat to="owner" className="button small quiet" /></> : null}
-            </div>
+            <h2 id="sync-title"><Icon name="alert" />Floor out of date</h2>
+            <p>The schedule needs {tr.reserve.required.display}; the floor on-chain is {tr.reserve.onchainFloor.display}. Deposits wait with <code>FloorOutOfSync</code> until the owner signs.</p>
+            {role !== 'owner' ? <div className="row-actions"><SwitchSeat to="owner" className="button small quiet" /></div> : null}
             {floorConfirm}
             <ErrorNote error={floorError} />
           </section>
         ) : null}
         <div role="status">{sent ? <p className="ok-note">Floor update {sent.startsWith('0x') ? <>sent: {mode === 'live' ? <TxStatus hash={sent as Hex} label="floor update" onMined={() => qc.invalidateQueries({ queryKey: ['treasury'] })} /> : <Hash value={sent} />}</> : sent}.</p> : null}</div>
 
-        <div className="cols">
-          <section className="block col-wide" aria-labelledby="bal-title">
-            <div className="block-head">
-              <h2 id="bal-title">Balance over time</h2>
-              <p>Rebuilt from executed deposits and redemptions, anchored on today’s balances. Yield is not split out.</p>
-            </div>
-            {history.series.length ? <BalanceChart points={history.series} /> : ledger.isLoading || !tr ? <Loading what="the balance history" /> : <p className="empty">No executions yet, so there is no history to draw.</p>}
-          </section>
-
-          <section className="block col-narrow" aria-labelledby="pol-title">
-            <div className="block-head">
-              <h2 id="pol-title">Policy on-chain</h2>
-              <p>Version {tr?.policy.version ?? '…'}. Every change increments it and voids records signed before.</p>
-            </div>
-            {tr ? (
-              <dl className="facts">
-                <div><dt>Auto cap</dt><dd className="nums">{tr.policy.autoCap.display}</dd></div>
-                <div><dt>Daily cap</dt><dd className="nums">{tr.policy.dailyCap.display}</dd></div>
-                <div><dt>Bank limit</dt><dd className="nums">{tr.policy.bankLimit.display}</dd></div>
-                <div><dt>Reserve floor</dt><dd className="nums">{tr.reserve.onchainFloor.display}</dd></div>
-                <div><dt>Price band width</dt><dd className="nums">{tr.policy.maxBandWidth ? fromUnits(tr.policy.maxBandWidth, 8).toFixed(4) : '0.0200'}</dd></div>
-                <div><dt>Oracle age limit</dt><dd className="nums">{tr.policy.maxOracleAge ?? 180} s</dd></div>
-                <div><dt>Owner freeze</dt><dd>{tr.policy.frozen.owner ? <Chip state="POLICY_CHANGED" tone="frozen">Frozen</Chip> : 'Off'}</dd></div>
-                <div><dt>Bank freeze</dt><dd>{tr.policy.frozen.bank ? <Chip state="POLICY_CHANGED" tone="frozen">Frozen</Chip> : 'Off'}</dd></div>
-                <div><dt>Authorizer</dt><dd>{tr.policy.authorizerRevoked ? <Chip state="REVERTED">Revoked</Chip> : 'Active'}</dd></div>
-              </dl>
-            ) : <Loading what="policy" />}
-          </section>
+        <div className="filters" role="group" aria-label="Filter the treasury">
+          <span className="fchip is-on">
+            <MenuButton buttonClass="fchip-main" align="start" radio
+              items={RANGES.map((r) => ({ key: r.key, label: r.label, checked: r.key === range, onSelect: () => setRange(r.key) }))}>
+              <Icon name="clock" />Date range<span className="fchip-sep" aria-hidden="true" /><span className="fchip-value">{RANGES.find((r) => r.key === range)!.label}</span>
+            </MenuButton>
+          </span>
         </div>
 
-        <section className="block" aria-labelledby="split-title">
-          <div className="block-head">
-            <h2 id="split-title">Reserve and deployable capital</h2>
-            <p>The reserve is the largest shortfall the calendar can produce over 30 days plus a buffer (10% of outflows or 500, whichever is larger). Everything to its right may earn.</p>
-          </div>
-          {tr ? <ReserveBar t={tr} /> : <Loading what="the treasury" />}
-        </section>
+        <div className="home">
+          <section className="card today" aria-labelledby="today-title">
+            <h2 id="today-title" className="card-kicker">Today</h2>
+            <div className="hero">
+              <p className="hero-label">Total balance<InfoTip label="About the total balance">USDC across the Safe and both vaults. The history is rebuilt from executed deposits and redemptions, anchored on today’s balances; yield is not split out.</InfoTip></p>
+              <p className="hero-value">{tr ? tr.balances.total.display : <span className="sk sk-value" role="img" aria-label="Loading" />}<span className="hero-unit">USDC</span></p>
+              {tr?.updatedAt ? <p className="hero-sub nums">Updated {stamp(tr.updatedAt)}</p> : null}
+            </div>
+            {history.points.length > 1 ? (
+              <StackedAreaChart points={history.points} changes={history.changes} series={series} label="Balance by holding over time" />
+            ) : ledger.isLoading || !tr ? <Loading what="the balance history" /> : <p className="empty">No executions yet.</p>}
+          </section>
 
-        <section className="block" aria-labelledby="cal-title">
-          <div className="block-head">
-            <h2 id="cal-title">Obligation calendar</h2>
-            <p>Entered and approved by the owner. The agent never infers obligations. Unconfirmed inflows count as zero.</p>
+          <div className="home-side">
+            <section className="card" aria-labelledby="alloc-title">
+              <header className="card-head">
+                <h2 id="alloc-title">Allocation</h2>
+                <InfoTip label="About the allocation">The reserve is the largest shortfall the calendar can produce over 30 days, plus a buffer of 10% of outflows or 500, whichever is larger. Everything beyond it may earn.</InfoTip>
+              </header>
+              {tr ? <ReserveBar t={tr} /> : <Loading what="the treasury" />}
+            </section>
+
+            <section className="card" aria-labelledby="pol-title">
+              <header className="card-head">
+                <h2 id="pol-title">Policy</h2>
+                {tr ? <span className="card-meta nums">v{tr.policy.version}</span> : null}
+                <button type="button" className="card-link" onClick={() => openPol('onchain')}>View all</button>
+              </header>
+              {tr ? (
+                <dl className="facts">
+                  <div><dt>Auto cap</dt><dd className="nums">{tr.policy.autoCap.display}</dd></div>
+                  <div><dt>Daily cap</dt><dd className="nums">{tr.policy.dailyCap.display}</dd></div>
+                  <div><dt>Bank limit</dt><dd className="nums">{tr.policy.bankLimit.display}</dd></div>
+                  <div><dt>Deposits</dt><dd>{frozen ? <Chip state="POLICY_CHANGED" tone="frozen">Frozen</Chip> : tr.policy.authorizerRevoked ? <Chip state="REVERTED">Agent revoked</Chip> : <Chip state="CONFIRMED">Open</Chip>}</dd></div>
+                </dl>
+              ) : <Loading what="policy" />}
+            </section>
           </div>
+        </div>
+
+        <Kpis label="Treasury figures">
+          <Figure label="Reserve floor" value={tr ? tr.reserve.onchainFloor.display : '…'} note={floorNote} tone={outOfSync ? 'alert' : undefined}
+            info="Signed on-chain by the owner. A deposit that would take the Safe below it reverts ReserveFloorBreached." />
+          <Figure label="Free to deploy" value={tr ? tr.deployable.display : '…'} note="After floor and fees" />
+          <Figure label="In vaults" value={tr ? money(vaultsNow) : '…'} spark={spark} sparkLabel={spark ? `In vaults over time, from ${money(spark[0])} to ${money(spark[spark.length - 1])}` : undefined} trend={vaultTrend}
+            note={history.changes.length ? `Since ${day(history.changes[0].t)}` : 'No executions yet'} />
+          <Figure label="Deposited today" value={tr ? money(today) : '…'} note={tr ? `of ${tr.policy.dailyCap.display} daily cap` : ''}
+            meter={tr ? { value: today, max: cap, label: `Deposited today, ${money(today)} of the ${money(cap)} daily cap`, tone: cap && today / cap > 0.9 ? 'warn' : undefined } : undefined}
+            info="Counted per UTC day, the way the contract counts its daily cap." />
+        </Kpis>
+
+        <Section title="Positions" info={<>Two <strong>ERC-4626</strong> vaults the owner added. {GLOSSARY_DEF.erc4626} A quarantined vault refuses deposits; redemptions to the Safe always run.</>}>
+          {tr ? (
+            <DataTable label="Positions" rows={positions} columns={posColumns} rowKey={(p) => p.key} rowName={(p) => p.name}
+              onOpen={(p) => openPos(p.key)} selectedKey={posSel?.key}
+              rowMenu={(p) => {
+                const href = explorerAddress(chainId, p.address)
+                return [
+                  { key: 'open', label: 'View details', onSelect: () => openPos(p.key) },
+                  ...(href ? [{ key: 'explorer', label: 'Open on the block explorer', onSelect: () => { window.open(href, '_blank', 'noopener,noreferrer') } }] : []),
+                ]
+              }} />
+          ) : <Loading what="positions" />}
+          <ErrorNote error={t.error} />
+        </Section>
+
+        <Section title="Obligations" info="Entered and approved by the owner. The agent never infers obligations. Unconfirmed inflows count as zero.">
           {obs.isLoading ? <Loading what="obligations" /> : (
             <DataTable label="Obligations" rows={obRows} columns={obColumns} rowKey={(o) => o.id} rowName={(o) => o.label}
               onOpen={(o) => openOb(o.id)} selectedKey={obOpen}
@@ -266,49 +301,56 @@ export default function Treasury() {
           )}
           <ErrorNote error={obs.error ?? settle.error} />
           <p className="ok-line" role="status">{status}</p>
-
-          <form className="form" onSubmit={submit} aria-labelledby="add-title">
-            <h3 id="add-title">Add an obligation</h3>
-            <div className="form-grid">
-              <label>Label<input id="ob-label" className="field" required value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Supplier invoice" /></label>
-              <label>Amount, USDC<input className="field nums" required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,6})?" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="1200.00" /></label>
-              <label>Due date<input className="field" required type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></label>
-              <label className="check"><input type="checkbox" checked={form.confirmedInflow} onChange={(e) => setForm({ ...form, confirmedInflow: e.target.checked })} /> <span>Confirmed inflow, not a payment</span></label>
-            </div>
-            <div className="row-actions">
-              <button type="submit" className="button" disabled={role !== 'owner' || add.isPending}>{add.isPending ? 'Adding…' : 'Add and recompute'}</button>
-              {role !== 'owner' ? <><span className="muted">Owner only.</span><SwitchSeat to="owner" className="button small quiet" /></> : null}
-            </div>
-            <ErrorNote error={add.error} />
-            {floorTx && mode === 'live' ? (
-              <div className="ok-note">
-                <p>The service proposed a new floor. Porthmos checks it and encodes the transaction itself, to the pinned PolicyRegistry, before the owner signs.</p>
-                {plan ? floorConfirm : <button type="button" className="button small secondary" disabled={signFloor.isPending || prepare.isPending || role !== 'owner'} onClick={askFloor}>Check and sign</button>}
-                <ErrorNote error={floorError} />
-              </div>
-            ) : null}
-          </form>
-        </section>
-
-        <section className="block" aria-labelledby="pos-title">
-          <div className="block-head">
-            <h2 id="pos-title">Positions</h2>
-            <p>Two <Term def={GLOSSARY_DEF.erc4626}>ERC-4626</Term> vaults the owner added. A quarantined vault refuses deposits; redemptions to the Safe always run.</p>
-          </div>
-          {tr ? (
-            <DataTable label="Positions" rows={positions} columns={posColumns} rowKey={(p) => p.key} rowName={(p) => p.name}
-              onOpen={(p) => openPos(p.key)} selectedKey={posSel?.key}
-              rowMenu={(p) => {
-                const href = explorerAddress(chainId, p.address)
-                return [
-                  { key: 'open', label: 'View details', onSelect: () => openPos(p.key) },
-                  ...(href ? [{ key: 'explorer', label: 'Open on the block explorer', onSelect: () => { window.open(href, '_blank', 'noopener,noreferrer') } }] : []),
-                ]
-              }} />
-          ) : <Loading what="positions" />}
-          <ErrorNote error={t.error} />
-        </section>
+        </Section>
       </div>
+
+      <DetailDrawer open={addOpen === 'obligation'} onClose={closeAdd} eyebrow="New obligation" title="Add an obligation">
+        <form className="form" onSubmit={submit} aria-label="Add an obligation">
+          <label>Label<input id="ob-label" className="field" required value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Supplier invoice" /></label>
+          <label>Amount, USDC<input className="field nums" required inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,6})?" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="1200.00" /></label>
+          <label>Due date<input className="field" required type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></label>
+          <label className="check"><input type="checkbox" checked={form.confirmedInflow} onChange={(e) => setForm({ ...form, confirmedInflow: e.target.checked })} /> <span>Confirmed inflow, not a payment</span></label>
+          <div className="row-actions">
+            <button type="submit" className="button" disabled={role !== 'owner' || add.isPending}>{add.isPending ? 'Adding…' : 'Add and recompute'}</button>
+            {role !== 'owner' ? <SwitchSeat to="owner" className="button small quiet" /> : null}
+          </div>
+          {role !== 'owner' ? <p className="muted">Only the owner adds obligations.</p> : null}
+          <ErrorNote error={add.error} />
+          {floorTx && mode === 'live' ? (
+            <div className="ok-note">
+              <p>The service proposed a new floor. Porthmos checks it and encodes the transaction itself, to the pinned PolicyRegistry, before the owner signs.</p>
+              {plan ? floorConfirm : <button type="button" className="button small secondary" disabled={signFloor.isPending || prepare.isPending || role !== 'owner'} onClick={askFloor}>Check and sign</button>}
+              <ErrorNote error={floorError} />
+            </div>
+          ) : null}
+        </form>
+      </DetailDrawer>
+
+      <DetailDrawer open={polOpen === 'onchain'} onClose={closePol} eyebrow="PolicyRegistry" title="Policy on-chain" badge={tr ? <span className="chip tone-neutral">Version {tr.policy.version}</span> : null}>
+        {tr ? (
+          <>
+            <DrawerSection title="Limits">
+              <KeyValues items={[
+                { label: 'Auto cap', value: <span className="nums">{tr.policy.autoCap.display} USDC</span> },
+                { label: 'Daily cap', value: <span className="nums">{tr.policy.dailyCap.display} USDC</span> },
+                { label: 'Bank limit', value: <span className="nums">{tr.policy.bankLimit.display} USDC</span> },
+                { label: 'Reserve floor', value: <span className="nums">{tr.reserve.onchainFloor.display} USDC</span> },
+                { label: 'Price band width', value: <span className="nums">{tr.policy.maxBandWidth ? fromUnits(tr.policy.maxBandWidth, 8).toFixed(4) : '0.0200'}</span> },
+                { label: 'Oracle age limit', value: <span className="nums">{tr.policy.maxOracleAge ?? 180} s</span> },
+              ]} />
+            </DrawerSection>
+            <DrawerSection title="Controls">
+              <KeyValues items={[
+                { label: 'Owner freeze', value: tr.policy.frozen.owner ? <Chip state="POLICY_CHANGED" tone="frozen">Frozen</Chip> : 'Off' },
+                { label: 'Bank freeze', value: tr.policy.frozen.bank ? <Chip state="POLICY_CHANGED" tone="frozen">Frozen</Chip> : 'Off' },
+                { label: 'Authorizer', value: tr.policy.authorizerRevoked ? <Chip state="REVERTED">Revoked</Chip> : 'Active' },
+                { label: 'Safe', value: <Hash value={tr.safe} kind="address" label="Safe address" head={10} tail={8} /> },
+              ]} />
+            </DrawerSection>
+            <p className="drawer-note">Every policy change raises the version, which voids every record signed under the old one.</p>
+          </>
+        ) : null}
+      </DetailDrawer>
 
       <DetailDrawer open={!!obSel} onClose={closeOb} eyebrow="Obligation" title={obSel?.label ?? ''} badge={obSel ? <ObChip o={obSel} /> : null}
         amount={obSel ? <>{obSel.confirmedInflow ? '+' : ''}{obSel.amount.display} <span className="drawer-unit">USDC</span></> : null}

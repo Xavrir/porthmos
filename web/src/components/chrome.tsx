@@ -6,23 +6,24 @@ import { DEFAULT_LIVE_URL, useAegis } from '../lib/source'
 import { useIdentity, type Seat } from '../lib/identity'
 import { chainName } from '../lib/wallet'
 import { shortHex } from '../lib/format'
-import { RECORDED_SCENARIOS, SCHEDULED_SCENARIOS, scheduledAfter } from '../lib/proof'
+import { RECORDED_SCENARIOS } from '../lib/proof'
 import { Hash } from './bits'
 import { Icon } from './icons'
 import { useSeatPicker } from '../lib/seats'
 import { useMarket } from '../lib/queries'
 import { dismissToast, useToasts } from '../lib/toast'
 import { openOverlay } from '../lib/ui'
+import { MenuButton } from './Menu'
 import { CommandPalette, SearchField } from './CommandPalette'
 import { GlossaryDialog, ShortcutsDialog, useGlobalShortcuts } from './Shortcuts'
 import type { Role } from '../lib/types'
 
 export const PAGES = [
-  { to: '/treasury', label: 'Treasury', chapter: 'surface', icon: 'treasury', acts: 'owner', hint: 'Owner acts', group: 'Treasury' },
-  { to: '/copilot', label: 'Copilot', chapter: 'blue', icon: 'copilot', acts: 'owner', hint: 'Owner acts', group: 'Treasury' },
-  { to: '/risk', label: 'Risk', chapter: 'red', icon: 'risk', acts: null, hint: 'Every seat watches', group: 'Treasury' },
-  { to: '/audit', label: 'Audit', chapter: 'black', icon: 'audit', acts: null, hint: 'Every seat reads', group: 'Treasury' },
-  { to: '/bank', label: 'Bank desk', chapter: 'navy', icon: 'bank', acts: 'bank', hint: 'Home of the bank seat', group: 'Oversight' },
+  { to: '/treasury', label: 'Treasury', icon: 'treasury', hint: 'Balances, reserve and positions', group: 'Treasury' },
+  { to: '/copilot', label: 'Copilot', icon: 'copilot', hint: 'Ask the agent, approve its deposits', group: 'Treasury' },
+  { to: '/risk', label: 'Risk', icon: 'risk', hint: 'Oracle, triggers and vault risk', group: 'Treasury' },
+  { to: '/audit', label: 'Audit', icon: 'audit', hint: 'Decision ledger and on-chain events', group: 'Treasury' },
+  { to: '/bank', label: 'Bank desk', icon: 'bank', hint: 'Clients, freezes and escalations', group: 'Oversight' },
 ] as const
 
 export const SEATS: { seat: Seat; name: string; what: string }[] = [
@@ -60,45 +61,57 @@ function seatTarget(r: Role) {
 }
 
 export function ModeIndicator() {
-  const { mode, phase, reason, switchMode, streamStatus, chainId, apiBase, connect, forgetApi, demoChanged, resetDemo } = useAegis()
+  const { mode, phase, reason, switchMode, streamStatus, chainId, apiBase, connect, forgetApi, demoChanged, resetDemo, service, onboard, tenant, wallet, refresh } = useAegis()
+  const { chooser } = useIdentity()
   const { open, setOpen, ref } = usePopover()
   const [url, setUrl] = useState(apiBase || DEFAULT_LIVE_URL)
   const id = useId()
   const urlId = useId()
-  const after = scheduledAfter()
   const label = phase === 'probing' ? 'Connecting…' : mode === 'replay' ? 'Replay' : 'Live'
-  const detail = phase === 'probing' ? '' : mode === 'replay' ? ' (recorded run)' : `, ${chainName(chainId)}`
+  const multi = service === 'up' && !!onboard
+  const close = () => setOpen(false)
+  const next = mode !== 'replay' ? null
+    : multi && tenant ? <button type="button" className="button small" onClick={() => { close(); chooser.show('switch') }}>Open my treasury</button>
+    : multi && wallet ? <Link to="/start" className="button small" onClick={close}>Continue setup</Link>
+    : multi ? <Link to="/start" className="button small" onClick={close}>Create your treasury</Link>
+    : service === 'down' ? <button type="button" className="button small quiet" onClick={() => { close(); refresh(null) }}>Try the live service again</button>
+    : null
   return (
     <div className={`mode mode-${phase === 'probing' ? 'probing' : mode}`} ref={ref}>
-      <button type="button" className="mode-button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="mode-button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} title="Data source">
         <span className="mode-mark" aria-hidden="true" />
-        <span>{label}<span className="xl-only">{detail}</span></span>
+        <span>{label}</span>
       </button>
       {open ? (
         <div className="mode-panel" id={id} role="dialog" aria-label="Data source">
           {mode === 'replay' ? (
             <>
-              <p><strong>Replay: a recorded run.</strong> It plays inside your browser: a 10,000 USDC treasury, a 4,500 reserve, two vaults, past attacks and a waiting approval. Contract and role addresses are the Base Sepolia deployment.</p>
-              <p>On Base Sepolia now: {RECORDED_SCENARIOS.join(', ')} (linked to Basescan). {SCHEDULED_SCENARIOS.length ? `Scheduled: ${SCHEDULED_SCENARIOS.join(', ')}${after ? ` after ${after}` : ''}. ` : ''}Other hashes and all signatures are illustrative.</p>
+              <p className="mode-title">Replay</p>
+              <p>A recorded run of the reference treasury, played in your browser. Nothing here sends a transaction.</p>
+              <p className="muted">Recorded on Base Sepolia: {RECORDED_SCENARIOS.join(', ')}. Rows without a recorded transaction show no hash.</p>
               <div className="demo-state">
-                <p>Demo state: <strong>{demoChanged ? 'changed by you' : 'recorded base run'}</strong>. It is kept until you close this tab.</p>
-                {demoChanged ? <button type="button" className="button small quiet" onClick={() => { resetDemo(); setOpen(false) }}>Reset demo</button> : null}
+                <p>{demoChanged ? 'Changed by you in this tab' : 'Recorded base run'}</p>
+                {demoChanged ? <button type="button" className="button small quiet" onClick={() => { resetDemo(); close() }}>Reset</button> : null}
               </div>
+              {next}
               {reason ? <p className="muted">{reason}.</p> : null}
-              <form className="connect" onSubmit={(e) => { e.preventDefault(); connect(url); setOpen(false) }}>
-                <label htmlFor={urlId}>Porthmos service address</label>
-                <input id={urlId} className="field" type="url" inputMode="url" required value={url} onChange={(e) => setUrl(e.target.value)} />
-                <button type="submit" className="button small">Connect live service</button>
-              </form>
-              <p className="muted">If it does not answer, the site stays in Replay. The service must allow this page’s origin (CORS) and the X-Aegis-Session header.</p>
+              <details className="mode-advanced">
+                <summary>Connect a live service</summary>
+                <form className="connect" onSubmit={(e) => { e.preventDefault(); connect(url); close() }}>
+                  <label htmlFor={urlId}>Service address</label>
+                  <input id={urlId} className="field" type="url" inputMode="url" required value={url} onChange={(e) => setUrl(e.target.value)} />
+                  <button type="submit" className="button small quiet">Connect</button>
+                </form>
+              </details>
             </>
           ) : (
             <>
-              <p><strong>Live.</strong> Reading the Porthmos service at {apiBase || 'this site’s /api'} on {chainName(chainId)}. Event stream: {streamStatus}.</p>
+              <p className="mode-title">Live</p>
+              <p>{apiBase || 'This site’s /api'} on {chainName(chainId)}. Event stream {streamStatus}.</p>
               {reason ? <p className="muted">{reason}.</p> : null}
               <div className="row-actions">
-                <button type="button" className="button small quiet" onClick={() => { switchMode('replay'); setOpen(false) }}>Switch to replay</button>
-                {apiBase ? <button type="button" className="button small quiet" onClick={() => { forgetApi(); setOpen(false) }}>Forget this address</button> : null}
+                <button type="button" className="button small quiet" onClick={() => { switchMode('replay'); close() }}>Switch to replay</button>
+                {apiBase ? <button type="button" className="button small quiet" onClick={() => { forgetApi(); close() }}>Forget this address</button> : null}
               </div>
             </>
           )}
@@ -194,8 +207,7 @@ function TenantSeats({ onDone }: { onDone: () => void }) {
 
 export function useTreasuryName() {
   const { mode, tenant } = useAegis()
-  if (mode === 'replay') return 'Harbour Lane Imports'
-  return tenant ? 'Your treasury' : 'Harbour Lane Imports'
+  return mode === 'live' && tenant ? 'Your treasury' : 'Reference treasury'
 }
 
 function initials(name: string) {
@@ -230,7 +242,8 @@ export function IdentityControl({ variant = 'chip' }: { variant?: 'chip' | 'swit
         </button>
       )}
       {open ? (
-        <div className="identity-panel" id={id} role="dialog" aria-label="Seat">
+        <div className="identity-panel" id={id} role="dialog" aria-label="Account">
+          {variant === 'switcher' ? <SafeLine /> : null}
           {multi && tenant ? <TenantSeats onDone={() => setOpen(false)} /> : null}
           {multi && !tenant ? (
             <div className="seat-set">
@@ -297,37 +310,6 @@ export function SwitchSeat({ to, children, className = 'button small', then }: {
   return <button type="button" className={`${className}${to === 'bank' ? ' navy' : ''}`} onClick={act}>{label}</button>
 }
 
-export function ModeBanner() {
-  const { mode, phase, service, onboard, tenant, wallet, refresh, apiBase } = useAegis()
-  const { chooser } = useIdentity()
-  if (phase !== 'ready' || mode !== 'replay') return null
-  const net = onboard ? chainName(onboard.chainId).replace(/ \(\d+\)$/, '') : 'Base Sepolia'
-  const multi = service === 'up' && !!onboard
-  let text: ReactNode
-  let action: ReactNode = null
-  if (multi && tenant) {
-    text = 'You are looking at the recorded run. Your own treasury is live.'
-    action = <button type="button" className="button small" onClick={() => chooser.show('switch')}>Open my treasury</button>
-  } else if (multi && wallet) {
-    text = 'This is the recorded run. Your treasury setup is not finished.'
-    action = <Link to="/start" className="button small">Continue setup</Link>
-  } else if (multi) {
-    text = `This is a recorded run of the reference treasury. Make your own on ${net} in about a minute.`
-    action = <Link to="/start" className="button small">Create your treasury</Link>
-  } else if (service === 'down') {
-    text = <>The Porthmos service is not answering, so you see a recorded run.{wallet ? ' Your own treasury is still on-chain.' : ''}</>
-    action = <button type="button" className="button small quiet" onClick={() => refresh(null)}>Try again</button>
-  } else {
-    text = apiBase ? 'Replay: a recorded run in your browser.' : 'Replay: a recorded run in your browser. No live service is set for this site.'
-  }
-  return (
-    <div className="mode-banner" role="region" aria-label="Data source">
-      <p><span className="mode-banner-tag">Replay</span> {text}</p>
-      {action}
-    </div>
-  )
-}
-
 export function MarketBanner() {
   const m = useMarket()
   if (!m.data?.active) return null
@@ -348,15 +330,23 @@ export function TestModeBanner() {
   )
 }
 
-function TopBar() {
+function HelpMenu() {
+  const navigate = useNavigate()
   return (
-    <div className="top-bar">
-      <SearchField />
-      <div className="top-tools">
-        <ModeIndicator />
-        <button type="button" className="icon-button" aria-haspopup="dialog" onClick={() => openOverlay({ kind: 'shortcuts' })} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)"><Icon name="help" /></button>
-        <button type="button" className="icon-button" aria-haspopup="dialog" onClick={() => openOverlay({ kind: 'glossary' })} aria-label="What the terms mean" title="What the terms mean"><Icon name="terms" /></button>
-      </div>
+    <MenuButton buttonClass="icon-button" buttonLabel="Help" items={[
+      { key: 'shortcuts', label: 'Keyboard shortcuts', meta: '?', onSelect: () => openOverlay({ kind: 'shortcuts' }) },
+      { key: 'terms', label: 'What the terms mean', onSelect: () => openOverlay({ kind: 'glossary' }) },
+      { key: 'overview', label: 'Product overview', onSelect: () => navigate('/') },
+    ]}><Icon name="help" /></MenuButton>
+  )
+}
+
+function TopTools() {
+  return (
+    <div className="top-tools">
+      <ModeIndicator />
+      <ThemeMenu />
+      <HelpMenu />
     </div>
   )
 }
@@ -376,7 +366,6 @@ function useWide() {
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
 
 function SideNav() {
-  const { role } = useIdentity()
   const groups = [...new Set(PAGES.map((p) => p.group))]
   return (
     <nav aria-label="Pages" className="side-nav">
@@ -384,18 +373,14 @@ function SideNav() {
         <div key={g} className="side-group">
           <p className="side-group-label">{g}</p>
           <ul className="side-links">
-            {PAGES.filter((p) => p.group === g).map((p) => {
-              const yours = p.acts !== null && p.acts === role
-              return (
-                <li key={p.to}>
-                  <NavLink to={p.to} className={({ isActive }) => `side-link${isActive ? ' is-active' : ''}`}>
-                    <Icon name={p.icon} />
-                    <span className="side-label">{p.label}</span>
-                    {yours ? <span className="side-badge">{p.acts === 'bank' ? 'Your desk' : 'You act'}</span> : null}
-                  </NavLink>
-                </li>
-              )
-            })}
+            {PAGES.filter((p) => p.group === g).map((p) => (
+              <li key={p.to}>
+                <NavLink to={p.to} className={({ isActive }) => `side-link${isActive ? ' is-active' : ''}`}>
+                  <Icon name={p.icon} />
+                  <span className="side-label">{p.label}</span>
+                </NavLink>
+              </li>
+            ))}
           </ul>
         </div>
       ))}
@@ -406,7 +391,7 @@ function SideNav() {
             <span className="side-link is-disabled" aria-disabled="true">
               <Icon name="orders" />
               <span className="side-label">Orders</span>
-              <span className="side-soon">Coming soon</span>
+              <span className="side-soon">Soon</span>
             </span>
           </li>
         </ul>
@@ -420,7 +405,7 @@ function SafeLine() {
   const safe = deployment.safe
   return (
     <div className="side-safe">
-      <span className="side-caption">Safe</span>
+      <span className="side-caption">Safe address</span>
       {safe && safe !== zeroAddress ? <Hash value={safe} kind="address" label="treasury Safe address" /> : <span className="muted">No treasury yet</span>}
     </div>
   )
@@ -444,7 +429,7 @@ function applyTheme(pref: ThemePref) {
   document.documentElement.dataset.theme = dark ? 'dark' : 'light'
 }
 
-function ThemeToggle() {
+function ThemeMenu() {
   const [pref, setPref] = useState<ThemePref>(readThemePref)
   useEffect(() => {
     applyTheme(pref)
@@ -458,17 +443,12 @@ function ThemeToggle() {
     setPref(p)
     try { localStorage.setItem(THEME_KEY, p) } catch { /* the choice still applies to this page */ }
   }
-  const options: { p: ThemePref; label: string; icon: 'sun' | 'moon' | 'system' }[] = [
-    { p: 'light', label: 'Light', icon: 'sun' }, { p: 'dark', label: 'Dark', icon: 'moon' }, { p: 'system', label: 'System', icon: 'system' },
-  ]
+  const options: { p: ThemePref; label: string }[] = [{ p: 'light', label: 'Light' }, { p: 'dark', label: 'Dark' }, { p: 'system', label: 'Match system' }]
   return (
-    <div className="theme-toggle" role="radiogroup" aria-label="Theme">
-      {options.map((o) => (
-        <button key={o.p} type="button" role="radio" aria-checked={pref === o.p} onClick={() => choose(o.p)}>
-          <Icon name={o.icon} /><span>{o.label}</span>
-        </button>
-      ))}
-    </div>
+    <MenuButton buttonClass="icon-button" buttonLabel={`Theme: ${options.find((o) => o.p === pref)!.label}`} radio
+      items={options.map((o) => ({ key: o.p, label: o.label, checked: pref === o.p, onSelect: () => choose(o.p) }))}>
+      <Icon name={pref === 'dark' ? 'moon' : pref === 'system' ? 'system' : 'sun'} />
+    </MenuButton>
   )
 }
 
@@ -538,17 +518,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       <TestModeBanner />
       <header className="app-head">
         <div className="app-top">
+          <button type="button" className="icon-button menu-button" ref={menuRef} aria-expanded={drawer} aria-controls="app-side" aria-label="Menu" onClick={() => setOpen(true)}>
+            <Icon name="menu" />
+          </button>
           <Brand />
           <div className="app-tools">
-            {wide ? null : (
-              <>
-                <button type="button" className="icon-button" aria-haspopup="dialog" aria-label="Search" onClick={() => openOverlay({ kind: 'palette' })}><Icon name="search" /></button>
-                <IdentityControl /><ModeIndicator />
-              </>
-            )}
-            <button type="button" className="menu-button" ref={menuRef} aria-expanded={drawer} aria-controls="app-side" onClick={() => setOpen(true)}>
-              <Icon name="menu" /><span className="menu-text">Menu</span>
-            </button>
+            <button type="button" className="icon-button" aria-haspopup="dialog" aria-label="Search" onClick={() => openOverlay({ kind: 'palette' })}><Icon name="search" /></button>
+            {wide ? null : <TopTools />}
           </div>
         </div>
         <div className={`side${drawer ? ' is-open' : ''}`} id="app-side" ref={sideRef} role={drawer ? 'dialog' : undefined} aria-modal={drawer || undefined} aria-label={drawer ? 'Menu' : undefined}>
@@ -556,33 +532,22 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="side-head">
               <Brand />
               {wide ? null : (
-                <button type="button" className="side-close" onClick={() => setOpen(false)}><Icon name="close" /><span>Close</span></button>
+                <button type="button" className="icon-button side-close" onClick={() => setOpen(false)} aria-label="Close menu"><Icon name="close" /></button>
               )}
             </div>
-            {wide ? (
-              <div className="side-org">
-                <IdentityControl variant="switcher" />
-                <SafeLine />
-              </div>
-            ) : <div className="side-org"><SafeLine /></div>}
+            <div className="side-org"><IdentityControl variant="switcher" /></div>
             <SideNav />
-            <div className="side-foot">
-              <div className="side-session">
-                <span className="side-caption" id="theme-caption">Theme</span>
-                <ThemeToggle />
-              </div>
-              <ul className="side-tools">
-                <li><button type="button" className="side-tool" aria-haspopup="dialog" onClick={() => { setOpen(false); openOverlay({ kind: 'glossary' }) }}><Icon name="terms" /><span>Terms</span></button></li>
-                <li><button type="button" className="side-tool" aria-haspopup="dialog" onClick={() => { setOpen(false); openOverlay({ kind: 'shortcuts' }) }}><Icon name="keyboard" /><span>Shortcuts</span></button></li>
-                <li><Link to="/" className="side-tool"><Icon name="overview" /><span>Overview</span></Link></li>
-              </ul>
-            </div>
           </div>
         </div>
         <div className="side-scrim" hidden={!drawer} onClick={() => setOpen(false)} />
       </header>
       <div className="app-main" inert={drawer}>
-        {wide ? <TopBar /> : null}
+        {wide ? (
+          <div className="top-bar">
+            <SearchField />
+            <TopTools />
+          </div>
+        ) : null}
         {children}
       </div>
       <Notices />

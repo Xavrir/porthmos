@@ -1,148 +1,49 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import type { RiskComponents } from '../lib/types'
-import { clock, compact, day, money, stamp } from '../lib/format'
-import { niceTicks, type BalancePoint } from '../lib/history'
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import { clock, compact, day, money, pct, stamp } from '../lib/format'
+import { DAY_OFFSET, niceTicks, timeTicks, type HoldingPoint } from '../lib/history'
 
-export function OracleChart({ history, price, stale }: { history: { t: number; price: number }[]; price: number; stale: boolean }) {
-  const W = 800
-  const H = 280
-  const pad = { l: 64, r: 20, t: 18, b: 34 }
-  const pts = history.length ? history : [{ t: 0, price }]
-  const t0 = pts[0].t
-  const t1 = Math.max(pts[pts.length - 1].t, t0 + 1)
-  const lo = Math.min(0.978, ...pts.map((p) => p.price))
-  const hi = Math.max(1.022, ...pts.map((p) => p.price))
-  const x = (t: number) => pad.l + ((t - t0) / (t1 - t0)) * (W - pad.l - pad.r)
-  const y = (p: number) => pad.t + (1 - (p - lo) / (hi - lo)) * (H - pad.t - pad.b)
-  const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.price).toFixed(1)}`).join(' ')
-  const last = pts[pts.length - 1]
-  const ticks = [0.98, 0.99, 1.0, 1.01, 1.02].filter((v) => v >= lo && v <= hi)
-  return (
-    <figure className="chart" data-ui>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Oracle price over the last ${Math.round((t1 - t0) / 60)} minutes, now ${price.toFixed(4)}${stale ? ', stale' : ''}. Exit zone below 0.9900 and above 1.0100.`}>
-        <rect x={pad.l} y={pad.t} width={W - pad.l - pad.r} height={Math.max(0, y(1.01) - pad.t)} className="zone" />
-        <rect x={pad.l} y={y(0.99)} width={W - pad.l - pad.r} height={Math.max(0, H - pad.b - y(0.99))} className="zone" />
-        {ticks.map((v) => (
-          <g key={v}>
-            <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} className={v === 1 ? 'grid strong' : 'grid'} />
-            <text x={pad.l - 10} y={y(v) + 5} textAnchor="end" className="tick">{v.toFixed(2)}</text>
-          </g>
-        ))}
-        <text x={pad.l + 8} y={y(0.99) + 20} className="zone-label">Peg trigger: exit below 0.9900</text>
-        <path d={path} className={`line${stale ? ' is-stale' : ''}`} />
-        <circle cx={x(last.t)} cy={y(last.price)} r={6} className={`dot${Math.abs(last.price - 1) > 0.01 ? ' is-alert' : ''}`} />
-        <text x={pad.l} y={H - 8} className="tick">{clock(t0)}</text>
-        <text x={W - pad.r} y={H - 8} textAnchor="end" className="tick">{clock(t1)}</text>
-      </svg>
-    </figure>
-  )
-}
+export type Slot = 1 | 2 | 3 | 4
 
-const AXES: { key: keyof RiskComponents; label: string; weight: string }[] = [
-  { key: 'peg', label: 'Peg', weight: '0.4' },
-  { key: 'liquidity', label: 'Liquidity', weight: '0.3' },
-  { key: 'utilisation', label: 'Utilisation', weight: '0.2' },
-  { key: 'concentration', label: 'Concentration', weight: '0.1' },
-]
-
-export function RiskRadar({ components, alert }: { components: RiskComponents; alert: boolean }) {
-  const S = 260
-  const c = S / 2
-  const r = S / 2 - 48
-  const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / AXES.length
-  const pt = (i: number, v: number) => [c + Math.cos(angle(i)) * r * v, c + Math.sin(angle(i)) * r * v]
-  const poly = AXES.map((a, i) => pt(i, Math.max(0.04, Math.min(1, components[a.key]))).join(',')).join(' ')
-  return (
-    <svg className="radar" data-ui viewBox={`0 0 ${S} ${S}`} role="img" aria-label={AXES.map((a) => `${a.label} ${Math.round(components[a.key] * 100)}%`).join(', ')}>
-      {[0.25, 0.5, 0.75, 1].map((ring) => (
-        <polygon key={ring} points={AXES.map((_, i) => pt(i, ring).join(',')).join(' ')} className={ring === 1 ? 'ring outer' : 'ring'} />
-      ))}
-      {AXES.map((_, i) => { const [x2, y2] = pt(i, 1); return <line key={i} x1={c} y1={c} x2={x2} y2={y2} className="spoke" /> })}
-      <polygon points={poly} className={`shape${alert ? ' is-alert' : ''}`} />
-      {AXES.map((a, i) => {
-        const [lx, ly] = pt(i, 1.2)
-        return <text key={a.key} x={lx} y={ly + 4} textAnchor={Math.abs(lx - c) < 4 ? 'middle' : lx > c ? 'start' : 'end'} className="axis">{a.label}</text>
-      })}
-    </svg>
-  )
-}
-
-export function Sparkline({ values, tone = 'accent' }: { values: number[]; tone?: 'accent' | 'vault' }) {
-  const id = useId()
-  if (values.length < 2) return null
-  const W = 120
-  const H = 32
-  const lo = Math.min(...values)
-  const hi = Math.max(...values)
-  const span = hi - lo || 1
-  const x = (i: number) => (i / (values.length - 1)) * W
-  const y = (v: number) => H - 3 - ((v - lo) / span) * (H - 6)
-  const line = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
-  return (
-    <svg className={`spark spark-${tone}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" className="spark-stop-a" />
-          <stop offset="1" className="spark-stop-b" />
-        </linearGradient>
-      </defs>
-      <path d={`${line} L${W},${H} L0,${H} Z`} fill={`url(#${id})`} />
-      <path d={line} className="spark-line" vectorEffect="non-scaling-stroke" />
-    </svg>
-  )
-}
-
-const SERIES = [
-  { key: 'safe', label: 'Cash in the Safe', cls: 's-safe' },
-  { key: 'vaults', label: 'In vaults', cls: 's-vault' },
-] as const
-
-function short(t: number) {
-  return `${day(t)}, ${clock(t).slice(0, 5)}`
-}
-
-function stepPath(pts: BalancePoint[], key: 'safe' | 'vaults', x: (t: number) => number, y: (v: number) => number) {
-  let d = ''
-  pts.forEach((p, i) => {
-    const px = x(p.t).toFixed(1)
-    const py = y(p[key]).toFixed(1)
-    if (!i) d = `M${px},${py}`
-    else d += ` H${px} V${py}`
-  })
-  return d
-}
-
-export function BalanceChart({ points, height = 240 }: { points: BalancePoint[]; height?: number }) {
-  const wrap = useRef<HTMLDivElement>(null)
-  const [w, setW] = useState(720)
-  const [active, setActive] = useState<number | null>(null)
-  const gid = useId()
+function useWidth<T extends HTMLElement>(fallback: number) {
+  const ref = useRef<T>(null)
+  const [w, setW] = useState(fallback)
   useEffect(() => {
-    const el = wrap.current
+    const el = ref.current
     if (!el) return
-    const ro = new ResizeObserver(([e]) => setW(Math.max(260, Math.round(e.contentRect.width))))
+    const ro = new ResizeObserver(([e]) => setW(Math.max(120, Math.round(e.contentRect.width))))
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-  const pad = { l: 52, r: 12, t: 12, b: 28 }
-  const t0 = points[0].t
-  const t1 = Math.max(points[points.length - 1].t, t0 + 1)
-  const ticks = niceTicks(Math.max(1, ...points.flatMap((p) => [p.safe, p.vaults])))
-  const hi = ticks[ticks.length - 1]
-  const x = (t: number) => pad.l + ((t - t0) / (t1 - t0)) * (w - pad.l - pad.r)
-  const y = (v: number) => pad.t + (1 - v / hi) * (height - pad.t - pad.b)
-  const at = active === null ? null : points[active]
-  const last = points[points.length - 1]
+  return [ref, w] as const
+}
 
-  const pick = (e: PointerEvent<SVGSVGElement>) => {
-    const box = e.currentTarget.getBoundingClientRect()
-    const t = t0 + ((e.clientX - box.left - pad.l) / (w - pad.l - pad.r)) * (t1 - t0)
-    let i = 0
-    for (let k = 0; k < points.length; k++) if (points[k].t <= t) i = k
-    setActive(i)
-  }
+function anchor(x: number, lo: number, hi: number): 'start' | 'middle' | 'end' {
+  return x - lo < 24 ? 'start' : hi - x < 24 ? 'end' : 'middle'
+}
+
+function tickLabel(t: number) {
+  return (t + DAY_OFFSET) % 86400 === 0 ? day(t) : clock(t).slice(0, 5)
+}
+
+function Tip({ x, width, children }: { x: number; width: number; children: ReactNode }) {
+  const W = 200
+  const left = x + 14 + W > width ? Math.max(0, x - 14 - W) : x + 14
+  return <div className="viz-tip" style={{ left }} aria-hidden="true">{children}</div>
+}
+
+function TipRow({ slot, label, value }: { slot?: Slot; label: string; value: string }) {
+  return (
+    <p className="viz-tip-row">
+      {slot ? <span className={`viz-key c${slot}`} aria-hidden="true" /> : <span className="viz-key is-none" aria-hidden="true" />}
+      <strong className="nums">{value}</strong>
+      <span>{label}</span>
+    </p>
+  )
+}
+
+function useIndex(n: number) {
+  const [active, setActive] = useState<number | null>(null)
   const onKey = (e: KeyboardEvent) => {
-    const n = points.length
     const cur = active ?? n - 1
     let next: number | null = null
     if (e.key === 'ArrowRight') next = Math.min(n - 1, cur + 1)
@@ -152,53 +53,270 @@ export function BalanceChart({ points, height = 240 }: { points: BalancePoint[];
     else if (e.key === 'Escape') { setActive(null); return }
     if (next !== null) { e.preventDefault(); setActive(next) }
   }
-  const tipLeft = at ? Math.min(Math.max(x(at.t) + 12, 0), w - 196) : 0
-  const flip = at ? x(at.t) + 208 > w : false
-  const summary = `Cash in the Safe went from ${money(points[0].safe)} to ${money(last.safe)} USDC and vaults from ${money(points[0].vaults)} to ${money(last.vaults)}, between ${stamp(t0)} and ${stamp(last.t)}. Use the arrow keys to read each change.`
+  return { active, setActive, onKey }
+}
+
+function nearest(ts: readonly number[], t: number) {
+  let best = 0
+  for (let i = 1; i < ts.length; i++) if (Math.abs(ts[i] - t) < Math.abs(ts[best] - t)) best = i
+  return best
+}
+
+export type AreaSeries = { key: string; label: string; slot: Slot }
+
+export function StackedAreaChart({ points, changes, series, label, height = 240 }: {
+  points: HoldingPoint[]
+  changes: HoldingPoint[]
+  series: AreaSeries[]
+  label: string
+  height?: number
+}) {
+  const [wrap, w] = useWidth<HTMLDivElement>(720)
+  const [table, setTable] = useState(false)
+  const { active, setActive, onKey } = useIndex(points.length)
+  const tableId = useId()
+  const wide = w >= 560
+  const pad = { l: 48, r: wide ? 92 : 8, t: 8, b: 28 }
+  const t0 = points[0].t
+  const t1 = Math.max(points[points.length - 1].t, t0 + 1)
+  const cum = points.map((p) => series.reduce<number[]>((acc, s) => [...acc, (acc[acc.length - 1] ?? 0) + (p.values[s.key] ?? 0)], []))
+  const total = (i: number) => cum[i][cum[i].length - 1]
+  const yTicks = niceTicks(Math.max(1, ...cum.map((c) => c[c.length - 1])), 5)
+  const hi = yTicks[yTicks.length - 1]
+  const x = (t: number) => pad.l + ((t - t0) / (t1 - t0)) * (w - pad.l - pad.r)
+  const y = (v: number) => pad.t + (1 - v / hi) * (height - pad.t - pad.b)
+  const xTicks = timeTicks(t0, t1, Math.max(3, Math.floor((w - pad.l - pad.r) / 90)))
+  const line = (j: number) => points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(cum[i][j]).toFixed(1)}`).join(' ')
+  const band = (j: number) => {
+    const top = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(cum[i][j]).toFixed(1)}`).join(' ')
+    const bottom = [...points].reverse().map((p, k) => { const i = points.length - 1 - k; return `L${x(p.t).toFixed(1)},${y(j ? cum[i][j - 1] : 0).toFixed(1)}` }).join(' ')
+    return `${top} ${bottom} Z`
+  }
+  const last = points.length - 1
+  const at = active === null ? null : active
+  const pick = (e: PointerEvent<SVGSVGElement>) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    const t = t0 + ((e.clientX - box.left - pad.l) / (w - pad.l - pad.r)) * (t1 - t0)
+    setActive(nearest(points.map((p) => p.t), t))
+  }
+  const summary = `${label}. ${series.map((s) => `${s.label} ${money(points[0].values[s.key] ?? 0)} to ${money(points[last].values[s.key] ?? 0)}`).join(', ')}, between ${stamp(t0)} and ${stamp(points[last].t)}.`
 
   return (
-    <div className="bchart">
-      <ul className="bchart-legend">
-        {SERIES.map((s) => (
-          <li key={s.key} className={s.cls}><span className="bchart-swatch" aria-hidden="true" />{s.label}<strong className="nums">{money(last[s.key])}</strong></li>
-        ))}
-      </ul>
-      <div className="bchart-plot" ref={wrap} tabIndex={0} role="group" aria-roledescription="chart" aria-label={`Balance over time. ${summary}`}
-        onKeyDown={onKey} onFocus={() => setActive((a) => a ?? points.length - 1)} onBlur={() => setActive(null)}>
-        <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} aria-hidden="true" focusable="false"
-          onPointerMove={pick} onPointerLeave={() => setActive(null)}>
-          <defs>
-            <linearGradient id={`${gid}-safe`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" className="fill-safe-a" /><stop offset="1" className="fill-b" /></linearGradient>
-            <linearGradient id={`${gid}-vault`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" className="fill-vault-a" /><stop offset="1" className="fill-b" /></linearGradient>
-          </defs>
-          {ticks.map((v, i) => (
-            <g key={i}>
-              <line x1={pad.l} x2={w - pad.r} y1={y(v)} y2={y(v)} className={i === 0 ? 'bc-grid base' : 'bc-grid'} />
-              <text x={pad.l - 8} y={y(v) + 4} textAnchor="end" className="bc-tick">{v === 0 ? '0' : compact(v)}</text>
+    <figure className="viz" data-ui>
+      <figcaption className="viz-head">
+        <ul className="viz-legend">
+          {series.map((s) => (
+            <li key={s.key}><span className={`viz-swatch c${s.slot}`} aria-hidden="true" />{s.label}<strong className="nums">{money(points[last].values[s.key] ?? 0)}</strong></li>
+          ))}
+        </ul>
+        <button type="button" className="viz-toggle" aria-expanded={table} aria-controls={tableId} onClick={() => setTable((v) => !v)}>{table ? 'Chart' : 'Table'}</button>
+      </figcaption>
+      {table ? (
+        <div className="viz-table" id={tableId}>
+          <table className="dt-table">
+            <caption className="sr-only">{label}, one row per execution</caption>
+            <thead><tr><th scope="col">Time</th>{series.map((s) => <th key={s.key} scope="col" className="r">{s.label}</th>)}<th scope="col" className="r">Total</th></tr></thead>
+            <tbody>
+              {changes.map((p) => (
+                <tr key={p.t}><td className="nums nowrap">{stamp(p.t)}</td>{series.map((s) => <td key={s.key} className="r nums">{money(p.values[s.key] ?? 0)}</td>)}<td className="r nums">{money(series.reduce((a, s) => a + (p.values[s.key] ?? 0), 0))}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="viz-plot" ref={wrap} id={tableId} tabIndex={0} role="group" aria-roledescription="chart" aria-label={`${summary} Use the arrow keys to read each point.`}
+          onKeyDown={onKey} onFocus={() => setActive((a) => a ?? last)} onBlur={() => setActive(null)}>
+          <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} aria-hidden="true" focusable="false" onPointerMove={pick} onPointerLeave={() => setActive(null)}>
+            {yTicks.map((v) => (
+              <g key={v}>
+                <line x1={pad.l} x2={w - pad.r} y1={y(v)} y2={y(v)} className={v === 0 ? 'viz-base' : 'viz-grid'} />
+                <text x={pad.l - 8} y={y(v) + 4} textAnchor="end" className="viz-tick">{v === 0 ? '0' : compact(v)}</text>
+              </g>
+            ))}
+            {xTicks.map((t) => <text key={t} x={x(t)} y={height - 8} textAnchor={anchor(x(t), pad.l, w - pad.r)} className="viz-tick">{tickLabel(t)}</text>)}
+            {series.map((s, j) => <path key={`f-${s.key}`} d={band(j)} className={`viz-fill c${s.slot}`} />)}
+            {/* drawn top band first, so where an upper band is empty the edge shows the series that holds the value */}
+            {series.map((s, j) => ({ s, j })).reverse().map(({ s, j }) => <path key={`l-${s.key}`} d={line(j)} className={`viz-line c${s.slot}`} />)}
+            {wide ? series.map((s, j) => {
+              const lo = y(j ? cum[last][j - 1] : 0)
+              const top = y(cum[last][j])
+              return lo - top >= 14 ? <text key={`d-${s.key}`} x={w - pad.r + 8} y={(lo + top) / 2 + 4} className="viz-direct">{s.label}</text> : null
+            }) : null}
+            {at !== null ? (
+              <g>
+                <line x1={x(points[at].t)} x2={x(points[at].t)} y1={pad.t} y2={height - pad.b} className="viz-cross" />
+                {series.map((s, j) => <circle key={s.key} cx={x(points[at].t)} cy={y(cum[at][j])} r={4} className={`viz-dot c${s.slot}`} />)}
+              </g>
+            ) : null}
+          </svg>
+          {at !== null ? (
+            <Tip x={x(points[at].t)} width={w}>
+              <p className="viz-tip-time nums">{stamp(points[at].t)}</p>
+              {[...series].reverse().map((s) => <TipRow key={s.key} slot={s.slot} label={s.label} value={money(points[at].values[s.key] ?? 0)} />)}
+              <TipRow label="Total" value={money(total(at))} />
+            </Tip>
+          ) : null}
+          <p className="sr-only" aria-live="polite">{at !== null ? `${stamp(points[at].t)}: ${series.map((s) => `${s.label} ${money(points[at].values[s.key] ?? 0)}`).join(', ')}, total ${money(total(at))}.` : ''}</p>
+        </div>
+      )}
+    </figure>
+  )
+}
+
+export function Sparkline({ values, label }: { values: number[]; label?: string }) {
+  const [wrap, w] = useWidth<HTMLSpanElement>(160)
+  if (values.length < 2) return null
+  const H = 32
+  const lo = Math.min(...values)
+  const hi = Math.max(...values)
+  const span = hi - lo || 1
+  const x = (i: number) => 4 + (i / (values.length - 1)) * (w - 8)
+  const y = (v: number) => H - 5 - ((v - lo) / span) * (H - 10)
+  const d = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const end = values.length - 1
+  return (
+    <span className="spark" ref={wrap} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+      <svg width={w} height={H} viewBox={`0 0 ${w} ${H}`} aria-hidden="true" focusable="false">
+        <path d={d} className="spark-line" />
+        <circle cx={x(end)} cy={y(values[end])} r={4} className="spark-end" />
+      </svg>
+    </span>
+  )
+}
+
+export function Meter({ value, max, label, tone }: { value: number; max: number; label: string; tone?: 'warn' | 'bad' }) {
+  const share = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0
+  return (
+    <span className={`meter${tone ? ` is-${tone}` : ''}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
+      <span className="meter-fill" style={{ transform: `scaleX(${share})` }} />
+    </span>
+  )
+}
+
+export function OracleChart({ history, price, stale }: { history: { t: number; price: number }[]; price: number; stale: boolean }) {
+  const [wrap, w] = useWidth<HTMLDivElement>(720)
+  const pts = history.length ? history : [{ t: 0, price }]
+  const { active, setActive, onKey } = useIndex(pts.length)
+  const height = 220
+  const pad = { l: 52, r: 12, t: 10, b: 28 }
+  const t0 = pts[0].t
+  const t1 = Math.max(pts[pts.length - 1].t, t0 + 1)
+  const lo = Math.min(0.98, ...pts.map((p) => p.price))
+  const hi = Math.max(1.02, ...pts.map((p) => p.price))
+  const x = (t: number) => pad.l + ((t - t0) / (t1 - t0)) * (w - pad.l - pad.r)
+  const y = (p: number) => pad.t + (1 - (p - lo) / (hi - lo)) * (height - pad.t - pad.b)
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.price).toFixed(1)}`).join(' ')
+  const last = pts[pts.length - 1]
+  const yTicks = [0.98, 0.99, 1.0, 1.01, 1.02].filter((v) => v >= lo && v <= hi)
+  const xTicks = timeTicks(t0, t1, Math.max(3, Math.floor((w - pad.l - pad.r) / 90)))
+  const at = active === null ? null : pts[active]
+  const pick = (e: PointerEvent<SVGSVGElement>) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    setActive(nearest(pts.map((p) => p.t), t0 + ((e.clientX - box.left - pad.l) / (w - pad.l - pad.r)) * (t1 - t0)))
+  }
+  const zoneW = w - pad.l - pad.r
+  return (
+    <figure className="viz" data-ui>
+      <div className="viz-plot" ref={wrap} tabIndex={0} role="group" aria-roledescription="chart"
+        aria-label={`Oracle price over the last ${Math.round((t1 - t0) / 60)} minutes, now ${price.toFixed(4)}${stale ? ', stale' : ''}. Exit zones below 0.9900 and above 1.0100. Use the arrow keys to read each point.`}
+        onKeyDown={onKey} onFocus={() => setActive((a) => a ?? pts.length - 1)} onBlur={() => setActive(null)}>
+        <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} aria-hidden="true" focusable="false" onPointerMove={pick} onPointerLeave={() => setActive(null)}>
+          <rect x={pad.l} y={pad.t} width={zoneW} height={Math.max(0, y(1.01) - pad.t)} className="viz-zone" />
+          <rect x={pad.l} y={y(0.99)} width={zoneW} height={Math.max(0, height - pad.b - y(0.99))} className="viz-zone" />
+          {yTicks.map((v) => (
+            <g key={v}>
+              <line x1={pad.l} x2={w - pad.r} y1={y(v)} y2={y(v)} className={v === 1 ? 'viz-base' : 'viz-grid'} />
+              <text x={pad.l - 8} y={y(v) + 4} textAnchor="end" className="viz-tick">{v.toFixed(2)}</text>
             </g>
           ))}
-          <path d={`${stepPath(points, 'safe', x, y)} V${y(0)} H${x(t0)} Z`} fill={`url(#${gid}-safe)`} />
-          <path d={`${stepPath(points, 'vaults', x, y)} V${y(0)} H${x(t0)} Z`} fill={`url(#${gid}-vault)`} />
-          <path d={stepPath(points, 'safe', x, y)} className="bc-line s-safe" />
-          <path d={stepPath(points, 'vaults', x, y)} className="bc-line s-vault" />
-          <text x={pad.l} y={height - 8} className="bc-tick">{short(t0)}</text>
-          <text x={w - pad.r} y={height - 8} textAnchor="end" className="bc-tick">{short(t1)}</text>
+          <g className="viz-zone-label" transform={`translate(${pad.l + 8} ${y(0.99) + 8})`}>
+            <path d="M6 0l6 11H0z" className="viz-zone-icon" />
+            <text x={18} y={10}>Exit zone</text>
+          </g>
+          {xTicks.map((t) => <text key={t} x={x(t)} y={height - 8} textAnchor={anchor(x(t), pad.l, w - pad.r)} className="viz-tick">{clock(t).slice(0, 5)}</text>)}
+          <path d={d} className={`viz-line c1${stale ? ' is-stale' : ''}`} />
+          <circle cx={x(last.t)} cy={y(last.price)} r={4} className="viz-dot c1" />
           {at ? (
             <g>
-              <line x1={x(at.t)} x2={x(at.t)} y1={pad.t} y2={height - pad.b} className="bc-cross" />
-              <circle cx={x(at.t)} cy={y(at.safe)} r={4.5} className="bc-dot s-safe" />
-              <circle cx={x(at.t)} cy={y(at.vaults)} r={4.5} className="bc-dot s-vault" />
+              <line x1={x(at.t)} x2={x(at.t)} y1={pad.t} y2={height - pad.b} className="viz-cross" />
+              <circle cx={x(at.t)} cy={y(at.price)} r={4} className="viz-dot c1" />
             </g>
           ) : null}
         </svg>
         {at ? (
-          <div className="bchart-tip" style={{ left: flip ? Math.max(0, x(at.t) - 196 - 12) : tipLeft }}>
-            <p className="bchart-tip-time nums">{stamp(at.t)}</p>
-            {SERIES.map((s) => <p key={s.key} className={s.cls}><span className="bchart-swatch" aria-hidden="true" />{s.label}<strong className="nums">{money(at[s.key])}</strong></p>)}
+          <Tip x={x(at.t)} width={w}>
+            <p className="viz-tip-time nums">{stamp(at.t)}</p>
+            <TipRow slot={1} label="Price" value={at.price.toFixed(4)} />
+          </Tip>
+        ) : null}
+        <p className="sr-only" aria-live="polite">{at ? `${stamp(at.t)}: price ${at.price.toFixed(4)}.` : ''}</p>
+      </div>
+    </figure>
+  )
+}
+
+export type BarSeries = { key: string; label: string; slot: Slot; values: Record<string, number> }
+
+export function GroupedBars({ categories, series, label }: { categories: { key: string; label: string }[]; series: BarSeries[]; label: string }) {
+  const [wrap, w] = useWidth<HTMLDivElement>(640)
+  const [active, setActive] = useState<string | null>(null)
+  const bar = 12
+  const gap = 2
+  const group = series.length * bar + (series.length - 1) * gap
+  const rowH = group + 20
+  const pad = { l: 104, r: 48, t: 4, b: 24 }
+  const height = pad.t + categories.length * rowH + pad.b
+  const x = (v: number) => pad.l + Math.max(0, Math.min(1, v)) * (w - pad.l - pad.r)
+  const rowTop = (i: number) => pad.t + i * rowH + 10
+  const end = (x0: number, x1: number, yy: number) => {
+    const len = Math.max(0, x1 - x0)
+    const r = Math.min(4, len, bar / 2)
+    return `M${x0},${yy} H${x0 + len - r} Q${x0 + len},${yy} ${x0 + len},${yy + r} V${yy + bar - r} Q${x0 + len},${yy + bar} ${x0 + len - r},${yy + bar} H${x0} Z`
+  }
+  const cur = categories.findIndex((c) => c.key === active)
+  return (
+    <figure className="viz" data-ui>
+      <figcaption className="viz-head">
+        <ul className="viz-legend">
+          {series.map((s) => <li key={s.key}><span className={`viz-swatch c${s.slot}`} aria-hidden="true" />{s.label}</li>)}
+        </ul>
+      </figcaption>
+      <div className="viz-plot" ref={wrap} role="group" aria-label={label}>
+        <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} aria-hidden="true" focusable="false">
+          {[0, 0.25, 0.5, 0.75, 1].map((v) => (
+            <g key={v}>
+              <line x1={x(v)} x2={x(v)} y1={pad.t} y2={height - pad.b} className={v === 0 ? 'viz-base' : 'viz-grid'} />
+              <text x={x(v)} y={height - 6} textAnchor="middle" className="viz-tick">{pct(v)}</text>
+            </g>
+          ))}
+          {categories.map((c, i) => (
+            <g key={c.key} className={active === c.key ? 'is-on' : undefined}>
+              <text x={pad.l - 10} y={rowTop(i) + group / 2 + 4} textAnchor="end" className="viz-cat">{c.label}</text>
+              {series.map((s, k) => {
+                const yy = rowTop(i) + k * (bar + gap)
+                const v = s.values[c.key] ?? 0
+                return (
+                  <g key={s.key}>
+                    <path d={end(x(0), x(v), yy)} className={`viz-bar c${s.slot}`} />
+                    <text x={x(v) + 6} y={yy + bar - 2} className="viz-value">{pct(v)}</text>
+                  </g>
+                )
+              })}
+            </g>
+          ))}
+        </svg>
+        {categories.map((c, i) => (
+          <span key={c.key} className="viz-hit" role="img" tabIndex={0} style={{ top: rowTop(i) - 6, height: group + 12, left: 0, width: w }}
+            aria-label={`${c.label}: ${series.map((s) => `${s.label} ${pct(s.values[c.key] ?? 0)}`).join(', ')}`}
+            onPointerEnter={() => setActive(c.key)} onPointerLeave={() => setActive(null)} onFocus={() => setActive(c.key)} onBlur={() => setActive(null)} />
+        ))}
+        {cur >= 0 ? (
+          <div className="viz-tip" style={{ left: Math.min(w - 200, x(Math.max(...series.map((s) => s.values[categories[cur].key] ?? 0))) + 44), top: rowTop(cur) - 4 }} aria-hidden="true">
+            <p className="viz-tip-time">{categories[cur].label}</p>
+            {series.map((s) => <TipRow key={s.key} slot={s.slot} label={s.label} value={pct(s.values[categories[cur].key] ?? 0)} />)}
           </div>
         ) : null}
-        <p className="sr-only" aria-live="polite">{at ? `${stamp(at.t)}: cash in the Safe ${money(at.safe)}, in vaults ${money(at.vaults)}.` : ''}</p>
       </div>
-    </div>
+    </figure>
   )
 }

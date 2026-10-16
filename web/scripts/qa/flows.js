@@ -1,0 +1,110 @@
+// Playwright CLI run-code snippet: replay smoke test of the main flows (palette, shortcuts, menus, drawers, approval, bank freeze, mobile menu).
+async (page) => {
+  const BASE = '__BASE__'
+  const log = []
+  const errors = []
+  page.on('pageerror', (e) => errors.push(String(e)))
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+  const step = async (name, fn) => { try { await fn(); log.push(`ok   ${name}`) } catch (e) { log.push(`FAIL ${name}: ${String(e).split('\n')[0]}`) } }
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(BASE + '/')
+  await page.evaluate(() => { localStorage.setItem('porthmos.theme', 'light'); sessionStorage.setItem('aegis.seat', 'owner') })
+  await page.goto(BASE + '/treasury')
+  await page.waitForSelector('main#main h1')
+
+  await step('command palette opens with Ctrl K and navigates', async () => {
+    await page.keyboard.press('Control+k')
+    await page.waitForSelector('dialog.palette[open]')
+    await page.keyboard.type('Risk')
+    await page.keyboard.press('Enter')
+    await page.waitForURL('**/risk')
+  })
+  await step('g then a jumps to Audit', async () => {
+    await page.locator('body').click({ position: { x: 700, y: 300 } }).catch(() => {})
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('g'); await page.keyboard.press('a')
+    await page.waitForURL('**/audit')
+  })
+  await step('? opens shortcuts, Esc closes', async () => {
+    await page.keyboard.press('Shift+?')
+    await page.waitForSelector('dialog.dialog-shortcuts[open]')
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('dialog.dialog-shortcuts[open]', { state: 'detached', timeout: 2000 }).catch(async () => { if (await page.locator('dialog.dialog-shortcuts[open]').count()) throw new Error('still open') })
+  })
+  await step('audit row opens the drawer and Back closes it', async () => {
+    await page.locator('.dt-open').first().click()
+    await page.waitForSelector('dialog.drawer[open]')
+    await page.goBack()
+    await page.waitForFunction(() => !document.querySelector('dialog.drawer[open]'))
+  })
+  await step('theme menu switches to dark and back', async () => {
+    await page.getByRole('button', { name: /^Theme/ }).click()
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click()
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
+    await page.getByRole('button', { name: /^Theme/ }).click()
+    await page.getByRole('menuitemradio', { name: 'Light' }).click()
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'light')
+  })
+  await step('help menu opens the glossary', async () => {
+    await page.getByRole('button', { name: 'Help' }).click()
+    await page.getByRole('menuitem', { name: 'What the terms mean' }).click()
+    await page.waitForSelector('dialog.dialog-glossary[open]')
+    await page.keyboard.press('Escape')
+  })
+  await step('data source pill opens its panel', async () => {
+    await page.locator('.top-bar .mode-button').click()
+    await page.waitForSelector('.mode-panel')
+    await page.keyboard.press('Escape').catch(() => {})
+    await page.locator('.top-bar .mode-button').click()
+  })
+  await step('account menu shows the Safe once', async () => {
+    await page.locator('.switcher-button').click()
+    await page.waitForSelector('.identity-panel .side-safe')
+    const safes = await page.locator('main .side-safe').count()
+    if (safes) throw new Error('Safe also shown in main')
+    await page.locator('.switcher-button').click()
+  })
+  await step('treasury: add obligation drawer adds a row', async () => {
+    await page.goto(BASE + '/treasury')
+    await page.waitForSelector('main#main h1')
+    await page.getByRole('button', { name: 'Add obligation' }).first().click()
+    await page.waitForSelector('dialog.drawer[open]')
+    await page.fill('#ob-label', 'QA invoice')
+    await page.locator('dialog.drawer input[inputmode="decimal"]').fill('150')
+    await page.locator('dialog.drawer input[type="date"]').fill('2026-11-20')
+    await page.getByRole('button', { name: 'Add and recompute' }).click()
+    await page.waitForFunction(() => [...document.querySelectorAll('.dt-open')].some((b) => b.textContent.includes('QA invoice')), null, { timeout: 8000 })
+  })
+  await step('treasury chart: crosshair tooltip on hover', async () => {
+    const plot = page.locator('.today .viz-plot svg')
+    const box = await plot.boundingBox()
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2)
+    await page.waitForSelector('.today .viz-tip')
+  })
+  await step('copilot: approve with the recorded EIP-712 signature', async () => {
+    await page.goto(BASE + '/copilot')
+    await page.waitForSelector('main#main h1')
+    await page.getByRole('button', { name: /Approve/ }).first().click()
+    await page.waitForFunction(() => /Confirmed|Explained|Approved/.test(document.querySelector('.decision')?.textContent ?? ''), null, { timeout: 15000 })
+  })
+  await step('bank: freeze the reference treasury from the drawer', async () => {
+    await page.evaluate(() => sessionStorage.setItem('aegis.seat', 'bank'))
+    await page.goto(BASE + '/bank')
+    await page.waitForSelector('.dt-open')
+    await page.locator('.dt-open').first().click()
+    await page.waitForSelector('dialog.drawer[open]')
+    await page.locator('dialog.drawer').getByRole('button', { name: 'Freeze' }).click()
+    await page.locator('dialog.drawer').getByRole('button', { name: /Confirm freeze/ }).click()
+    await page.waitForFunction(() => /Bank frozen/.test(document.querySelector('dialog.drawer')?.textContent ?? ''), null, { timeout: 8000 })
+  })
+  await step('mobile: menu opens the sidebar and navigates', async () => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(BASE + '/treasury')
+    await page.waitForSelector('main#main h1')
+    await page.getByRole('button', { name: 'Menu' }).click()
+    await page.waitForSelector('.side.is-open')
+    await page.locator('.side.is-open').getByRole('link', { name: 'Risk' }).click()
+    await page.waitForURL('**/risk')
+  })
+  return log.join('\n') + `\nconsole errors: ${errors.length}${errors.length ? '\n' + errors.join('\n') : ''}`
+}

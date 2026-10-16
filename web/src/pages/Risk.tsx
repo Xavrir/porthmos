@@ -1,21 +1,29 @@
 import { useMutation } from '@tanstack/react-query'
-import { OracleChart, RiskRadar } from '../components/charts'
-import { Chip, ErrorNote, Figure, Hash, Kpis, Loading, PageHeader } from '../components/bits'
+import { GroupedBars, OracleChart, type Slot } from '../components/charts'
+import { Chip, ErrorNote, Figure, Hash, Kpis, Loading, PageHeader, Section } from '../components/bits'
+import { DataTable, type Column } from '../components/DataTable'
 import { usePageTitle } from '../components/chrome'
 import { BreakIt } from '../components/BreakIt'
 import { useAegis } from '../lib/source'
 import { useOracle, useRisk } from '../lib/queries'
-import { clock, money, num, pct, stamp } from '../lib/format'
+import { clock, pct, stamp } from '../lib/format'
 import { TRIGGERS } from '../lib/policy'
-import type { ScenarioName, StreamEvent } from '../lib/types'
+import type { ScenarioName, StreamEvent, VaultRisk } from '../lib/types'
 
 const SCENARIOS: { name: ScenarioName; label: string; what: string }[] = [
-  { name: 'depeg', label: 'Depeg', what: 'Price falls to 0.9850. The peg trigger fires; the Exit Agent quarantines both vaults and redeems to the Safe.' },
-  { name: 'liquidity', label: 'Liquidity squeeze', what: 'Vault B lets only 1,500 leave. The Exit Agent takes what it can now and retries every window.' },
-  { name: 'stale', label: 'Stale oracle', what: 'The keeper stops. Past 180 s, deposits would revert StaleOracle; exits still run.' },
-  { name: 'obligation', label: 'New invoice', what: 'A 2,000 customs bill is approved. The floor is out of date until the owner signs; then the agent covers it.' },
-  { name: 'restore', label: 'Restore', what: 'Return to the recorded base state: healthy peg, both vaults open, one approval waiting.' },
+  { name: 'depeg', label: 'Depeg', what: 'Price drops to 0.9850' },
+  { name: 'liquidity', label: 'Liquidity squeeze', what: 'Vault B lets 1,500 leave' },
+  { name: 'stale', label: 'Stale oracle', what: 'The keeper stops' },
+  { name: 'obligation', label: 'New invoice', what: 'A 2,000 customs bill' },
+  { name: 'restore', label: 'Restore', what: 'Back to the recorded base' },
 ]
+
+const COMPONENTS = [
+  { key: 'peg', label: 'Peg' },
+  { key: 'liquidity', label: 'Liquidity' },
+  { key: 'utilisation', label: 'Utilisation' },
+  { key: 'concentration', label: 'Concentration' },
+] as const
 
 function describe(e: StreamEvent): string | null {
   switch (e.type) {
@@ -28,6 +36,10 @@ function describe(e: StreamEvent): string | null {
   }
 }
 
+function VaultStatus({ v }: { v: VaultRisk }) {
+  return v.quarantined ? <Chip state="QUARANTINED">Quarantined</Chip> : v.triggers.length ? <Chip state="REVERTED">Trigger firing</Chip> : <Chip state="CONFIRMED">Open</Chip>
+}
+
 export default function Risk() {
   usePageTitle('Risk')
   const { api, chainId, feed, mode, health, tenant } = useAegis()
@@ -36,119 +48,103 @@ export default function Risk() {
   const run = useMutation({ mutationFn: (n: ScenarioName) => api.scenario(n) })
   const o = oracle.data
   const price = o ? Number(o.price.display) : 1
-  const triggers = risk.data?.vaults.flatMap((v) => v.triggers.map((t) => ({ vault: v.name, t }))) ?? []
-  const quarantined = risk.data?.vaults.filter((v) => v.quarantined) ?? []
+  const off = Math.abs(price - 1)
+  const limit = o?.maxOracleAge ?? TRIGGERS.maxOracleAge
+  const vaults = risk.data?.vaults ?? []
+  const triggers = vaults.flatMap((v) => v.triggers.map((t) => ({ vault: v.name, t })))
+  const quarantined = vaults.filter((v) => v.quarantined)
   const lab = mode === 'replay' || (chainId === 31337 && health?.demo !== false)
   const log = feed.map((f) => ({ id: f.id, at: f.at, text: describe(f.event) })).filter((x) => x.text && !x.text.startsWith('Price ')).slice(0, 14)
+
+  const columns: Column<VaultRisk>[] = [
+    { key: 'name', header: 'Vault', primary: true, cell: (v) => v.name },
+    { key: 'status', header: 'Status', cell: (v) => <VaultStatus v={v} /> },
+    { key: 'score', header: 'Score', align: 'right', cell: (v) => <span className="nums">{v.score.toFixed(3)}</span> },
+    { key: 'position', header: 'Position, USDC', align: 'right', cell: (v) => <span className="nums">{v.position?.display ?? ''}</span> },
+    { key: 'leave', header: 'Can leave now', align: 'right', cell: (v) => <span className="nums">{v.maxRedeem.display}</span> },
+    { key: 'triggers', header: 'Triggers', hideNarrow: true, cell: (v) => (v.triggers.length ? v.triggers.join(', ') : <span className="muted">None</span>) },
+    { key: 'address', header: 'Address', hideNarrow: true, cell: (v) => <Hash value={v.address} kind="address" label={v.name} /> },
+  ]
 
   return (
     <main id="main" className="page">
       <div className="page-body">
         <PageHeader
           title="Risk"
-          description="Three hard triggers, checked every five blocks. Any one quarantines the vault and sends the Exit Agent in. It can only redeem back to the Safe."
-          actions={lab ? <a className="button quiet" href="#lab-title">Open the stress lab</a> : null}
+          info="Three hard triggers, checked every five blocks. Any one quarantines the vault and sends the Exit Agent in. It can only redeem back to the Safe."
+          actions={lab ? <a className="button quiet" href="#lab">Stress lab</a> : null}
         />
         <Kpis label="Risk figures">
-          <Figure label="Oracle price" value={o ? o.price.display : '…'} note={o ? `${pct(Math.abs(price - 1), 2)} from 1.0000` : ''} tone={Math.abs(price - 1) > TRIGGERS.pegDeviation ? 'alert' : undefined} />
-          <Figure label="Price age" value={o ? `${o.ageSeconds} s` : '…'} note={`Limit ${o?.maxOracleAge ?? TRIGGERS.maxOracleAge} s, heartbeat 60 s`} tone={o?.stale ? 'alert' : undefined} />
-          <Figure label="Triggers firing" value={String(triggers.length)} note={triggers[0]?.t ?? 'None'} tone={triggers.length ? 'alert' : undefined} />
-          <Figure label="Quarantined" value={String(quarantined.length)} note={quarantined.map((v) => v.name).join(', ') || 'Both vaults open'} />
+          <Figure label="Oracle price" value={o ? o.price.display : '…'} note={o ? `${pct(off, 2)} from peg` : ''} tone={off > TRIGGERS.pegDeviation ? 'alert' : undefined}
+            info="Exit trigger: more than 1% from 1.0000." />
+          <Figure label="Price age" value={o ? `${o.ageSeconds} s` : '…'} note={o?.stale ? 'Stale' : `Limit ${limit} s`} tone={o?.stale ? 'alert' : undefined}
+            meter={o ? { value: Math.min(o.ageSeconds, limit), max: limit, label: `Price age ${o.ageSeconds} of ${limit} seconds`, tone: o.stale ? 'bad' : o.ageSeconds > limit * 0.66 ? 'warn' : undefined } : undefined}
+            info="Heartbeat 60 s. Past the limit, deposits revert StaleOracle; exits still run." />
+          <Figure label="Triggers firing" value={risk.data ? String(triggers.length) : '…'} note={triggers[0] ? `${triggers[0].vault}: ${triggers[0].t}` : 'None'} tone={triggers.length ? 'alert' : undefined} />
+          <Figure label="Quarantined" value={risk.data ? String(quarantined.length) : '…'} note={quarantined.map((v) => v.name).join(', ') || 'Both vaults open'} tone={quarantined.length ? 'alert' : undefined} />
         </Kpis>
 
-        <section className="block" aria-labelledby="oracle-title">
-          <div className="block-head">
-            <h2 id="oracle-title">Oracle</h2>
-            <p>Chainlink-style feed, 8 decimals. Deposits must also land inside the signed price band, no wider than 0.0200.</p>
-          </div>
+        <Section title="Oracle price" className="card"
+          info="Chainlink-style feed with 8 decimals. Deposits must also land inside the signed price band, no wider than 0.0200."
+          actions={o ? (o.stale ? <Chip state="HELD">Stale</Chip> : <span className="card-meta nums">Updated {stamp(o.updatedAt)}</span>) : null}>
           {o ? <OracleChart history={o.history ?? []} price={price} stale={o.stale} /> : <Loading what="the oracle" />}
           <ErrorNote error={oracle.error} />
-          {o ? <p className="muted small-print">Last update {stamp(o.updatedAt)}{o.stale ? '. Stale: deposits revert StaleOracle; exits still run.' : '.'}</p> : null}
-        </section>
+        </Section>
 
-        <section className="block" aria-labelledby="radar-title">
-          <div className="block-head">
-            <h2 id="radar-title">Vault radar</h2>
-            <p>Ranking score r = 0.4 peg + 0.3 liquidity + 0.2 utilisation + 0.1 concentration. The weights are configuration, not calibrated values. Triggers act on their own, whatever the score.</p>
-          </div>
+        <Section title="Vault risk" className="card"
+          info="Ranking score r = 0.4 peg + 0.3 liquidity + 0.2 utilisation + 0.1 concentration. Higher is riskier. The weights are configuration, not calibrated values; triggers act on their own, whatever the score.">
           {risk.data ? (
-            <div className="radars">
-              {risk.data.vaults.map((v) => (
-                <article key={v.address} className={`radar-card${v.triggers.length ? ' is-alert' : ''}`}>
-                  <header>
-                    <h3>{v.name}</h3>
-                    {v.quarantined ? <Chip state="QUARANTINED">Quarantined</Chip> : v.triggers.length ? <Chip state="REVERTED">Trigger firing</Chip> : <Chip state="CONFIRMED">Open</Chip>}
-                  </header>
-                  <RiskRadar components={v.components} alert={v.triggers.length > 0} />
-                  <dl className="facts">
-                    <div><dt>Score</dt><dd className="nums">{v.score.toFixed(3)}</dd></div>
-                    <div><dt>Position</dt><dd className="nums">{v.position?.display ?? 'n/a'}</dd></div>
-                    <div><dt>Can leave now</dt><dd className="nums">{v.maxRedeem.display}</dd></div>
-                    <div><dt>Address</dt><dd><Hash value={v.address} kind="address" label={v.name} /></dd></div>
-                  </dl>
-                  {v.triggers.length ? (
-                    <ul className="trigger-list">{v.triggers.map((t) => <li key={t}>{t}</li>)}</ul>
-                  ) : <p className="muted">No trigger. Liquidity needs at least 1.2 × the position to be withdrawable{v.position ? ` (${money(num(v.position) * 1.2)})` : ''}.</p>}
-                </article>
-              ))}
-            </div>
+            <>
+              <GroupedBars label="Risk components by vault, higher is riskier"
+                categories={COMPONENTS.map((c) => ({ key: c.key, label: c.label }))}
+                series={vaults.slice(0, 3).map((v, i) => ({ key: v.address, label: v.name, slot: (i + 2) as Slot, values: { ...v.components } }))} />
+              <DataTable label="Vaults" rows={vaults} columns={columns} rowKey={(v) => v.address} rowName={(v) => v.name} />
+            </>
           ) : <Loading what="the risk report" />}
           <ErrorNote error={risk.error} />
-        </section>
+        </Section>
 
         {mode === 'live' && tenant ? <BreakIt /> : null}
 
         <div className="cols">
-          <section className="block col-wide" aria-labelledby="lab-title" id="lab">
-            <div className="block-head">
-              <h2 id="lab-title">Stress lab</h2>
-              <p>{mode === 'replay' ? 'Each button plays a recorded scenario inside your browser; watch the system respond through the event stream.' : lab ? 'Local chain 31337 only. Each button calls /api/demo/scenario and you watch the system respond through the event stream.' : tenant ? 'Market scenarios move the shared price feed and vaults, so only the Porthmos team runs them here. When one runs, a banner shows it to every treasury.' : 'Scenario controls exist only on the local demo chain (31337).'}</p>
-            </div>
+          <Section title="Stress lab" id="lab" className="card col-wide"
+            info={mode === 'replay' ? 'Each button plays a recorded scenario in your browser. Watch the system respond in the event stream.' : lab ? 'Local chain 31337 only. Each button calls /api/demo/scenario.' : 'Market scenarios move the shared price feed and vaults, so only the Porthmos team runs them here.'}>
             {lab ? (
-              <div className="scenarios">
+              <ul className="scenarios">
                 {SCENARIOS.map((s) => (
-                  <div key={s.name} className="scenario">
-                    <button type="button" className="button quiet" disabled={run.isPending} onClick={() => run.mutate(s.name)}>
+                  <li key={s.name} className="scenario">
+                    <button type="button" className="button small quiet" disabled={run.isPending} onClick={() => run.mutate(s.name)}>
                       {run.isPending && run.variables === s.name ? 'Running…' : s.label}
                     </button>
-                    <p>{s.what}</p>
-                  </div>
+                    <span className="muted">{s.what}</span>
+                  </li>
                 ))}
-              </div>
-            ) : null}
+              </ul>
+            ) : <p className="empty">Scenario controls run on the local demo chain only.</p>}
             <ErrorNote error={run.error} />
-          </section>
+          </Section>
 
-          <section className="block col-narrow" aria-labelledby="log-title">
-            <div className="block-head">
-              <h2 id="log-title">Event stream</h2>
-              <p>Newest first, from /api/stream{mode === 'replay' ? ' (replayed in the browser)' : ''}.</p>
-            </div>
+          <Section title="Event stream" className="card col-narrow" info={`Newest first, from /api/stream${mode === 'replay' ? ', replayed in the browser' : ''}.`}>
             {log.length ? (
               <ol className="log" aria-live="polite">
                 {log.map((l) => <li key={l.id}><span className="nums muted">{clock(Math.floor(l.at / 1000))}</span> {l.text}</li>)}
               </ol>
-            ) : <p className="empty">Quiet. Run a scenario to see the stream.</p>}
-          </section>
+            ) : <p className="empty">Quiet. Run a scenario.</p>}
+          </Section>
         </div>
 
-        <section className="block" aria-labelledby="rules-title">
-          <div className="block-head">
-            <h2 id="rules-title">Hard exit triggers</h2>
-            <p>From the technical document. Quarantine is cleared only by the owner, after 24 hours with no trigger.</p>
-          </div>
+        <Section title="Exit triggers" info="From the technical document. Quarantine is cleared only by the owner, after 24 hours with no trigger. With one stable asset and one feed, a depeg exit reduces vault risk, not exposure to the coin itself.">
           <div className="table-wrap" tabIndex={0} role="region" aria-label="Exit triggers table, scrolls sideways on small screens">
             <table className="table">
               <thead><tr><th scope="col">Trigger</th><th scope="col">Threshold</th><th scope="col">Why</th></tr></thead>
               <tbody>
-                <tr><td>Peg deviation</td><td className="nums">|p − 1.00| &gt; 1.0%</td><td>Outside 1% a stablecoin is in distress, not noise.</td></tr>
-                <tr><td>Oracle staleness</td><td className="nums">older than 180 s</td><td>Three missed 60 s heartbeats; never act on dead data.</td></tr>
-                <tr><td>Withdrawable liquidity</td><td className="nums">maxRedeem &lt; 1.2 × position</td><td>Leave before the exit door closes, not after.</td></tr>
+                <tr><td>Peg deviation</td><td className="nums">|p − 1.00| &gt; 1.0%</td><td>Outside 1% a stablecoin is in distress</td></tr>
+                <tr><td>Oracle staleness</td><td className="nums">older than 180 s</td><td>Three missed heartbeats</td></tr>
+                <tr><td>Withdrawable liquidity</td><td className="nums">maxRedeem &lt; 1.2 × position</td><td>Leave before the exit door closes</td></tr>
               </tbody>
             </table>
           </div>
-          <p className="muted small-print">With one stable asset and one feed, a depeg exit reduces vault risk (lock-up, bad debt, a run on the vault), not exposure to the coin itself.</p>
-        </section>
+        </Section>
       </div>
     </main>
   )

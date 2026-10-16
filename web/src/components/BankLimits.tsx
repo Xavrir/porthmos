@@ -7,6 +7,7 @@ import { REGISTRY_ABI } from '../lib/deployment'
 import { publicClientFor } from '../lib/onboard/chain'
 import { plainError } from '../lib/onboard/errors'
 import { fromUnits, money, toUnits } from '../lib/format'
+import { Section } from './bits'
 import { SignConfirm } from './SignConfirm'
 import { TxStatus } from './TxStatus'
 
@@ -63,11 +64,7 @@ export function BankLimits({ safe }: { safe: Address }) {
 
   if (!bankKey) return null
   return (
-    <section className="block" aria-labelledby="limits-title">
-      <div className="block-head">
-        <h2 id="limits-title">Tighten this client’s limits</h2>
-        <p>Your bank key sends these straight to the PolicyRegistry. The registry lets the bank only lower a cap or remove a vault, never loosen or add. Exits still run.</p>
-      </div>
+    <Section title="Tighten limits" info="Your bank key sends these straight to the PolicyRegistry. The registry lets the bank only lower a cap or remove a vault, never loosen or add. Exits still run.">
       <div className="limits">
         {vaults.map((v, i) => (
           <div key={v.address} className="limit">
@@ -98,6 +95,6 @@ export function BankLimits({ safe }: { safe: Address }) {
       <div role="status">
         {sent ? <p className="ok-note">{sent.summary}. Sent: <TxStatus hash={sent.hash} label="bank transaction" onMined={() => { qc.invalidateQueries({ queryKey: ['bank-clients'] }); qc.invalidateQueries({ queryKey: ['treasury'] }); void limits.refetch() }} /></p> : null}
       </div>
-    </section>
+    </Section>
   )
 }

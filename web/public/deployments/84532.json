@@ -6,5 +6,7 @@
   "roles": { "owner": "0x01c38dfC1Eb6D925E5e302910E1C83CED96c1663", "bank": "0x08FC2B2FfDec2d52B6Bc41f45d791Cf37933e594", "authorizer": "0x7682b4855cc2a68D2c6b4594072ba504AE321d1d", "exitKey": "0x40C5E17C85b03C38faC331a94477D77F3b3e5839", "executor": "0xfd299800e629Ab2D708fF399C79DbEd06569528D", "keeper": "0x7d22e1c8D1B8B9FFe872F6312605f889cc73C8ed" },
   "params": { "autoCap": "1000000000", "dailyCap": "5000000000", "bankLimit": "3000000000",
               "reserveFloor": "4500000000", "maxBandWidth": "2000000", "maxOracleAge": 180 },
+  "tradeEscrow": "0x009ca6F11b24fE0bAb9dE3EBb5dAb9e15f95ce76", "multiSendCallOnly": "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", "tradeEscrowBlock": 48204293,
+  "issuers": { "carrier": "0x4A9Ec1f4d93c4E0ed5888793Ce340F714c869c76", "sensor": "0xb7F84e62f46608aCA2FC59302132cb8beA754300", "surveyor": "0x4b304413d432DD917b3171f4DaC7C8C9890c6ee7" },
   "abis": "contracts/out (forge artifacts)"
 }

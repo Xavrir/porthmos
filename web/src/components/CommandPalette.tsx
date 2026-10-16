@@ -57,10 +57,11 @@ function usePaletteItems(enabled: boolean): PaletteItem[] {
       })
     }
     for (const e of [...(events.data ?? [])].sort((a, b) => b.blockNumber - a.blockNumber)) {
-      const href = mode === 'replay' && !isRecordedTx(e.txHash) ? undefined : explorerTx(chainId, e.txHash)
+      if (mode === 'replay' && !isRecordedTx(e.txHash)) continue
+      const href = explorerTx(chainId, e.txHash)
       items.push({
         id: `tx-${e.txHash}-${e.logIndex}`, group: 'Transactions', title: `${e.name} ${shortHex(e.txHash, 8, 6)}`,
-        hint: `Block ${e.blockNumber}${href ? '' : ', illustrative hash'}`, keywords: e.txHash,
+        hint: `Block ${e.blockNumber}`, keywords: e.txHash,
         target: href ? { kind: 'external', href } : { kind: 'route', to: '/audit' },
       })
     }
@@ -74,8 +75,7 @@ export function SearchField() {
   return (
     <button type="button" className="search-field" aria-haspopup="dialog" onClick={() => openOverlay({ kind: 'palette' })}>
       <Icon name="search" />
-      <span className="search-placeholder">Search pages, ledger rows, transactions, terms</span>
-      <span className="search-placeholder-short">Search</span>
+      <span className="search-placeholder">Search</span>
       <kbd className="search-kbd" aria-hidden="true">{mac ? '⌘K' : 'Ctrl K'}</kbd>
       <span className="sr-only">, shortcut / or {mac ? 'Command' : 'Control'} K</span>
     </button>

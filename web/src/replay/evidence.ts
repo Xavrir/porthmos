@@ -9,7 +9,7 @@ export type EvidenceMeta = { network: string; chainId: number; generatedAt: stri
 export const EVIDENCE_META: EvidenceMeta = {
   "network": "Base Sepolia",
   "chainId": 84532,
-  "generatedAt": "2026-10-15T17:21:50.479468+00:00",
+  "generatedAt": "2026-10-16T19:24:28.593358+00:00",
   "deployBlock": 48114516
 }
 
@@ -125,6 +125,152 @@ export const EVIDENCE_SLOTS: Partial<Record<string, EvidenceSlot>> = {
 }
 
 export const EVIDENCE_SCENARIOS: EvidenceScenario[] = [
+  {
+    "id": "E6a",
+    "status": "recorded",
+    "description": "The reference Safe funds a 1,000 test USDC order (200 / 400 / 400) in one owner-signed Safe transaction: a delegatecall to MultiSendCallOnly batching approve(escrow, total) and createOrder.",
+    "txs": [
+      {
+        "label": "owner funds the order: Safe -> MultiSendCallOnly (approve + createOrder)",
+        "hash": "0x63a8622b38aa631533900f5cea7b92699132b1d2e1e036bff2fc8f035c1a07f1",
+        "block": 48205059,
+        "role": "owner",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      }
+    ],
+    "ledgerRows": 1
+  },
+  {
+    "id": "E6b",
+    "status": "recorded",
+    "description": "Milestone 1 (handed to carrier): the demo carrier's proof is posted to the service; PROOF_VERIFIED, signed by the Authorizer process, submitted by the Executor.",
+    "requestId": "rel_1d2316e0152e4830",
+    "txs": [
+      {
+        "label": "Executor submits release of milestone 1 (200 USDC)",
+        "hash": "0x86cbfd7e450b18d54448d7b28c57c20d3ddbeb7308faa5e2eba392fa67402281",
+        "block": 48205076,
+        "role": "executor",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      }
+    ],
+    "ledgerRows": 3
+  },
+  {
+    "id": "E6c",
+    "status": "recorded",
+    "description": "Milestone 2 (arrived): the sensor proof reports a maximum of 9.40 C against 2.00 to 8.00 C. The service writes MILESTONE_HELD (ConditionNotMet) and requests no release; a release signed with the Authorizer key by this script is then forced and reverts.",
+    "requestId": "rel_4c4a9b3638924703",
+    "expectedError": "ConditionNotMet",
+    "txs": [
+      {
+        "label": "forced release of the held milestone (script-signed)",
+        "hash": "0x71c4032f5926988e7d28ef0e6c5bacda025ffc8ee2800517db885e69408386b6",
+        "block": 48205087,
+        "role": "attacker",
+        "expected": "ConditionNotMet",
+        "verified": true,
+        "reverted": true,
+        "error": "ConditionNotMet"
+      }
+    ],
+    "ledgerRows": 2
+  },
+  {
+    "id": "E6d",
+    "status": "recorded",
+    "description": "Milestone 2 resolved: the owner waives after a survey (owner-signed Safe transaction).",
+    "txs": [
+      {
+        "label": "owner waives milestone 2 (Safe -> TradeEscrow.waive)",
+        "hash": "0xb7a2a4178f7cbb6cb865244e6bc4a2832f94cbc8d926b848834ff432ef2a6160",
+        "block": 48205089,
+        "role": "owner",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      }
+    ],
+    "ledgerRows": 1
+  },
+  {
+    "id": "E6e",
+    "status": "recorded",
+    "description": "Milestone 3 (quality accepted): the surveyor's proof is posted after the unfreeze; PROOF_VERIFIED, a new authorization from the Authorizer process, submitted by the Executor; the order completes.",
+    "requestId": "rel_37cdbff9f566483e",
+    "txs": [
+      {
+        "label": "Executor submits release of milestone 3 (400 USDC)",
+        "hash": "0xf4a27910945cd6e6044bcd7973ee41e066c98762df15218802b70a60f1be1493",
+        "block": 48205115,
+        "role": "executor",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      }
+    ],
+    "ledgerRows": 3
+  },
+  {
+    "id": "E6f",
+    "status": "recorded",
+    "description": "Attack: a valid milestone 3 authorization, script-signed with the Authorizer key, with the amount changed after signing, sent by the attacker role.",
+    "expectedError": "BadSignature",
+    "txs": [
+      {
+        "label": "release with the amount changed after signing (script-signed)",
+        "hash": "0x2bbf4bd484f679106d700dd326cb3f6b87052de7b8db709a9884f35a142e0bf5",
+        "block": 48205096,
+        "role": "attacker",
+        "expected": "BadSignature",
+        "verified": true,
+        "reverted": true,
+        "error": "BadSignature"
+      }
+    ],
+    "ledgerRows": 0
+  },
+  {
+    "id": "E6g",
+    "status": "recorded",
+    "description": "Bank freeze: a valid milestone 3 release, script-signed, submitted while the buyer Safe is bank-frozen; then the bank unfreezes.",
+    "expectedError": "Frozen",
+    "txs": [
+      {
+        "label": "setup: bank freezes the buyer Safe",
+        "hash": "0xddfb6e11f76f453e37f06ac9158f192f8cf15f321e0d1c17f9da22ad6bd2e323",
+        "block": 48205097,
+        "role": "bank",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      },
+      {
+        "label": "valid release while bank-frozen (script-signed)",
+        "hash": "0x0411d80b31157943150ca5702082dc157afc855da5edad13b4e6ac4bce448a9c",
+        "block": 48205102,
+        "role": "attacker",
+        "expected": "Frozen",
+        "verified": true,
+        "reverted": true,
+        "error": "Frozen"
+      },
+      {
+        "label": "cleanup: bank unfreezes",
+        "hash": "0x880659b35223219eeb470ac734e66096ba163eb035d18c7b503e9fc2d9b5223e",
+        "block": 48205104,
+        "role": "bank",
+        "expected": "success",
+        "verified": true,
+        "reverted": false
+      }
+    ],
+    "ledgerRows": 0
+  },
   {
     "id": "E1",
     "status": "recorded",

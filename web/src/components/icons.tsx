@@ -34,6 +34,9 @@ const PATHS = {
   ledger: 'M4 6.5h16 M4 12h16 M4 17.5h10',
   tx: 'M4 8.5h14l-3.5-3.5 M20 15.5H6l3.5 3.5',
   safe: 'M4 5.5h16v13H4z M8 9.5h3v5H8z M15 12h2',
+  clock: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17z M12 7.5V12l3 2',
+  lock: 'M6 10.5h12v9H6z M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5',
+  stop: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17z M8 8l8 8',
 } as const
 
 export type IconName = keyof typeof PATHS

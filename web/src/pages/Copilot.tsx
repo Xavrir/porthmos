@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ActionCardView, ApprovalPanel } from '../components/ActionCard'
-import { Chip, Empty, ErrorNote, ErrorTag, Figure, Hash, Kpis, Loading, PageHeader } from '../components/bits'
+import { Chip, Empty, ErrorNote, ErrorTag, Hash, Loading, PageHeader } from '../components/bits'
 import { DecisionChain } from '../components/DecisionChain'
 import { expectedSigner, RecordSheet } from '../components/RecordSheet'
 import { SwitchSeat, usePageTitle } from '../components/chrome'
-import { GLOSSARY_DEF, Term } from '../components/Glossary'
 import { isRecordedTx } from '../replay/hashes'
 import { proofFor, proofSentence, refusalFor } from '../lib/proof'
 import { useAegis } from '../lib/source'
@@ -110,16 +109,12 @@ export default function Copilot() {
       <div className="page-body">
       <PageHeader
         title="Copilot"
-        description={<>Ask in plain words. The agent holds no key and writes no <Term def={GLOSSARY_DEF.calldata}>calldata</Term>: it picks among options the deterministic engines build, and material actions wait for your signature.</>}
+        subtitle={<>{pending.data ? `${pending.data.length} waiting for you` : '…'}<span className="sep" aria-hidden="true" />{mode === 'replay' || /determin/i.test(health?.llm ?? health?.llmMode ?? health?.agentMode ?? '') ? 'Deterministic agent' : `${health?.llm ?? health?.llmMode ?? health?.agentMode ?? 'Model'} agent`}{latest ? <><span className="sep" aria-hidden="true" />Last: {sentenceCase(latest).toLowerCase()}</> : null}</>}
+        info="Ask in plain words. The agent holds no key and writes no calldata: it picks among options the deterministic engines build, and material actions wait for your signature. No safety property depends on the model."
         actions={pending.data?.[0] ? (
-          <button type="button" className="button" onClick={() => { setSelected(pending.data![0].requestId); setJump(pending.data![0].requestId) }}>Review the approval</button>
+          <button type="button" className="button" onClick={() => { setSelected(pending.data![0].requestId); setJump(pending.data![0].requestId) }}>Review approval</button>
         ) : null}
       />
-      <Kpis label="Copilot figures">
-        <Figure label="Waiting for you" value={pending.data ? String(pending.data.length) : '…'} note={pending.data?.[0] ? `${pending.data[0].actionCard.amount.display} into ${pending.data[0].actionCard.vault.name}` : 'No approvals due'} />
-        <Figure label="Last state" value={latest ? sentenceCase(latest) : '…'} />
-        <Figure label="Agent" value={mode === 'replay' || /determin/i.test(health?.llm ?? health?.llmMode ?? health?.agentMode ?? '') ? 'Deterministic' : (health?.llm ?? health?.llmMode ?? health?.agentMode ?? 'Model')} note="No safety property depends on the model" />
-      </Kpis>
 
       <div className={`copilot${isPending ? ' is-approving' : ''}`}>
         <section className="chat" aria-labelledby="chat-title">
@@ -214,10 +209,10 @@ export default function Copilot() {
                 </div>
               ) : null}
               {r.revertReason && mode === 'replay' && !isRecordedTx(r.txHash) ? (
-                <p className="decision-tx">Refused with <ErrorTag name={r.revertReason} /> in the replay narrative. No Base Sepolia transaction is shown for it. {refusalFor(r.revertReason) ? proofSentence(proofFor(refusalFor(r.revertReason)!)) : ''}</p>
-              ) : r.txHash || r.revertReason ? (
-                <p className="decision-tx">{r.revertReason ? <>Reverted <ErrorTag name={r.revertReason} /> </> : 'Executed '} in <Hash value={r.txHash} label="transaction" /></p>
-              ) : null}
+                <p className="decision-tx">Refused with <ErrorTag name={r.revertReason} /> in the replay narrative. {refusalFor(r.revertReason) ? proofSentence(proofFor(refusalFor(r.revertReason)!)) : ''}</p>
+              ) : r.txHash ? (
+                <p className="decision-tx">{r.revertReason ? <>Reverted <ErrorTag name={r.revertReason} /> in</> : 'Executed in'} <Hash value={r.txHash} label="transaction" /></p>
+              ) : r.revertReason ? <p className="decision-tx">Reverted <ErrorTag name={r.revertReason} /></p> : null}
               {r.explanation ? <p className="decision-why">{r.explanation}</p> : null}
             </article>
           ) : <ErrorNote error={req.error} />}

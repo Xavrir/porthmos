@@ -30,37 +30,15 @@ export function initLandingMotion(root: HTMLElement): () => void {
         gsap.set(split.words, { yPercent: 40, autoAlpha: 0 })
         html.classList.remove('motion-pending')
         gsap.to(split.words, { yPercent: 0, autoAlpha: 1, duration: 0.9, stagger: 0.08, ease: 'pmOut', delay: 0.1 })
-        gsap.from(qa('.pm-hero-sub, .pm-pair, .pm-hero-chips'), { y: 12, autoAlpha: 0, duration: 0.9, stagger: 0.1, ease: 'pmOut', delay: 0.45 })
+        gsap.from(qa('.pm-hero-sub, .pm-pair, .pm-hero-chips', q('.pm-hero') ?? root), { y: 12, autoAlpha: 0, duration: 0.9, stagger: 0.1, ease: 'pmOut', delay: 0.45 })
         gsap.from(q('.pm-nav'), { autoAlpha: 0, duration: 0.6, ease: 'pmOut', delay: 0.2 })
       }
 
       const curtain = () => {
         const burst = q('.pm-burst')
-        const problem = q('.pm-problem')
-        if (!burst || !problem) return
-        gsap.fromTo(burst, { opacity: 1, scale: 1 }, { opacity: 0.3, scale: 1.12, ease: 'none', scrollTrigger: { trigger: problem, start: 'top bottom', end: 'top top', scrub: true } })
-      }
-
-      const statement = () => {
-        const p = q('.pm-statement')
-        if (!p) return
-        const split = SplitText.create(p, { type: 'lines', mask: 'lines', aria: 'none' })
-        gsap.from(split.lines, { yPercent: 100, duration: 1, stagger: 0.06, ease: 'pmOut', scrollTrigger: { trigger: p, start: 'top 80%', once: true } })
-        gsap.from(q('.pm-statement-chip'), { y: 12, autoAlpha: 0, duration: 0.6, ease: 'pmOut', scrollTrigger: { trigger: p, start: 'top 85%', once: true } })
-      }
-
-      const rules = () => {
-        const rows = qa('.pm-rule')
-        if (!rows.length) return
-        ScrollTrigger.batch(rows, {
-          start: 'top bottom', once: true,
-          onEnter: (batch) => {
-            const els = batch as HTMLElement[]
-            gsap.from(els.map((r) => r.querySelectorAll('.pm-rule-title, .pm-rule-status')), { y: 16, autoAlpha: 0, duration: 0.6, stagger: 0.05, ease: 'pmOut' })
-            gsap.from(els.map((r) => r.querySelector('.pm-rule-line')), { scaleX: 0, transformOrigin: 'left center', duration: 0.6, stagger: 0.05, ease: 'pmOut' })
-            gsap.from(els.map((r) => r.querySelector('.pm-tile')), { scale: 0.6, duration: 0.6, stagger: 0.05, ease: 'pmOut' })
-          },
-        })
+        const curtainEl = q('.pm-curtain')
+        if (!burst || !curtainEl) return
+        gsap.fromTo(burst, { opacity: 1, scale: 1 }, { opacity: 0.3, scale: 1.12, ease: 'none', scrollTrigger: { trigger: curtainEl, start: 'top bottom', end: 'top top', scrub: true } })
       }
 
       const wipe = () => {
@@ -119,7 +97,7 @@ export function initLandingMotion(root: HTMLElement): () => void {
       }
 
       const blocks = () => {
-        const items = qa('.pm-card, .pm-stat, .pm-split, .pm-col, .pm-freeze, .pm-plan, .pm-lede')
+        const items = qa('.pm-stat, .pm-card, .pm-fact, .pm-built-item, .pm-lede, .pm-cta-pair')
         ScrollTrigger.batch(items, {
           start: 'top bottom', once: true,
           onEnter: (batch) => { gsap.from(batch, { y: 24, autoAlpha: 0, duration: 0.7, stagger: 0.06, ease: 'pmOut' }) },
@@ -128,8 +106,6 @@ export function initLandingMotion(root: HTMLElement): () => void {
 
       hero()
       curtain()
-      statement()
-      rules()
       wipe()
       rail()
       words()
@@ -142,9 +118,21 @@ export function initLandingMotion(root: HTMLElement): () => void {
   const refresh = () => ScrollTrigger.refresh()
   window.addEventListener('load', refresh)
   const late = window.setTimeout(refresh, 1500)
+  // Live stats can mount after setup and change the page height, which would leave pin and rail offsets stale.
+  let lastHeight = root.offsetHeight
+  let pending = 0
+  const resize = new ResizeObserver(() => {
+    if (root.offsetHeight === lastHeight) return
+    lastHeight = root.offsetHeight
+    window.clearTimeout(pending)
+    pending = window.setTimeout(refresh, 200)
+  })
+  resize.observe(root)
   return () => {
     window.removeEventListener('load', refresh)
     window.clearTimeout(late)
+    window.clearTimeout(pending)
+    resize.disconnect()
     mm.revert()
     html.classList.remove('motion-pending')
   }

@@ -1,7 +1,11 @@
-import { money, num } from '../lib/format'
+import { useState } from 'react'
+import { money, num, pct } from '../lib/format'
 import type { TreasuryState } from '../lib/types'
+import { Icon } from './icons'
 
-export function reserveSegments(t: TreasuryState) {
+type Segment = { key: string; label: string; value: number; mark: string; quarantined?: boolean }
+
+export function reserveSegments(t: TreasuryState): Segment[] {
   const safe = num(t.balances.safeUsdc)
   const floor = num(t.reserve.onchainFloor)
   const required = num(t.reserve.required)
@@ -10,35 +14,38 @@ export function reserveSegments(t: TreasuryState) {
   const idle = Math.max(0, safe - reserve - fees)
   const shortfall = Math.max(0, Math.max(floor, required) - safe)
   return [
-    { key: 'reserve', label: 'Reserve', sub: 'kept for obligations', value: reserve },
-    { key: 'fees', label: 'Fees', sub: 'kept for gas', value: fees },
-    { key: 'idle', label: 'Idle', sub: 'deployable cash', value: idle },
-    ...t.balances.vaults.map((v, i) => ({ key: `vault-${i}`, label: v.name, sub: v.quarantined ? 'quarantined' : 'earning', value: num(v.assets), quarantined: !!v.quarantined })),
-    ...(shortfall > 0 ? [{ key: 'short', label: 'Shortfall', sub: 'below the reserve', value: shortfall }] : []),
+    { key: 'reserve', label: 'Reserve', value: reserve, mark: 'c1' },
+    ...t.balances.vaults.slice(0, 2).map((v, i) => ({ key: `vault-${i}`, label: v.quarantined ? `${v.name}, quarantined` : v.name, value: num(v.assets), mark: `c${i + 2}`, quarantined: !!v.quarantined })),
+    { key: 'idle', label: 'Idle cash', value: idle, mark: 'c4' },
+    { key: 'fees', label: 'Kept for gas', value: fees, mark: 'is-muted' },
+    ...(shortfall > 0 ? [{ key: 'short', label: 'Shortfall', value: shortfall, mark: 'is-critical' }] : []),
   ].filter((s) => s.value > 0.004)
 }
 
-export function ReserveBar({ t, labelled = true }: { t: TreasuryState; labelled?: boolean }) {
+export function ReserveBar({ t }: { t: TreasuryState }) {
   const segs = reserveSegments(t)
   const total = segs.reduce((a, s) => a + s.value, 0) || 1
+  const [on, setOn] = useState<string | null>(null)
   return (
-    <figure className="reserve-bar" data-ui>
-      <div className="rb-track" role="img" aria-label={segs.map((s) => `${s.label} ${money(s.value)}`).join(', ')}>
-        {segs.map((s, i) => (
-          <span key={s.key} className={`rb-seg rb-${s.key.startsWith('vault') ? 'vault' : s.key}${'quarantined' in s && s.quarantined ? ' is-q' : ''}`} style={{ flexGrow: s.value / total, ['--i' as string]: i }} />
+    <figure className={`alloc${on ? ' has-on' : ''}`} data-ui>
+      <div className="alloc-track" aria-hidden="true">
+        {segs.map((s) => (
+          <span key={s.key} className={`alloc-seg ${s.mark}${s.quarantined ? ' is-q' : ''}${on === s.key ? ' is-on' : ''}`} style={{ flexGrow: s.value / total }}
+            onPointerEnter={() => setOn(s.key)} onPointerLeave={() => setOn(null)} />
         ))}
       </div>
-      {labelled ? (
-        <figcaption className="rb-legend">
+      <figcaption>
+        <ul className="alloc-list">
           {segs.map((s) => (
-            <span key={s.key} className={`rb-key rb-k-${s.key.startsWith('vault') ? 'vault' : s.key}`}>
-              <span className="rb-name">{s.label}</span>
-              <span className="rb-val nums">{money(s.value)}</span>
-              <span className="rb-sub">{s.sub}</span>
-            </span>
+            <li key={s.key} className={on === s.key ? 'is-on' : undefined} onPointerEnter={() => setOn(s.key)} onPointerLeave={() => setOn(null)}>
+              <span className={`viz-swatch ${s.mark}`} aria-hidden="true" />
+              <span className="alloc-name">{s.key === 'short' ? <Icon name="alert" className="alloc-icon" /> : null}{s.label}</span>
+              <span className="alloc-val nums">{money(s.value)}</span>
+              <span className="alloc-share nums">{pct(s.value / total)}</span>
+            </li>
           ))}
-        </figcaption>
-      ) : null}
+        </ul>
+      </figcaption>
     </figure>
   )
 }

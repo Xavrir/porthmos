@@ -155,21 +155,6 @@ export function ArtRelease() {
   )
 }
 
-export function ArtAgent() {
-  const s = scene()
-  const floor = s.floor(-8, -8, 7, 26)
-  const reserve = s.box(10, 30, 0, 50, 50, 120)
-  const free = s.box(90, 30, 0, 50, 50, 60)
-  const invested = s.box(90, 30, 60, 50, 50, 44)
-  return (
-    <Frame s={s} label="Two bars: cash reserved for bills, and free cash invested on top">
-      <path className="pm-iso-floor" d={floor} />
-      <Paths d={[...reserve, ...free]} />
-      <Paths d={invested} keyed />
-    </Frame>
-  )
-}
-
 const stroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'square' as const, strokeLinejoin: 'miter' as const }
 
 function Icon({ children, size = 24 }: { children: ReactNode; size?: number }) {
@@ -177,9 +162,6 @@ function Icon({ children, size = 24 }: { children: ReactNode; size?: number }) {
 }
 
 export const IconLock = () => <Icon><rect x="5" y="11" width="14" height="9" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /><path d="M12 14.5v2" /></Icon>
-export const IconMilestone = () => <Icon><path d="M6 21V4" /><path d="M6 5h11l-2.5 3.5L17 12H6" /></Icon>
-export const IconReserve = () => <Icon><rect x="4" y="5" width="16" height="15" /><path d="M4 9h16M8 3v4M16 3v4M8 13h3M8 16h6" /></Icon>
-export const IconGrow = () => <Icon><path d="M4 20h16" /><path d="M5 16l5-5 3 3 6-6" /><path d="M15 8h4v4" /></Icon>
 export const IconFreeze = () => <Icon><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9" /><path d="M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5" /></Icon>
 export const IconArrow = () => <Icon size={18}><path d="M4 12h15M13 6l6 6-6 6" /></Icon>
 export const IconOut = () => <Icon size={18}><path d="M7 17 17 7M9 7h8v8" /></Icon>
@@ -187,3 +169,8 @@ export const IconPlus = () => <Icon size={14}><path d="M12 5v14M5 12h14" /></Ico
 export const IconBlock = () => <Icon><circle cx="12" cy="12" r="8" /><path d="M6.5 17.5l11-11" /></Icon>
 export const IconContract = () => <Icon><path d="M6 3h9l3 3v15H6z" /><path d="M9 9h6M9 13h6M9 17h3" /></Icon>
 export const IconCheck = () => <Icon><path d="M4 12.5 9.5 18 20 6" /></Icon>
+export const IconGitHub = () => (
+  <svg className="pm-icon" viewBox="0 0 16 16" width={20} height={20} aria-hidden="true" fill="currentColor">
+    <path d="M8 0c4.42 0 8 3.58 8 8a8.01 8.01 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" />
+  </svg>
+)

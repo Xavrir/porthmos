@@ -8,7 +8,7 @@ import { plainError } from '../lib/onboard/errors'
 import type { AttackKind, AttackResult } from '../lib/onboard/types'
 import { ERRORS, isErrorName } from '../lib/vocabulary'
 import { ApprovalPanel } from './ActionCard'
-import { Chip, ErrorTag } from './bits'
+import { Chip, ErrorTag, Section } from './bits'
 import { SwitchSeat } from './chrome'
 import { SignConfirm } from './SignConfirm'
 import { TxStatus } from './TxStatus'
@@ -102,11 +102,7 @@ export function BreakIt() {
   const t = useTreasury()
   const held = t.data?.balances.vaults.find((v) => BigInt(v.shares.raw || '0') > 0n)?.name ?? 'Vault A'
   return (
-    <section className="block" aria-labelledby="break-title">
-      <div className="block-head">
-        <h2 id="break-title">Try to break it</h2>
-        <p>Real attacks on your own treasury. A server attacker key sends each one with a fixed gas limit, so it is mined and you can open the refusal on the explorer.</p>
-      </div>
+    <Section title="Try to break it" info="Real attacks on your own treasury. A server attacker key sends each one with a fixed gas limit, so it is mined and you can open the refusal on the explorer.">
       {role === 'owner' && signedIn ? (
         <div className="break-grid">{ATTACKS.map((a) => <AttackCard key={a.kind} a={a} />)}</div>
       ) : (
@@ -119,6 +115,6 @@ export function BreakIt() {
         <li><div className="guided-body"><h3>Ask the agent to exit</h3><AgentAsk message={`Exit ${held}`} expect="Expected: the exit runs, because a freeze never blocks a redeem back to the Safe. With no position there is nothing to exit." /></div></li>
         <li><div className="guided-body"><h3>The bank lifts its freeze</h3><BankStep action="bankUnfreeze" /></div></li>
       </ol>
-    </section>
+    </Section>
   )
 }

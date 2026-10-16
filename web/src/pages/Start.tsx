@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'r
 import { Link, useNavigate } from 'react-router-dom'
 import { useConnect, useConnection, useConnectors } from 'wagmi'
 import type { Address, Hex } from 'viem'
-import { Figure, Kpis, PageHeader } from '../components/bits'
+import { Figure, Kpis, PageHeader, Section } from '../components/bits'
 import { usePageTitle } from '../components/chrome'
 import { SignConfirm } from '../components/SignConfirm'
 import { Term } from '../components/Glossary'
@@ -174,13 +174,15 @@ export default function Start() {
       <div className="page-body">
         <PageHeader
           title="Create your treasury"
-          description={<>Your own Porthmos treasury on {config ? chainName(config.chainId) : 'Base Sepolia'}, with the same rules as the recorded one. Two keys are made in this browser, then a few short transactions set it up. About a minute.</>}
+          subtitle={`About a minute on ${config ? chainName(config.chainId).replace(/ \(\d+\)$/, '') : 'Base Sepolia'}. Free, test network only.`}
+          info="Your own Porthmos treasury with the same rules as the reference one. Two keys are made in this browser, then a few short transactions set it up. If you leave, finished steps are read from the chain and skipped."
         />
         {config ? <Kpis label="Setup figures">
-          <Figure label="Network" value={config ? chainName(config.chainId).replace(/ \(\d+\)$/, '') : '…'} note={config ? `Chain ${config.chainId}, test network` : ''} />
-          <Figure label="Progress" value={`${doneCount} of ${steps.length}`} note={current?.txIndex ? `Transaction ${current.txIndex} of ${TX_STEPS.length}` : running ? STEP_LABELS[current?.id ?? 'fund'] : activated ? 'Ready' : started ? 'Paused' : 'Not started'} />
-          <Figure label="Your Safe" value={safe ? shortHex(safe) : 'Not yet'} note={safe ? (activated ? 'Active' : 'Address fixed by your owner key') : 'Known before it is created'} />
-          <Figure label="Test USDC" value={config ? usd(config.testUsdc) : '…'} note="Sent once, at activation" />
+          <Figure label="Network" value={config ? chainName(config.chainId).replace(/ \(\d+\)$/, '') : '…'} note={config ? `Chain ${config.chainId}` : ''} />
+          <Figure label="Progress" value={`${doneCount} of ${steps.length}`} note={current?.txIndex ? `Transaction ${current.txIndex} of ${TX_STEPS.length}` : running ? STEP_LABELS[current?.id ?? 'fund'] : activated ? 'Ready' : started ? 'Paused' : 'Not started'}
+            meter={{ value: doneCount, max: steps.length, label: `Setup progress, ${doneCount} of ${steps.length} steps` }} />
+          <Figure label="Your Safe" value={safe ? shortHex(safe) : 'Not yet'} note={safe ? (activated ? 'Active' : 'Address fixed') : 'Known in advance'} />
+          <Figure label="Test USDC" value={config ? usd(config.testUsdc) : '…'} note="Sent at activation" />
         </Kpis> : null}
 
         {phase === 'probing' && !config ? <p className="empty" aria-live="polite">Reaching the Porthmos service…</p> : service !== 'up' ? (
@@ -199,11 +201,7 @@ export default function Start() {
           </section>
         ) : (
           <div className="cols start-cols">
-            <section className="block col-wide" aria-labelledby="steps-title">
-              <div className="block-head">
-                <h2 id="steps-title">Steps</h2>
-                <p>Every step is a real transaction you can open on the explorer. If you leave, come back to this page: finished steps are read from the chain and skipped.</p>
-              </div>
+            <Section title="Steps" className="col-wide" info="Every step is a real transaction you can open on the explorer. If you leave, come back to this page: finished steps are read from the chain and skipped.">
               {!config.onboardingOpen && !started ? (
                 <p className="alert-inline" role="alert">New treasuries are closed for now: the test network limit is reached. You can still look at the recorded run.</p>
               ) : null}
@@ -280,14 +278,9 @@ export default function Start() {
                   )
                 })}
               </ol>
+            </Section>
 
-            </section>
-
-            <aside className="block col-narrow keys" aria-labelledby="keys-title">
-              <div className="block-head">
-                <h2 id="keys-title">Your keys</h2>
-                <p>Stored in this browser only. No key is ever sent to the server.</p>
-              </div>
+            <Section title="Your keys" className="card col-narrow keys" info="Stored in this browser only. No key is ever sent to the server.">
               <p className="keys-warning"><strong>Test network only.</strong> Anyone with these keys or the key file controls this test treasury. Never send real funds to it.</p>
               <dl className="facts">
                 <div><dt>Owner</dt><dd>{owner ? <><code className="break">{owner}</code>{wallet?.owner.type === 'injected' ? ' (your wallet)' : ''}</> : 'Made when you start'}</dd></div>
@@ -316,7 +309,7 @@ export default function Start() {
                   </div>
                 ) : <button type="button" className="link-plain forget-link" disabled={running} onClick={() => setForget(true)}>Start over with new keys</button>
               ) : null}
-            </aside>
+            </Section>
           </div>
         )}
       </div>

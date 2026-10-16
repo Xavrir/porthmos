@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { onTick, reducedMotion } from '../components/Count'
 import { useSearchParams } from 'react-router-dom'
-import { Chip, ErrorNote, ErrorTag, Figure, Hash, Kpis, Loading, PageHeader, stateTone, TierMark, type Tone } from '../components/bits'
+import { Chip, ErrorNote, ErrorTag, Figure, Hash, Kpis, Loading, PageHeader, Section, stateTone, TierMark, type Tone } from '../components/bits'
 import { DataTable, type Column } from '../components/DataTable'
 import { CopyButton, DetailDrawer, DrawerSection, KeyValues, Timeline, useHashParam, type TimelineItem } from '../components/Drawer'
 import { Icon } from '../components/icons'
@@ -48,12 +48,12 @@ function TxCell({ row }: { row: LedgerRow }) {
     const p = ref ? proofFor(ref) : null
     return (
       <span className="tx-none">
-        Replay only, no transaction.{' '}
-        {p?.kind === 'onchain' ? <a className="link-plain" href={p.href} target="_blank" rel="noreferrer">Real revert on Basescan</a> : ref ? `Contract test ${ref.test}` : null}
+        None.{' '}
+        {p?.kind === 'onchain' ? <a className="link-plain" href={p.href} target="_blank" rel="noreferrer">Real revert</a> : ref ? `Test ${ref.test}` : null}
       </span>
     )
   }
-  return row.txHash ? <Hash value={row.txHash} label={`transaction for row ${row.seq}`} /> : <span className="muted">none</span>
+  return row.txHash ? <Hash value={row.txHash} label={`transaction for row ${row.seq}`} /> : <span className="muted">None</span>
 }
 
 function errorMatch(r: LedgerRow, error: string) {
@@ -129,21 +129,20 @@ export default function Audit() {
       <div className="page-body">
         <PageHeader
           title="Audit"
-          description="Every decision leaves a row: executions, refusals, holds and denials. Each row hashes the one before it, and the bank reads the chain to check the ledger."
-          actions={<a className="button quiet" href="#evidence">Recorded on-chain evidence</a>}
+          info="Every decision leaves a row: executions, refusals, holds and denials. Each row hashes the one before it, and the bank reads the chain to check the ledger."
+          actions={<a className="button quiet" href="#evidence">On-chain evidence</a>}
         />
         <Kpis label="Audit figures">
-          <Figure label="Ledger rows" value={ledger.data ? String(ledger.data.length) : '…'} spark={ledger.data?.length ? daily.rows : undefined} note={intact === null ? '' : intact ? 'Hash chain intact. Rows per day, last 7 days' : 'Hash chain broken'} tone={intact === false ? 'alert' : undefined} />
-          <Figure label="Executed" value={String(executed)} note="AegisExecuted events" />
-          <Figure label="Refused" value={String(refused)} spark={ledger.data?.length ? daily.refused : undefined} note={mode === 'replay' ? 'In the replay narrative. Real status under Recorded on Base Sepolia' : 'Typed reverts and unrepresentable requests'} />
-          <Figure label="Ledger against chain" value={mismatches === undefined ? '…' : mismatches === 0 ? 'Reconciled' : `${mismatches} mismatch`} tone={mismatches ? 'alert' : undefined} />
+          <Figure label="Ledger rows" value={ledger.data ? String(ledger.data.length) : '…'} spark={ledger.data?.length ? daily.rows : undefined} sparkLabel="Rows per day, last 7 days"
+            note={intact === null ? '' : intact ? 'Hash chain intact' : 'Hash chain broken'} tone={intact === false ? 'alert' : undefined} />
+          <Figure label="Executed" value={ledger.data ? String(executed) : '…'} note="AegisExecuted rows" />
+          <Figure label="Refused" value={ledger.data ? String(refused) : '…'} spark={ledger.data?.length ? daily.refused : undefined} sparkLabel="Refusals per day, last 7 days"
+            note="Last 7 days" info={mode === 'replay' ? 'Counts rows of the replay narrative. Real refusals on Base Sepolia are listed under On-chain evidence.' : 'Typed reverts and requests no action can express.'} />
+          <Figure label="Ledger against chain" value={mismatches === undefined ? '…' : mismatches === 0 ? 'Reconciled' : `${mismatches} mismatch`} tone={mismatches ? 'alert' : undefined}
+            note={recon.data ? `${recon.data.length} checked` : ''} />
         </Kpis>
 
-        <section className="block" aria-labelledby="ledger-title">
-          <div className="block-head">
-            <h2 id="ledger-title">Decision ledger</h2>
-            <p>Newest first, times in {TIME_ZONE_LABEL}. Select a row to see its decision timeline, its signed record and the hashes that link it.</p>
-          </div>
+        <Section title="Decision ledger" info={`Newest first, times in ${TIME_ZONE_LABEL}. Open a row for its timeline, signed record and hash links.`}>
           {error && refusalFor(error) ? (
             <p className="proof-note" role="status">
               {(() => {
@@ -159,7 +158,7 @@ export default function Audit() {
               onOpen={(r) => openRow(String(r.seq))} selectedKey={openSeq} tall
               status={{ label: 'Outcome', get: group, options: FILTERS }} statusValue={status} onStatusChange={setStatus}
               searchText={(r) => `${r.seq} ${r.summary} ${r.revertReason ?? ''} ${r.amount?.display ?? ''} ${r.vault ?? ''} ${r.txHash ?? ''} ${r.state}`}
-              searchLabel="Search rows, amounts, errors, hashes"
+              searchLabel="Search rows, amounts, errors"
               chips={error ? (
                 <span className="fchip is-on">
                   <button type="button" className="fchip-x" onClick={() => setParams({})} aria-label="Clear error filter"><Icon name="clear" /></button>
@@ -180,16 +179,11 @@ export default function Audit() {
               empty="No ledger rows yet." />
           )}
           <ErrorNote error={ledger.error} />
-        </section>
-
-        <EvidencePanel />
+        </Section>
 
         <div className="cols">
-          <section className="block col-wide" aria-labelledby="events-title">
-            <div className="block-head">
-              <h2 id="events-title">On-chain events</h2>
-              <p>Read from {chainName(chainId)}. {mode === 'replay' ? 'Contract addresses are the Base Sepolia deployment. Hashes of recorded transactions link to Basescan; the others are tagged illustrative and not linked.' : explorerTx(chainId, '0x0') ? 'Hashes link to the block explorer.' : 'This chain has no public explorer; hashes are copyable.'}</p>
-            </div>
+          <Section title="On-chain events" className="col-wide"
+            info={`Read from ${chainName(chainId)}.${mode === 'replay' ? ' Replay lists only transactions recorded on Base Sepolia.' : explorerTx(chainId, '0x0') ? ' Hashes link to the block explorer.' : ' This chain has no public explorer; hashes are copyable.'}`}>
             {events.isLoading ? <Loading what="events" /> : (
               <DataTable label="On-chain events" rows={[...(events.data ?? [])].sort((a, b) => b.blockNumber - a.blockNumber)} tall
                 rowKey={(e) => `${e.txHash}-${e.logIndex}`}
@@ -202,14 +196,10 @@ export default function Audit() {
                 empty="No events yet." />
             )}
             <ErrorNote error={events.error} />
-          </section>
+          </Section>
 
-          <section className="block col-narrow" aria-labelledby="recon-title">
-            <div className="block-head">
-              <h2 id="recon-title">Ledger against chain</h2>
-              <p>Every executed row must match an <code>AegisExecuted</code> event with the same hash and amount. The bank desk runs the same check for every client.</p>
-            </div>
-            {recon.data ? (
+          <Section title="Ledger against chain" className="col-narrow" info="Every executed row must match an AegisExecuted event with the same hash and amount. The bank desk runs the same check for every client.">
+            {recon.data ? (recon.data.length ? (
               <ul className="recon">
                 {recon.data.map((x) => (
                   <li key={x.key} className={`recon-${x.status}`}>
@@ -218,9 +208,11 @@ export default function Audit() {
                   </li>
                 ))}
               </ul>
-            ) : <Loading what="reconciliation" />}
-          </section>
+            ) : <p className="empty">No executions with a transaction yet.</p>) : <Loading what="reconciliation" />}
+          </Section>
         </div>
+
+        <EvidencePanel />
       </div>
       <RowDrawer row={selected} linked={selected ? links.get(selected.seq) ?? false : false} onClose={closeRow} onError={(e) => setParams({ error: e })} />
     </main>

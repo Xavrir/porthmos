@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Link, Outlet, Route, Routes, useLocation } from 'react-router-dom'
-import { AppShell, MarketBanner, ModeBanner, Notices, usePageTitle } from './components/chrome'
+import { AppShell, MarketBanner, Notices, usePageTitle } from './components/chrome'
 import { SeatChooser } from './components/SeatChooser'
 import { Loading } from './components/bits'
 import { Landing } from './pages/Landing'
@@ -13,11 +13,9 @@ const Bank = lazy(() => import('./pages/Bank'))
 const Start = lazy(() => import('./pages/Start'))
 
 function AppLayout() {
-  const { pathname } = useLocation()
   return (
     <AppShell>
       <MarketBanner />
-      {pathname === '/start' ? null : <ModeBanner />}
       <Suspense fallback={<main id="main" className="page"><div className="page-body"><Loading what="the page" rows={4} /></div></main>}>
         <Outlet />
       </Suspense>
@@ -59,7 +57,7 @@ function NotFound() {
       <div className="page-body">
         <section className="gate-block">
           <h1>No such page</h1>
-          <p>This address is not part of Porthmos. Use the page list, or go back to the overview.</p>
+          <p>This address is not part of Porthmos.</p>
           <Link to="/treasury" className="button">Go to the treasury</Link>
         </section>
       </div>

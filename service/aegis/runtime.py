@@ -65,6 +65,7 @@ class Runtime:
         self.authorizer = authorizer
         self.sessions = SessionManager(services)
         self.tradeflow = TradeFlow(services, workflow.agent, authorizer) if settings.tradeflow_enabled else None
+        workflow.tradeflow = self.tradeflow
         self.in_process = in_process
         self.executor = None
         self.exit_agent = None

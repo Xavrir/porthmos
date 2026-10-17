@@ -63,6 +63,14 @@ class LlmGate:
     def exhausted(self) -> bool:
         return self.limiter.count("llm", "all", 3600) >= self.per_hour
 
+    def status(self, tenant: str | None) -> dict:
+        used = self.limiter.count("llm_tenant", (tenant or "").lower(), 3600) if tenant else 0
+        exhausted = self.exhausted()
+        remaining = 0 if exhausted else max(0, self.per_tenant_hour - used)
+        state = "globalExhausted" if exhausted else ("tenantExhausted" if remaining == 0 else "available")
+        return {"state": state, "used": used, "limit": self.per_tenant_hour, "remaining": remaining,
+                "windowSeconds": 3600}
+
 
 def quoted(source: str, text: str) -> dict:
     """External text is passed to the model as labelled, quoted data, never as instructions."""

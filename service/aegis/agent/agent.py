@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from aegis.agent import intent as I
 from aegis.agent.llm import LlmClient, LlmError, LlmGate
@@ -48,6 +50,11 @@ HOLD_TEXT = {
                                        "Treasury > Obligations; confirming it produces the reserve floor "
                                        "update for your wallet to sign."),
     "Cancelled": "Cancelled. Nothing was submitted.",
+    "SuspiciousRequest": ("I did not act on this message. It combines an action with text that asks to change policy, "
+                          "reveal secrets or prompts, ignore my rules, or act on another treasury. Policy changes are "
+                          "signed by you or the bank in the app. Send the action on its own, for example 'deposit "
+                          "1,000 USDC into Vault B'."),
+    "NothingToConfirm": "There is nothing waiting for your confirmation.",
 }
 
 
@@ -59,6 +66,9 @@ LLM_NOTICES = {
 log = logging.getLogger("aegis.agent")
 
 LLM_COOLDOWN = 30.0
+LEAK_RE = re.compile(r"you are aegis|reply with json only|data block|system prompt|private key|seed phrase|mnemonic"
+                     r"|api key", re.I)
+HEX_RE = re.compile(r"0x[0-9a-fA-F]{40,}")
 
 
 def _usd(raw: int | str) -> str:
@@ -85,7 +95,7 @@ class Agent:
         """One user request. After the first model failure or refusal by the gate, the rest of the request stays
         deterministic, so a dead endpoint costs at most one timeout."""
         prev = getattr(self._ctx, "state", None)
-        self._ctx.state = {"tenant": tenant, "fallback": None}
+        self._ctx.state = {"tenant": tenant, "fallback": None, "reply": None}
         try:
             yield self._ctx.state
         finally:
@@ -98,6 +108,20 @@ class Agent:
     def notice(self) -> str | None:
         reason = self.fallback()
         return LLM_NOTICES[reason] if reason else None
+
+    def reply_mode(self, reply: str | None) -> str:
+        """llm only when this exact reply text is the model's accepted wording."""
+        state = getattr(self._ctx, "state", None)
+        last = state["reply"] if state else None
+        return "llm" if last and reply and last == reply else "deterministic"
+
+    def budget(self) -> dict:
+        if self.llm is None:
+            return {"state": "disabled"}
+        if self.gate is None:
+            return {"state": "unlimited"}
+        state = getattr(self._ctx, "state", None)
+        return self.gate.status(state["tenant"] if state else None)
 
     def _complete_json(self, messages: list[dict]) -> dict | None:
         if self.llm is None:
@@ -125,8 +149,8 @@ class Agent:
 
     def parse_intent(self, message: str, now: int, vault_labels: list[str]) -> I.Intent:
         rule = I.parse(message, now, vault_labels)
-        if self.llm is None:
-            return rule
+        if self.llm is None or rule.kind in I.RULE_ONLY_KINDS:
+            return I.guard(rule)
         data = self._complete_json([
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": json.dumps({
@@ -139,26 +163,12 @@ class Agent:
                 "DATA": {"source": "owner chat message", "quoted": message},
             })},
         ])
-        if data is None:
-            return rule
-        kind = data.get("kind") if data.get("kind") in I.KINDS else rule.kind
-        if rule.kind == I.TRANSFER_OUT:
-            kind = I.TRANSFER_OUT
-        out = I.Intent(kind, rule.text, addresses=rule.addresses, flags=rule.flags)
-        try:
-            out.amount = I.parse_amount(f"{data['amount_usdc']} usdc") if data.get("amount_usdc") else rule.amount
-        except (TypeError, ValueError):
-            out.amount = rule.amount
-        out.vault_hint = data.get("vault") if data.get("vault") in vault_labels else rule.vault_hint
-        out.due = I.parse_due(str(data["due_date"]), now) if data.get("due_date") else rule.due
-        out.label = str(data.get("label") or rule.label or "")[:60] or None
-        out.months = data.get("months") if isinstance(data.get("months"), int) else rule.months
-        out.vague_amount = rule.vague_amount and out.amount is None
-        out.missing = I.missing_fields(out)
-        return out
+        if not isinstance(data, dict):
+            return I.guard(rule)
+        return I.guard(I.reconcile(rule, data, now, vault_labels))
 
-    def clarification(self, intent: I.Intent, plan: Plan | None = None) -> str:
-        if intent.kind == I.MANDATE:
+    def clarification(self, intent: I.Intent, plan: Plan | None = None, labels: list[str] | None = None) -> str:
+        if intent.kind == I.MANDATE and not intent.disputed:
             what = (intent.label or "payment").lower()
             parts = []
             if "amount" in intent.missing:
@@ -166,6 +176,23 @@ class Agent:
             if "dueDate" in intent.missing:
                 parts.append(f"the date the next {what} is due (for example 2026-10-30 or 'the 25th')")
             return "To reserve for this, I need " + " and ".join(parts) + "."
+        if intent.disputed:
+            return (f"I want to be sure before I act. I read your message as {_describe(intent)}. Reply 'yes' to "
+                    "continue with exactly that, restate the request, or say 'cancel'.")
+        if "vault" in intent.missing:
+            known = " or ".join(labels or []) or "one of the vaults you approved"
+            return f"There is no {intent.vault_unknown} in this treasury. Which vault: {known}?"
+        if intent.percent is not None:
+            if intent.kind == I.REDEEM:
+                return (f"How much should I redeem, in USDC? I do not size redemptions from a percentage "
+                        f"({intent.percent}%).")
+            if Decimal(intent.percent) > 100 or Decimal(intent.percent) <= 0:
+                return f"{intent.percent}% is not a share I can use. How much should I deposit, in USDC?"
+            return (f"{intent.percent}% of what? Say for example '{intent.percent}% of free cash', or give the amount "
+                    "in USDC.")
+        if intent.ambiguous_amount:
+            return ("I could not read the amount with certainty. Please write it in USDC, for example '1,000 USDC' "
+                    "or '1.000 USDC'.")
         suggestion = ""
         if plan is not None and plan.default and not plan.default.is_hold:
             suggestion = f" The plan's default is {plan.default.label.lower()} for {_usd(plan.default.assets)} USDC."
@@ -173,7 +200,7 @@ class Agent:
 
     def select(self, intent: I.Intent, plan: Plan, tool_data: dict) -> dict:
         rule = self._select_rule(intent, plan)
-        if self.llm is None or intent.kind not in I.ACTION_KINDS:
+        if self.llm is None or intent.kind not in I.ACTION_KINDS or intent.refused:
             return rule
         data = self._complete_json([
             {"role": "system", "content": SYSTEM},
@@ -189,13 +216,16 @@ class Agent:
                          **tool_data},
             }, default=str)},
         ])
-        if data is None:
+        if not isinstance(data, dict):
             return rule
         args = data.get("arguments") if isinstance(data.get("arguments"), dict) else {}
         option_id = args.get("option_id")
         if not isinstance(option_id, str) or plan.option(option_id) is None:
             return rule
         reductions = args.get("reductions") if isinstance(args.get("reductions"), dict) else None
+        if not _within_request(intent, plan.option(option_id), reductions):
+            return {**rule, "rationale": f"{rule['rationale']}; model choice {option_id} ignored: outside the "
+                                         "owner's stated request", "llmRejected": option_id}
         return {"optionId": option_id, "reductions": reductions or None,
                 "rationale": str(data.get("rationale", ""))[:500], "holdReason": None if option_id != HOLD_ID
                 else (plan.hold_reason or "NoMatchingOption"), "source": "llm"}
@@ -205,14 +235,16 @@ class Agent:
             return {"optionId": HOLD_ID, "reductions": None, "rationale": reason, "holdReason": reason,
                     "source": "rules"}
 
-        if plan.hold_reason == "FloorOutOfSync":
-            return hold("FloorOutOfSync")
+        if intent.refused:
+            return hold(intent.refused)
         if intent.kind == I.TRANSFER_OUT:
             return hold("NotRepresentable")
+        if intent.kind not in I.WRITE_KINDS:
+            return hold("ReadOnly")
+        if plan.hold_reason == "FloorOutOfSync":
+            return hold("FloorOutOfSync")
         if intent.kind == I.MANDATE:
             return hold("AwaitingObligationConfirmation")
-        if intent.kind not in I.ACTION_KINDS:
-            return hold("ReadOnly")
         default = plan.default
         if intent.kind == I.REBALANCE:
             if default.is_hold:
@@ -256,10 +288,57 @@ class Agent:
                 "DATA": {"source": "AEGIS deterministic record", "facts": facts, "draft": text},
             }, default=str)},
         ])
-        if data is None:
+        if not isinstance(data, dict):
             return text
-        reply = str(data.get("reply", "")).strip()
-        return reply[:1200] or text
+        reply = str(data.get("reply", "")).strip()[:1200]
+        if not reply or not safe_reply(reply, json.dumps(facts, default=str)):
+            return text
+        state = getattr(self._ctx, "state", None)
+        if state is not None:
+            state["reply"] = reply
+        return reply
+
+
+def safe_reply(reply: str, facts_json: str) -> bool:
+    """A model reply may only rephrase the facts. One that mentions prompts or keys, or any address or hash the facts
+    do not contain, is dropped for the template."""
+    if LEAK_RE.search(reply) or SYSTEM[:60] in reply:
+        return False
+    known = facts_json.lower()
+    return all(h.lower() in known for h in HEX_RE.findall(reply))
+
+
+def _within_request(intent: I.Intent, option, reductions: dict | None) -> bool:
+    """A model selection may hold or lower, never switch the operation or vault the owner named or exceed the
+    amount the owner stated."""
+    if option.is_hold:
+        return True
+    if intent.kind == I.ALLOCATE and option.op != OP_DEPOSIT:
+        return False
+    if intent.kind == I.REDEEM and option.op != OP_REDEEM:
+        return False
+    if intent.vault_hint and option.vault_label != intent.vault_hint:
+        return False
+    if intent.amount is not None:
+        try:
+            effective = min(option.assets, int((reductions or {}).get("amount", option.assets)))
+        except (TypeError, ValueError):
+            return False
+        if effective > intent.amount:
+            return False
+    return True
+
+
+def _describe(intent: I.Intent) -> str:
+    what = {I.ALLOCATE: "a deposit", I.REDEEM: "a redemption", I.REBALANCE: "a rebalance",
+            I.MANDATE: "an obligation draft"}.get(intent.kind, "a request")
+    if intent.amount is not None:
+        what += f" of {_usd(intent.amount)} USDC"
+    elif intent.percent is not None:
+        what += f" of {intent.percent}%" + (" of free cash" if intent.percent_of_free else "")
+    if intent.vault_hint:
+        what += (" into " if intent.kind == I.ALLOCATE else " from ") + intent.vault_hint
+    return what
 
 
 def template(f: dict) -> str:
@@ -273,8 +352,13 @@ def template(f: dict) -> str:
     if state == "NEEDS_CLARIFICATION":
         return f.get("question", "Could you give me more detail?")
     if state in ("HELD", "EXPLAINED") and f.get("outcome") == "HELD":
-        if reason == "ReadOnly":
-            return f.get("summary", "Here is the current state of your treasury.")
+        if reason in ("ReadOnly", "NothingToConfirm") and f.get("summary"):
+            prefix = HOLD_TEXT[reason] + " " if reason == "NothingToConfirm" else ""
+            return prefix + f["summary"]
+        if reason == "AwaitingConfirmation":
+            return (f"I prepared a {what} (tier T{action.get('tier')}, which runs without a signature). Your message "
+                    f"did not instruct it directly, so I will not run it on my own. Reply 'confirm' within "
+                    f"{f.get('windowMinutes', 30)} minutes to run it, or 'cancel'.")
         msg = HOLD_TEXT.get(reason, "Holding: {reason}.")
         return msg.format(floor=f.get("floor", "?"), required=f.get("required", "?"), reason=reason,
                           default_label=f.get("defaultLabel", "redemption"))

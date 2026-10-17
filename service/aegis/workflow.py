@@ -8,13 +8,14 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
+from decimal import ROUND_DOWN, Decimal
 
 from aegis.agent import intent as I
 from aegis.agent.agent import Agent
+from aegis.agent.llm import quoted
 from aegis.agent.tools import AgentTools
 from aegis.core import simulator
 from aegis.core.pipeline import Prepared, Snapshot, approval_fits, prepare
-from aegis.errors import AuthorizerRefused
 from aegis.eip712 import (
     DAR,
     OP_DEPOSIT,
@@ -26,6 +27,7 @@ from aegis.eip712 import (
     hex32,
     recover_digest,
 )
+from aegis.errors import AuthorizerRefused
 from aegis.obligations import iso
 from aegis.obligations import to_json as obligation_json
 from aegis.services import Services
@@ -175,6 +177,7 @@ class Workflow:
         self.authorizer = authorizer
         self.executor_address = executor_address
         self.store = RequestStore(services)
+        self.tradeflow = None
         self._locks: dict[str, threading.RLock] = {}
         self._locks_guard = threading.Lock()
 
@@ -188,7 +191,8 @@ class Workflow:
         return [v.label for v in self.s.settings.addresses.vaults]
 
     def _tools(self, safe: str) -> AgentTools:
-        return AgentTools(self.s, safe, request_lookup=lambda rid: self.store.get(rid, with_history=True))
+        return AgentTools(self.s, safe, request_lookup=lambda rid: self.store.get(rid, with_history=True),
+                          tradeflow=self.tradeflow)
 
     def _ledger(self, rec: dict, kind: str, payload: dict, **kw) -> None:
         base = {"intent": (rec["data"].get("intent") or {}).get("kind"), "flags": rec["data"].get("flags", [])}
@@ -238,13 +242,15 @@ class Workflow:
             "darHash": d.get("darHash"), "txHash": d.get("txHash"), "revertReason": d.get("revertReason"),
             "approval": d.get("approval"), "approvalsReceived": sorted((d.get("signatures") or {}).keys()),
             "plan": d.get("planView"), "prepared": d.get("prepared"), "flags": d.get("flags", []),
-            "obligationDraft": d.get("obligationDraft"), "history": rec.get("history", []),
+            "obligationDraft": d.get("obligationDraft"), "proposal": d.get("proposal"), "confirms": d.get("confirms"),
+            "history": rec.get("history", []),
         }
 
     def _response(self, rec: dict) -> dict:
         d = rec["data"]
         out = {"reply": d.get("reply", ""), "requestId": rec["id"], "state": rec["state"],
-               "mode": self.agent.mode}
+               "mode": self.agent.mode, "replyMode": self.agent.reply_mode(d.get("reply")),
+               "llmBudget": self.agent.budget()}
         notice = self.agent.notice()
         if notice:
             out["reply"] = f"{out['reply']}\n{notice}" if out["reply"] else notice
@@ -258,6 +264,10 @@ class Workflow:
             out["obligationDraft"] = d["obligationDraft"]
         if d.get("question"):
             out["clarification"] = d["question"]
+        proposal = d.get("proposal")
+        if proposal and proposal.get("open"):
+            out["pendingConfirmation"] = {k: proposal[k] for k in ("requestId", "op", "vault", "amount", "tier",
+                                                                   "expiresAt")}
         return out
 
 
@@ -274,7 +284,7 @@ class Workflow:
             with self._lock(pending["id"]):
                 rec = self.store.get(pending["id"])
                 intent = I.Intent.from_json(rec["data"]["intent"])
-                intent = I.merge_answer(intent, message, now, self.labels)
+                intent = I.guard(I.merge_answer(intent, message, now, self.labels))
                 rec["data"]["intent"] = intent.to_json()
                 rec["data"]["flags"] = sorted(set(rec["data"].get("flags", [])) | set(intent.flags))
                 self._move(rec, "INTENT_PARSED", f"clarification answered: {message[:200]}")
@@ -287,14 +297,24 @@ class Workflow:
             foreign = [a for a in intent.addresses if a.lower() != session.safe.lower()]
             if foreign:
                 intent.flags = sorted(set(intent.flags) | {"crossClient"})
+            intent = I.guard(intent)
+            if intent.kind == I.CONFIRM:
+                intent = self._confirmed_intent(session.safe, rec, intent)
+            elif intent.kind in I.WRITE_KINDS:
+                self._close_proposals(session.safe, f"superseded by {rec['id']}")
             rec["data"]["intent"] = intent.to_json()
             rec["data"]["flags"] = intent.flags
-            self._move(rec, "INTENT_PARSED", f"intent {intent.kind}" + (f" flags={intent.flags}" if intent.flags else ""))
+            note = f"intent {intent.kind}" + (f" flags={intent.flags}" if intent.flags else "")
+            if rec["data"].get("confirms"):
+                note += f" confirms {rec['data']['confirms']}"
+            self._move(rec, "INTENT_PARSED", note)
             if intent.kind == I.CANCEL:
                 cancelled = self._cancel_latest(session.safe, exclude=rec["id"])
+                closed = self._close_proposals(session.safe, f"cancelled by {rec['id']}")
+                what = [x for x in (cancelled, closed) if x]
                 rec["data"]["outcome"] = "CANCELLED"
-                rec["data"]["reason"] = f"cancel command; cancelled {cancelled}" if cancelled else "cancel command"
-                rec["data"]["reply"] = (f"Cancelled request {cancelled}. Nothing was submitted." if cancelled
+                rec["data"]["reason"] = f"cancel command; cancelled {', '.join(what)}" if what else "cancel command"
+                rec["data"]["reply"] = (f"Cancelled {' and '.join(what)}. Nothing was submitted." if what
                                         else "There was nothing pending to cancel.")
                 self._move(rec, "CANCELLED", rec["data"]["reason"])
                 return self._response(rec)
@@ -314,13 +334,51 @@ class Workflow:
         if not waiting:
             return None
         rec = waiting[-1]
-        answer = I.parse(message, now, self.labels)
-        pending_kind = rec["data"]["intent"]["kind"]
-        if answer.kind in (I.UNKNOWN, pending_kind):
-            return rec
-        if answer.kind == I.MANDATE and pending_kind == I.MANDATE:
-            return rec
-        return None
+        pending = I.Intent.from_json(rec["data"]["intent"])
+        return rec if I.answers(pending, message, now, self.labels) else None
+
+    def _open_proposal(self, safe: str) -> dict | None:
+        rows = self.s.db.query("SELECT id FROM requests WHERE safe=? AND json_extract(data, '$.proposal.open')=1 "
+                               "ORDER BY created_at DESC LIMIT 1", (safe.lower(),))
+        if not rows:
+            return None
+        rec = self.store.get(rows[0]["id"])
+        if time.time() - rec["data"]["proposal"]["at"] >= CLARIFICATION_WINDOW:
+            return None
+        return rec
+
+    def _close_proposals(self, safe: str, why: str) -> str | None:
+        """Closes every open chat proposal of this Safe; returns the newest one closed."""
+        newest = None
+        for row in self.s.db.query("SELECT id FROM requests WHERE safe=? AND json_extract(data, '$.proposal.open')=1 "
+                                   "ORDER BY created_at", (safe.lower(),)):
+            with self._lock(row["id"]):
+                rec = self.store.get(row["id"])
+                if rec["data"]["proposal"].get("open"):
+                    rec["data"]["proposal"].update({"open": False, "closed": why})
+                    self.store.save(rec)
+                    newest = rec["id"]
+        return newest
+
+    def _confirmed_intent(self, safe: str, rec: dict, intent: I.Intent) -> I.Intent:
+        """A chat "confirm" re-runs the open proposal as an explicit instruction, pinned to the proposed operation,
+        vault and amount, so revalidation can only keep or lower it."""
+        prop = self._open_proposal(safe)
+        if prop is not None:
+            with self._lock(prop["id"]):
+                prop = self.store.get(prop["id"])
+                p = prop["data"]["proposal"]
+                if p.get("open"):
+                    p.update({"open": False, "confirmedBy": rec["id"]})
+                    self.store.save(prop)
+                    base = I.Intent.from_json(prop["data"]["intent"])
+                    rec["data"]["confirms"] = prop["id"]
+                    return I.Intent(I.ALLOCATE if p["op"] == "DEPOSIT" else I.REDEEM,
+                                    f"confirm {prop['id']}: {base.text}"[:4000], amount=int(p["amount"]["raw"]),
+                                    vault_hint=p["vault"]["name"], flags=intent.flags, mood="imperative",
+                                    imperative=True)
+        intent.refused = "NothingToConfirm"
+        return intent
 
     def _continue_after_intent(self, rec: dict, intent: I.Intent) -> None:
         tools = self._tools(rec["safe"])
@@ -329,7 +387,7 @@ class Workflow:
             if intent.kind in I.ACTION_KINDS:
                 tools.plan_allocation()
                 plan = tools.snapshot.plan
-            question = self.agent.clarification(intent, plan)
+            question = self.agent.clarification(intent, plan, self.labels)
             rec["data"]["question"] = question
             rec["data"]["reply"] = question
             rec["data"]["outcome"] = "NEEDS_CLARIFICATION"
@@ -351,6 +409,7 @@ class Workflow:
         rec["data"]["planView"] = plan_json
         self._move(rec, "PLAN_OPTIONS_BUILT", f"default={snap.plan.default_id} hold={snap.plan.hold_reason}",
                    snap.versions())
+        intent = self._resolve_percent(rec, intent, snap)
         selection = self.agent.select(intent, snap.plan, {
             "get_treasury_state": state_json, "get_obligations": obligations_json,
             "get_risk_report": risk_json, "plan_allocation": plan_json,
@@ -371,6 +430,10 @@ class Workflow:
         prepared = prepare(self.s.chain, self.s.settings, snap, selection["optionId"], selection.get("reductions"),
                            rec["id"], self.authorizer.address)
         rec["data"]["prepared"] = prepared.to_json()
+        tier = prepared.policy.tier if prepared.policy else 0
+        if prepared.ok and prepared.stage == "simulated" and tier < 3 and not intent.may_execute_unsigned:
+            self._propose(rec, intent, snap, prepared)
+            return
         if prepared.is_hold or prepared.stage == "validation":
             reason = selection.get("holdReason") or snap.plan.hold_reason or "Hold"
             if prepared.stage == "validation":
@@ -407,12 +470,40 @@ class Workflow:
         self._move(rec, "FINAL_REVALIDATION", "no human approval required at this tier", snap.versions())
         self._finalize(rec, intent)
 
-    def _hold(self, rec: dict, intent: I.Intent, snap: Snapshot, reason: str) -> None:
+    def _propose(self, rec: dict, intent: I.Intent, snap: Snapshot, prepared: Prepared) -> None:
+        """T1/T2 from a message that did not instruct the action itself: record it and wait for "confirm"."""
+        self._close_proposals(rec["safe"], f"superseded by {rec['id']}")
+        card = self._action_card(rec, snap, prepared)
+        now = time.time()
+        rec["data"]["proposal"] = {"open": True, "at": now, "expiresAt": int(now + CLARIFICATION_WINDOW),
+                                   "requestId": rec["id"], "op": card["op"], "vault": card["vault"],
+                                   "amount": card["amount"], "tier": card["tier"], "optionId": card["optionId"],
+                                   "why": "polite or indirect wording" if not intent.llm_filled
+                                   else f"model filled {', '.join(intent.llm_filled)}"}
+        self._hold(rec, intent, snap, "AwaitingConfirmation",
+                   {"action": _action(card), "windowMinutes": CLARIFICATION_WINDOW // 60})
+
+    def _resolve_percent(self, rec: dict, intent: I.Intent, snap: Snapshot) -> I.Intent:
+        if intent.percent is None or intent.amount is not None or not intent.percent_of_free:
+            return intent
+        raw = int((Decimal(snap.plan.deployable) * Decimal(intent.percent) / 100).to_integral_value(ROUND_DOWN))
+        if raw <= 0:
+            intent.refused = "NothingDeployable"
+        intent.amount = raw or None
+        rec["data"]["intent"] = intent.to_json()
+        return intent
+
+    def _hold(self, rec: dict, intent: I.Intent, snap: Snapshot, reason: str, extra: dict | None = None) -> None:
         facts = {"state": "HELD", "outcome": "HELD", "reason": reason,
                  "floor": display_usdc(snap.plan.onchain_floor), "required": display_usdc(snap.plan.required),
-                 "defaultLabel": snap.plan.default.label if snap.plan.default else ""}
-        if reason == "ReadOnly":
+                 "defaultLabel": snap.plan.default.label if snap.plan.default else "", **(extra or {})}
+        if reason in ("ReadOnly", "NothingToConfirm"):
             facts["summary"] = self._summary(intent, snap, rec)
+            if intent.kind == I.ORDERS:
+                facts["summary"], data = self._orders_summary(intent, rec)
+                if data:
+                    facts["orders"] = quoted("TradeFlow records and TradeEscrow reads for this Safe",
+                                             json.dumps(data, sort_keys=True, default=str))
         if reason == "AwaitingObligationConfirmation":
             rec["data"]["obligationDraft"] = _obligation_draft(intent)
         if intent.kind == I.TRANSFER_OUT or "crossClient" in rec["data"].get("flags", []):
@@ -432,6 +523,25 @@ class Workflow:
         rec["data"]["reply"] = self.agent.explain({"outcome": state, "reason": reason, **facts})
         self._move(rec, "EXPLAINED", "explained")
 
+    def _orders_summary(self, intent: I.Intent, rec: dict) -> tuple[str, dict]:
+        if self.tradeflow is None:
+            return "TradeFlow is not enabled on this deployment, so there are no supplier orders.", {}
+        tools = self._tools(rec["safe"])
+        if intent.order_id is not None:
+            order = tools.get_order(intent.order_id)
+            if "error" in order:
+                return f"There is no order {intent.order_id} for this treasury.", {}
+            held = tools.explain_hold(intent.order_id, intent.milestone)
+            return f"{held['text']} {_order_line(order)}", {"order": order, "milestone": held}
+        orders = tools.get_orders()
+        active = [o for o in orders["orders"] if o["status"] == "ACTIVE"]
+        lines = [f"Committed to suppliers: {orders['committed']['display']} USDC in escrow across {len(active)} "
+                 f"active order{'s' if len(active) != 1 else ''}."]
+        lines += [_order_line(o) for o in orders["orders"][:5]]
+        if len(orders["orders"]) > 5:
+            lines.append(f"{len(orders['orders']) - 5} more orders are listed in TradeFlow.")
+        return " ".join(lines), orders
+
     def _summary(self, intent: I.Intent, snap: Snapshot, rec: dict) -> str:
         s, p = snap.state, snap.plan
         if intent.kind == I.EXPLAIN:
@@ -448,6 +558,11 @@ class Workflow:
             return ("Risk: " + "; ".join(parts) + f". Oracle age {snap.risk.oracle_age}s "
                     f"(limit {snap.risk.max_oracle_age}s).")
         vaults = ", ".join(f"{v.label} {display_usdc(v.assets)}" for v in s.vaults)
+        if intent.asked:
+            lead = (f"Right now up to {display_usdc(p.deployable)} USDC is deployable after keeping the required "
+                    f"reserve of {display_usdc(p.required)} USDC. " if intent.asked == I.ALLOCATE else "")
+            return (lead + "This answers your question only; nothing was proposed. To act, send an instruction, for "
+                    "example 'deposit 1,000 USDC into Vault B'. " + self._summary(I.Intent(I.STATUS, ""), snap, rec))
         note = ""
         if "crossClient" in rec["data"].get("flags", []):
             note = " I can only show this session's treasury; other clients' data is not accessible."
@@ -598,6 +713,7 @@ class Workflow:
         rec["data"]["planView"] = plan_json
         self._move(rec, "PLAN_OPTIONS_BUILT", f"default={snap.plan.default_id} hold={snap.plan.hold_reason}",
                    snap.versions())
+        intent = self._resolve_percent(rec, intent, snap)
         selection = self.agent.select(intent, snap.plan, {
             "get_treasury_state": state_json, "get_obligations": obligations_json,
             "get_risk_report": risk_json, "plan_allocation": plan_json,
@@ -809,6 +925,14 @@ class Workflow:
                 if self.cancel(rec["id"], reason):
                     dropped.append(rec["id"])
         return dropped
+
+
+def _order_line(o: dict) -> str:
+    line = (f"Order {o['orderId']}: {o['total']['display']} USDC, {o['released']['display']} released, "
+            f"{o['committed']['display']} committed, status {o['status']}")
+    flagged = [f"milestone {m['index'] + 1} {m['state'].lower()} ({m['reason']})" for m in o["milestones"]
+               if m["state"] in ("HELD", "WAITING")]
+    return line + ("; " + "; ".join(flagged) if flagged else "") + "."
 
 
 def _risk_note(snap: Snapshot) -> str:

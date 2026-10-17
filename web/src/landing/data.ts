@@ -5,7 +5,7 @@ const BASESCAN = 'https://sepolia.basescan.org'
 export const txUrl = (hash: string) => `${BASESCAN}/tx/${hash}`
 export const addressUrl = (address: string) => `${BASESCAN}/address/${address}`
 
-export const REPO_URL = 'https://github.com/Xavrir/aegis-treasury'
+export const REPO_URL = 'https://github.com/Xavrir/porthmos'
 export const DOCS_URL = `${REPO_URL}/blob/main/docs/TECHNICAL-DOCUMENT.md`
 export const CONTRACTS_URL = `${REPO_URL}/tree/main/contracts`
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'https://aegis-api.150-109-23-187.sslip.io'

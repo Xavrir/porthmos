@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Address } from 'viem'
-import { Hash, InfoTip, type Tone } from './bits'
+import { Hash, InfoTip, Swap, type Tone } from './bits'
 import { Icon, type IconName } from './icons'
 import { MILESTONE_LABEL, MILESTONE_TONE, ORDER_LABEL, ORDER_TONE, type MilestoneDisplay, type OrderDisplay } from '../lib/tradeflow/state'
 import { MILESTONES, type IssuerRole } from '../lib/tradeflow/model'
@@ -11,16 +11,16 @@ const ICON: Record<MilestoneDisplay | OrderDisplay, IconName> = {
   active: 'clock', completed: 'check',
 }
 
-export function Pill({ tone, icon, children }: { tone: Tone; icon: IconName; children: ReactNode }) {
-  return <span className={`chip tone-${tone}`}><Icon name={icon} className="chip-icon" />{children}</span>
+export function Pill({ tone, icon, state, children }: { tone: Tone; icon: IconName; state?: string; children: ReactNode }) {
+  return <span className={`chip tone-${tone}`}><Swap value={state ?? `${tone}:${icon}:${typeof children === 'string' ? children : ''}`}><Icon name={icon} className="chip-icon" />{children}</Swap></span>
 }
 
 export function MilestonePill({ state, reason }: { state: MilestoneDisplay; reason?: string | null }) {
-  return <Pill tone={MILESTONE_TONE[state]} icon={ICON[state]}><span>{MILESTONE_LABEL[state]}{state === 'held' && reason ? <span className="pill-reason">: {reason}</span> : null}</span></Pill>
+  return <Pill tone={MILESTONE_TONE[state]} icon={ICON[state]} state={state}><span>{MILESTONE_LABEL[state]}{state === 'held' && reason ? <span className="pill-reason">: {reason}</span> : null}</span></Pill>
 }
 
 export function OrderPill({ state }: { state: OrderDisplay }) {
-  return <Pill tone={ORDER_TONE[state]} icon={ICON[state]}>{ORDER_LABEL[state]}</Pill>
+  return <Pill tone={ORDER_TONE[state]} icon={ICON[state]} state={state}>{ORDER_LABEL[state]}</Pill>
 }
 
 export function HeldFlag() {

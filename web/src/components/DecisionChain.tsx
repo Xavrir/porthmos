@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 import { onTick, reducedMotion } from './Count'
+import { easeEnter } from '../lib/motion'
 import { GATES, STATE_GATE, type Gate } from '../lib/vocabulary'
 import type { ErrorName, StateTransition, WorkflowState } from '../lib/types'
 import { clock } from '../lib/format'
@@ -51,7 +52,7 @@ export function DecisionChain({ history, revertReason, compact = false }: { hist
     seen.current = { id, status }
     if (!prev || prev.id !== id || !listRef.current || reducedMotion()) return
     const changed = GATES.map((g, i) => (prev.status[g.id] !== status[g.id] ? listRef.current!.children[i] : null)).filter(Boolean) as Element[]
-    if (changed.length) return onTick(() => { gsap.fromTo(changed, { yPercent: -14, autoAlpha: 0.4 }, { yPercent: 0, autoAlpha: 1, duration: 0.45, ease: 'power3.out', stagger: 0.08 }) })
+    if (changed.length) return onTick(() => { gsap.fromTo(changed, { yPercent: -14, autoAlpha: 0.4 }, { yPercent: 0, autoAlpha: 1, duration: 0.3, ease: easeEnter, stagger: 0.08 }) })
     // status is derived from history; the joined signature is the real dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, signature])

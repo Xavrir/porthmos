@@ -21,6 +21,7 @@ import { buildFloorTx, guardedSend, pinnedFor, sendFloorUpdate, type FloorPlan }
 import { explorerAddress } from '../lib/wallet'
 import { toast } from '../lib/toast'
 import { Icon } from '../components/icons'
+import { CountText } from '../components/Count'
 import type { Obligation, TreasuryState, TxRequest } from '../lib/types'
 import { useOrders, useTradeFlow } from '../lib/tradeflow/queries'
 import { committedRaw } from '../lib/tradeflow/state'
@@ -230,12 +231,12 @@ export default function Treasury() {
             <h2 id="today-title" className="card-kicker">Today</h2>
             <div className="hero">
               <p className="hero-label">Total balance<InfoTip label="About the total balance">USDC across the Safe and both vaults. The history is rebuilt from executed deposits and redemptions, anchored on today’s balances; yield is not split out.</InfoTip></p>
-              <p className="hero-value">{tr ? tr.balances.total.display : <span className="sk sk-value" role="img" aria-label="Loading" />}<span className="hero-unit">USDC</span></p>
+              <p className="hero-value">{tr ? <CountText text={tr.balances.total.display} id="hero:total" /> : <span className="sk sk-value" role="img" aria-label="Loading" />}<span className="hero-unit">USDC</span></p>
               {tr?.updatedAt ? <p className="hero-sub nums">Updated {stamp(tr.updatedAt)}</p> : null}
             </div>
             {history.points.length > 1 ? (
               <StackedAreaChart points={history.points} changes={history.changes} series={series} label="Balance by holding over time" />
-            ) : ledger.isLoading || !tr ? <Loading what="the balance history" /> : <p className="empty">No executions yet.</p>}
+            ) : ledger.isLoading || !tr ? <Loading what="the balance history" shape="chart" /> : <p className="empty">No executions yet.</p>}
           </section>
 
           <div className="home-side">
@@ -300,12 +301,12 @@ export default function Treasury() {
                   ...(href ? [{ key: 'explorer', label: 'Open on the block explorer', onSelect: () => { window.open(href, '_blank', 'noopener,noreferrer') } }] : []),
                 ]
               }} />
-          ) : <Loading what="positions" />}
+          ) : <Loading what="positions" shape="table" />}
           <ErrorNote error={t.error} />
         </Section>
 
         <Section title="Obligations" info="Entered and approved by the owner. The agent never infers obligations. Unconfirmed inflows count as zero.">
-          {obs.isLoading ? <Loading what="obligations" /> : (
+          {obs.isLoading ? <Loading what="obligations" shape="table" /> : (
             <DataTable label="Obligations" rows={obRows} columns={obColumns} rowKey={(o) => o.id} rowName={(o) => o.label}
               onOpen={(o) => openOb(o.id)} selectedKey={obOpen}
               status={{ label: 'Status', get: obStatus, options: OB_STATUS }}

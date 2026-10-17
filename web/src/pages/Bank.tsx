@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { onTick, reducedMotion } from '../components/Count'
+import { easeEnter } from '../lib/motion'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Address, Hex } from 'viem'
 import { ActionCardView, ApprovalPanel } from '../components/ActionCard'
@@ -115,7 +116,7 @@ export default function Bank() {
         ) : (
           <>
             <Section title="Clients" info="Risk score is the highest vault score for that client. Open a client for its detail and ledger check; freeze and revoke sit in the row menu and the detail panel.">
-              {clients.isLoading ? <Loading what="clients" /> : (
+              {clients.isLoading ? <Loading what="clients" shape="table" /> : (
                 <DataTable label="Clients" rows={list} columns={columns} rowKey={(c) => c.safe} rowName={(c) => c.name}
                   onOpen={(c) => openClient(c.safe)} selectedKey={sel?.safe ?? null}
                   status={{ label: 'Deposits', get: depositState, options: DEPOSIT_STATES }}
@@ -264,7 +265,7 @@ function DepositChip({ c }: { c: BankClient }) {
     prev.current = state
     const el = ref.current
     if (!el || reducedMotion()) return
-    return onTick(() => { gsap.fromTo(el, { rotateX: -90, transformPerspective: 400, transformOrigin: '50% 100%' }, { rotateX: 0, duration: 0.5, ease: 'power3.out' }) })
+    return onTick(() => { gsap.fromTo(el, { rotateX: -90, transformPerspective: 400, transformOrigin: '50% 100%' }, { rotateX: 0, duration: 0.36, ease: easeEnter }) })
   }, [state])
   return (
     <span ref={ref} className="chip-flip">

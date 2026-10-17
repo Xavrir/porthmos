@@ -1,9 +1,10 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { ExitPanel } from './Exit'
 
 export function Dialog({ open, onClose, labelledBy, className, children }: { open: boolean; onClose: () => void; labelledBy: string; className?: string; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const d = ref.current
     if (!d) return
     if (open && !d.open) d.showModal()
@@ -18,7 +19,7 @@ export function Dialog({ open, onClose, labelledBy, className, children }: { ope
       onCancel={(e) => { e.preventDefault(); onClose() }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      {open ? children : null}
+      {open ? <ExitPanel kind="dialog" className="motion-contents">{children}</ExitPanel> : null}
     </dialog>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Hex } from 'viem'
@@ -10,6 +10,7 @@ import { SignConfirm } from '../components/SignConfirm'
 import { TxStatus } from '../components/TxStatus'
 import { Meter } from '../components/charts'
 import { Icon } from '../components/icons'
+import { CountText } from '../components/Count'
 import { HeldFlag, IssuerLabel, MilestonePill, OrderPill, Pill } from '../components/orders'
 import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
@@ -88,7 +89,7 @@ export default function Order() {
   const refund = () => ask(() => ({ kind: 'refund', plan: buildRefundTx(chainId, { safe: o!.order.buyer, owner: address!, orderId: BigInt(id!) }) }))
   const confirm = (m: OrderMilestone) => ask(() => ({ kind: 'confirm', index: m.index, proofHash: m.resolution!.confirmation!.proofHash, expiry: m.resolution!.confirmation!.expiry }))
 
-  if (q.isLoading || tf.loading) return <Shell><Loading what="the order" rows={5} /></Shell>
+  if (q.isLoading || tf.loading) return <Shell><Loading what="the order" rows={5} shape="table" /></Shell>
   if (!o) {
     return (
       <Shell>
@@ -145,7 +146,7 @@ export default function Order() {
       <section className="order-summary card" aria-label="Order summary">
         <div className="order-money">
           <p className="hero-label">Released</p>
-          <p className="order-amount nums">{o.order.released.display}<span className="hero-unit">of {o.order.total.display} USDC</span></p>
+          <p className="order-amount nums"><CountText text={o.order.released.display} id={`order:${o.order.orderId}:released`} /><span className="hero-unit">of {o.order.total.display} USDC</span></p>
           <Meter value={fromUnits(released)} max={fromUnits(total)} label={`Released ${o.order.released.display} of ${o.order.total.display} USDC`} />
         </div>
         <dl className="facts order-facts">
@@ -197,8 +198,8 @@ function MilestoneStep({ m, o, tf, supplierView, actions, confirm }: { m: OrderM
   const checks = proof?.proof ? conditionChecks(m, proof.proof) : []
   const isNext = o.order.status === 'ACTIVE' && o.order.nextIndex === m.index
   return (
-    <li className={`ms-step ms-${d}${isNext ? ' is-next' : ''}`} id={`m-${m.index + 1}`}>
-      <span className="ms-node" aria-hidden="true"><Icon name={d === 'released' || d === 'waived' ? 'check' : d === 'held' ? 'alert' : d === 'refunded' ? 'left' : 'clock'} /></span>
+    <li className={`ms-step ms-${d}${isNext ? ' is-next' : ''}`} id={`m-${m.index + 1}`} style={{ '--i': m.index } as CSSProperties}>
+      <span className="ms-node" aria-hidden="true"><Icon key={d} name={d === 'released' || d === 'waived' ? 'check' : d === 'held' ? 'alert' : d === 'refunded' ? 'left' : 'clock'} /></span>
       <div className="ms-card">
         <header className="ms-head">
           <h3><span className="ms-index">{m.index + 1}</span>{spec.label}</h3>

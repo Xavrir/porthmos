@@ -5,6 +5,7 @@ import { SeatChooser } from './components/SeatChooser'
 import { Loading } from './components/bits'
 import { Landing } from './pages/Landing'
 import { useGate } from './auth/hooks'
+import { installRouteFade } from './lib/ghost'
 
 const Treasury = lazy(() => import('./pages/Treasury'))
 const Copilot = lazy(() => import('./pages/Copilot'))
@@ -19,6 +20,7 @@ const Order = lazy(() => import('./pages/Order'))
 const pageLoading = <main id="main" className="page"><div className="page-body"><Loading what="the page" rows={4} /></div></main>
 
 function AppLayout({ waiting = false }: { waiting?: boolean }) {
+  useEffect(() => installRouteFade(), [])
   return (
     <AppShell>
       <MarketBanner />

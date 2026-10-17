@@ -1,6 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { gsap } from 'gsap'
-import { onTick, reducedMotion } from '../components/Count'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Chip, ErrorNote, ErrorTag, Figure, Hash, Kpis, Loading, PageHeader, Section, stateTone, TierMark, type Tone } from '../components/bits'
 import { DataTable, type Column } from '../components/DataTable'
@@ -99,19 +97,6 @@ export default function Audit() {
   }, [ledger.data])
   const selected = openSeq ? all.find((r) => String(r.seq) === openSeq) ?? null : null
 
-  const tableRef = useRef<HTMLTableSectionElement>(null)
-  const seen = useRef<Set<number> | null>(null)
-  useLayoutEffect(() => {
-    if (!ledger.data) return
-    const seqs = ledger.data.map((r) => r.seq)
-    if (!seen.current) { seen.current = new Set(seqs); return }
-    const fresh = seqs.filter((n) => !seen.current!.has(n))
-    fresh.forEach((n) => seen.current!.add(n))
-    const body = tableRef.current
-    if (!fresh.length || !body || reducedMotion()) return
-    const els = fresh.map((n) => body.querySelector(`tr[data-seq="${n}"]`)).filter(Boolean) as Element[]
-    if (els.length) return onTick(() => { gsap.fromTo(els, { autoAlpha: 0, y: -12 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power3.out', stagger: 0.06, clearProps: 'opacity,visibility,transform' }) })
-  }, [ledger.data])
 
   const columns: Column<LedgerRow>[] = [
     { key: 'seq', header: 'Row', className: 'dt-seq', cell: (r) => <span className="nums">{r.seq}</span> },
@@ -153,7 +138,7 @@ export default function Audit() {
               })()}
             </p>
           ) : null}
-          {ledger.isLoading ? <Loading what="the ledger" rows={6} /> : (
+          {ledger.isLoading ? <Loading what="the ledger" rows={6} shape="table" /> : (
             <DataTable label="Ledger rows" rows={rows} columns={columns} rowKey={(r) => String(r.seq)} rowName={(r) => `row ${r.seq}`}
               onOpen={(r) => openRow(String(r.seq))} selectedKey={openSeq} tall
               status={{ label: 'Outcome', get: group, options: FILTERS }} statusValue={status} onStatusChange={setStatus}
@@ -175,7 +160,7 @@ export default function Audit() {
                   ...(r.revertReason ? [{ key: 'err', label: `Show every ${r.revertReason}`, onSelect: () => setParams({ error: r.revertReason! }) }] : []),
                 ]
               }}
-              rowAttrs={(r) => ({ 'data-seq': r.seq })} bodyRef={tableRef}
+              rowAttrs={(r) => ({ 'data-seq': r.seq })}
               empty="No ledger rows yet." />
           )}
           <ErrorNote error={ledger.error} />

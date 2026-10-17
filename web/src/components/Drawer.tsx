@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Icon } from './icons'
+import { ExitPanel } from './Exit'
 
 export function useHashParam(prefix: string): [string | null, (id: string) => void, () => void] {
   const location = useLocation()
@@ -33,7 +34,8 @@ export function DetailDrawer({ open, onClose, eyebrow, title, badge, amount, act
   const back = useRef<HTMLElement | null>(null)
   const id = useId()
 
-  useEffect(() => {
+  // layout effect: the dialog must close before paint, while its exit copy (ExitPanel) is already on screen
+  useLayoutEffect(() => {
     const d = ref.current
     if (!d) return
     if (open && !d.open) {
@@ -60,7 +62,7 @@ export function DetailDrawer({ open, onClose, eyebrow, title, badge, amount, act
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       {open ? (
-        <div className="drawer-panel">
+        <ExitPanel kind="drawer" className="drawer-panel">
           <header className="drawer-head">
             <div className="drawer-top">
               {eyebrow ? <p className="drawer-eyebrow">{eyebrow}</p> : <span />}
@@ -74,7 +76,7 @@ export function DetailDrawer({ open, onClose, eyebrow, title, badge, amount, act
             {actions ? <div className="drawer-actions">{actions}</div> : null}
           </header>
           <div className="drawer-body">{children}</div>
-        </div>
+        </ExitPanel>
       ) : null}
     </dialog>
   )

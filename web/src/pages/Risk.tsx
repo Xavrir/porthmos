@@ -87,7 +87,7 @@ export default function Risk() {
         <Section title="Oracle price" className="card"
           info="Chainlink-style feed with 8 decimals. Deposits must also land inside the signed price band, no wider than 0.0200."
           actions={o ? (o.stale ? <Chip state="HELD">Stale</Chip> : <span className="card-meta nums">Updated {stamp(o.updatedAt)}</span>) : null}>
-          {o ? <OracleChart history={o.history ?? []} price={price} stale={o.stale} /> : <Loading what="the oracle" />}
+          {o ? <OracleChart history={o.history ?? []} price={price} stale={o.stale} /> : <Loading what="the oracle" shape="chart" />}
           <ErrorNote error={oracle.error} />
         </Section>
 

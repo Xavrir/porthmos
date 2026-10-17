@@ -37,7 +37,15 @@ export function Chip({ state, tone, children }: { state: string; tone?: Tone; ch
   const label = children ?? sentenceCase(state as WorkflowState)
   const t = tone ?? stateTone(state)
   const icon = TONE_ICON[t]
-  return <span className={`chip v-${verdict} tone-${t}`}>{icon ? <Icon name={icon} className="chip-icon" /> : null}{label}</span>
+  return <span className={`chip v-${verdict} tone-${t}`}><Swap value={`${t}:${state}:${typeof label === 'string' ? label : ''}`}>{icon ? <Icon name={icon} className="chip-icon" /> : null}{label}</Swap></span>
+}
+
+/** Remounts its content when `value` changes after the first render, so a changed status label rises in while the chip's colours cross-fade. */
+export function Swap({ value, children }: { value: string; children: ReactNode }) {
+  const last = useRef(value)
+  const turns = useRef(0)
+  if (last.current !== value) { last.current = value; turns.current += 1 }
+  return <span key={turns.current} className={`chip-in${turns.current ? ' is-swapped' : ''}`}>{children}</span>
 }
 
 export function TierMark({ tier, short = false }: { tier: Tier | undefined; short?: boolean }) {
@@ -129,7 +137,7 @@ export function Figure({ label, value, note, tone, spark, sparkLabel, trend, met
     <div className={`kpi${tone === 'alert' ? ' is-alert' : ''}`}>
       <span className="kpi-label">{label}{info ? <InfoTip label={`About ${label.toLowerCase()}`}>{info}</InfoTip> : null}</span>
       <span className="kpi-row">
-        <span className="kpi-value">{pending ? <span className="sk sk-value" aria-label="Loading" role="img" /> : typeof value === 'string' ? <CountText text={value} /> : value}</span>
+        <span className="kpi-value">{pending ? <span className="sk sk-value" aria-label="Loading" role="img" /> : typeof value === 'string' ? <CountText text={value} id={`kpi:${label}`} /> : value}</span>
         {trend ? (
           <span className={`trend trend-${trend.dir}${trend.good === false ? ' is-bad' : ''}`}>
             {trend.dir !== 'flat' ? <Icon name={trend.dir} /> : null}<span className="nums">{trend.text}</span>
@@ -177,11 +185,12 @@ export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty-state"><span className="empty-mark" aria-hidden="true" /><p>{children}</p></div>
 }
 
-export function Loading({ what, rows = 3 }: { what: string; rows?: number }) {
+export function Loading({ what, rows = 3, shape = 'lines' }: { what: string; rows?: number; shape?: 'lines' | 'chart' | 'table' }) {
   return (
-    <div className="skeleton" aria-live="polite" aria-busy="true">
+    <div className={`skeleton${shape === 'table' ? ' is-table' : ''}`} aria-live="polite" aria-busy="true">
       <span className="sr-only">Loading {what}…</span>
-      {Array.from({ length: rows }, (_, i) => <span key={i} className="sk sk-line" aria-hidden="true" />)}
+      {shape === 'chart' ? <span className="sk sk-chart" aria-hidden="true" />
+        : Array.from({ length: shape === 'table' ? rows + 1 : rows }, (_, i) => <span key={i} className={`sk ${shape === 'table' ? 'sk-row' : 'sk-line'}`} aria-hidden="true" />)}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
+import { usePopoverExit } from './Exit'
 
 export type MenuItem = { key: string; label: ReactNode; onSelect: () => void; checked?: boolean; danger?: boolean; disabled?: boolean; meta?: ReactNode }
 
@@ -69,7 +70,7 @@ export function MenuButton({ items, buttonClass, buttonLabel, children, align = 
         {children}
       </button>
       {open ? createPortal(
-        <div ref={menu} id={id} role="menu" className="menu" style={style} onKeyDown={onKey} onClick={(e) => e.stopPropagation()}>
+        <MenuPanel panel={menu} id={id} style={style} onKeyDown={onKey}>
           {items.map((it) => (
             <button key={it.key} type="button" role={radio ? 'menuitemradio' : 'menuitem'} aria-checked={radio ? !!it.checked : undefined}
               aria-disabled={it.disabled || undefined} tabIndex={-1}
@@ -79,9 +80,14 @@ export function MenuButton({ items, buttonClass, buttonLabel, children, align = 
               {it.meta !== undefined ? <span className="menu-meta nums">{it.meta}</span> : null}
             </button>
           ))}
-        </div>,
+        </MenuPanel>,
         document.body,
       ) : null}
     </>
   )
+}
+
+function MenuPanel({ panel, id, style, onKeyDown, children }: { panel: RefObject<HTMLDivElement | null>; id: string; style: CSSProperties; onKeyDown: (e: KeyboardEvent) => void; children: ReactNode }) {
+  usePopoverExit(panel)
+  return <div ref={panel} id={id} role="menu" className="menu" style={style} onKeyDown={onKeyDown} onClick={(e) => e.stopPropagation()}>{children}</div>
 }

@@ -1,4 +1,5 @@
-import { useId, useMemo, useState, type MouseEvent, type ReactNode, type Ref } from 'react'
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode, type Ref } from 'react'
+import { CSS_ENTER, DUR, reducedMotion } from '../lib/motion'
 import { countByStatus, filterRows, paginate } from '../lib/table'
 import { Icon } from './icons'
 import { MenuButton, type MenuItem } from './Menu'
@@ -58,6 +59,14 @@ export function DataTable<T>(p: DataTableProps<T>) {
     [p.rows, text, status, p.searchText, p.status],
   )
   const pg = paginate(filtered, page, size)
+  const body = useRef<HTMLTableSectionElement | null>(null)
+  const { bodyRef } = p
+  const setBody = useCallback((el: HTMLTableSectionElement | null) => {
+    body.current = el
+    if (typeof bodyRef === 'function') bodyRef(el)
+    else if (bodyRef) bodyRef.current = el
+  }, [bodyRef])
+  useFreshRows(body, p.rows, p.rowKey)
   const active = !!status || !!text.trim() || !!p.chips
   const statusLabel = p.status?.options.find((o) => o.value === status)?.label
 
@@ -116,12 +125,12 @@ export function DataTable<T>(p: DataTableProps<T>) {
                   {p.rowMenu ? <th scope="col" className="dt-menu-col"><span className="sr-only">Actions</span></th> : null}
                 </tr>
               </thead>
-              <tbody ref={p.bodyRef}>
+              <tbody ref={setBody}>
                 {pg.rows.map((row) => {
                   const key = p.rowKey(row)
                   const name = p.rowName?.(row) ?? key
                   return (
-                    <tr key={key} {...(p.rowAttrs?.(row) ?? {})} className={`${p.onOpen ? 'is-clickable' : ''}${p.selectedKey === key ? ' is-selected' : ''}`} onClick={(e) => onRow(e, row)}>
+                    <tr key={key} data-key={key} {...(p.rowAttrs?.(row) ?? {})} className={`${p.onOpen ? 'is-clickable' : ''}${p.selectedKey === key ? ' is-selected' : ''}`} onClick={(e) => onRow(e, row)}>
                       {p.columns.map((c) => (
                         <td key={c.key} data-label={c.label ?? (typeof c.header === 'string' ? c.header : undefined)}
                           className={`${c.align === 'right' ? 'r' : ''}${c.primary ? ' dt-primary' : ''}${c.hideNarrow ? ' hide-narrow' : ''}${c.className ? ` ${c.className}` : ''}`}>
@@ -161,4 +170,26 @@ export function DataTable<T>(p: DataTableProps<T>) {
       )}
     </div>
   )
+}
+
+/** Rows that arrive after the table first had data slide in and keep a brief highlight, newest first. */
+function useFreshRows<T>(body: { current: HTMLTableSectionElement | null }, rows: readonly T[], rowKey: (row: T) => string) {
+  const seen = useRef<Set<string> | null>(null)
+  const keys = rows.map(rowKey)
+  const sig = keys.join('\u0000')
+  useLayoutEffect(() => {
+    if (!seen.current) { if (keys.length) seen.current = new Set(keys); return }
+    const fresh = keys.filter((k) => !seen.current!.has(k))
+    for (const k of fresh) seen.current.add(k)
+    const tb = body.current
+    if (!fresh.length || !tb || reducedMotion() || typeof tb.animate !== 'function') return
+    const tint = getComputedStyle(tb).getPropertyValue('--fresh').trim() || 'rgba(47, 166, 118, 0.16)'
+    const els = fresh.map((k) => tb.querySelector<HTMLTableRowElement>(`tr[data-key="${CSS.escape(k)}"]`)).filter((r): r is HTMLTableRowElement => !!r).slice(0, 8)
+    els.forEach((tr, i) => {
+      tr.animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: DUR.enter, delay: i * 40, easing: CSS_ENTER, fill: 'backwards' })
+      for (const td of tr.cells) td.animate([{ backgroundColor: tint }, { backgroundColor: tint, offset: 0.35 }, { backgroundColor: 'transparent' }], { duration: 1600, delay: i * 40, easing: 'linear' })
+    })
+    // sig stands for keys
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig])
 }

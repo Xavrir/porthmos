@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { zeroAddress } from 'viem'
 import { useAegis } from '../lib/source'
@@ -12,6 +12,7 @@ import { sentenceCase } from '../lib/vocabulary'
 import { GLOSSARY } from './Glossary'
 import { Icon, type IconName } from './icons'
 import { useVisiblePages } from './chrome'
+import { ExitPanel } from './Exit'
 import { useOrders } from '../lib/tradeflow/queries'
 import { heldCount, ORDER_LABEL, orderDisplay } from '../lib/tradeflow/state'
 import { toast } from '../lib/toast'
@@ -110,7 +111,7 @@ export function CommandPalette() {
   const sections = useMemo(() => searchPalette(items, q), [items, q])
   const flat = useMemo(() => flatten(sections), [sections])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const d = ref.current
     if (!d) return
     if (open && !d.open) { setQ(''); setActive(0); d.showModal(); input.current?.focus() }
@@ -156,7 +157,7 @@ export function CommandPalette() {
     <dialog ref={ref} className="palette" aria-label="Search" onCancel={(e) => { e.preventDefault(); closeOverlay() }}
       onClick={(e) => { if (e.target === e.currentTarget) closeOverlay() }}>
       {open ? (
-        <div className="palette-panel">
+        <ExitPanel kind="palette" className="palette-panel">
           <div className="palette-input">
             <Icon name="search" />
             <input ref={input} type="text" role="combobox" aria-expanded="true" aria-controls={`${id}-list`} aria-autocomplete="list"
@@ -188,7 +189,7 @@ export function CommandPalette() {
             )) : <p className="palette-empty">No results for “{q}”. Try a row number, an amount, an error such as BadSignature, or a term.</p>}
           </div>
           <p className="palette-foot" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> to move <kbd>Enter</kbd> to open <kbd>Esc</kbd> to close</p>
-        </div>
+        </ExitPanel>
       ) : null}
     </dialog>
   )

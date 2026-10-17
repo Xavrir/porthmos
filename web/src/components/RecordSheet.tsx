@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { onTick, reducedMotion } from './Count'
+import { easeEnter } from '../lib/motion'
 import type { Address } from 'viem'
 import { DAR_FIELD_NOTES, recoverSigner, typedDataFor } from '../lib/eip712'
 import { fromUnits, money, shortHex, stamp } from '../lib/format'
@@ -66,7 +67,7 @@ export function RecordSheet({ record, chainId, module, expected, names, changed,
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return
       io.disconnect()
-      cancel = onTick(() => { tween = gsap.fromTo(rows, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.4, ease: 'power3.out', stagger: 0.025 }) })
+      cancel = onTick(() => { tween = gsap.fromTo(rows, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.24, ease: easeEnter, stagger: 0.025 }) })
     }, { threshold: 0.15 })
     io.observe(el)
     return () => { io.disconnect(); cancel?.(); tween?.kill(); gsap.set(rows, { clearProps: 'opacity,visibility,transform' }) }
@@ -75,7 +76,7 @@ export function RecordSheet({ record, chainId, module, expected, names, changed,
   useLayoutEffect(() => {
     const el = verdictRef.current
     if (!el || matches !== false || reducedMotion()) return
-    const call = gsap.delayedCall(0.25, () => { gsap.fromTo(el, { rotateX: -90, transformPerspective: 500, transformOrigin: '50% 100%' }, { rotateX: 0, duration: 0.55, ease: 'power3.out' }) })
+    const call = gsap.delayedCall(0.25, () => { gsap.fromTo(el, { rotateX: -90, transformPerspective: 500, transformOrigin: '50% 100%' }, { rotateX: 0, duration: 0.4, ease: easeEnter }) })
     return () => { call.kill(); gsap.killTweensOf(el); gsap.set(el, { clearProps: 'transform' }) }
   }, [matches, recordKey])
 

@@ -1,26 +1,8 @@
 import { useLayoutEffect, useRef } from 'react'
 import { gsap } from 'gsap'
+import { countStart, DUR, figureAt, parseFigure, reducedMotion, tween } from '../lib/motion'
 
-export function reducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
-
-const NUMBER = /-?\d[\d,]*(?:\.\d+)?/
-
-function parse(text: string) {
-  const m = text.match(NUMBER)
-  if (!m || m.index === undefined) return null
-  const raw = m[0]
-  const decimals = raw.includes('.') ? raw.split('.')[1].length : 0
-  return { before: text.slice(0, m.index), after: text.slice(m.index + raw.length), value: Number(raw.replace(/,/g, '')), decimals, grouped: raw.includes(',') || Math.abs(Number(raw.replace(/,/g, ''))) >= 10000 }
-}
-
-function render(p: NonNullable<ReturnType<typeof parse>>, v: number) {
-  const n = p.grouped
-    ? v.toLocaleString('en-US', { minimumFractionDigits: p.decimals, maximumFractionDigits: p.decimals })
-    : v.toFixed(p.decimals)
-  return `${p.before}${n}${p.after}`
-}
+export { reducedMotion }
 
 // Hidden or rewritten states must start inside a GSAP tick: if frames never run, the content stays as rendered.
 export function onTick(fn: () => void): () => void {
@@ -28,35 +10,47 @@ export function onTick(fn: () => void): () => void {
   return () => { call.kill() }
 }
 
-export function CountText({ text, fromZero = false, duration = 0.9, className }: { text: string; fromZero?: boolean; duration?: number; className?: string }) {
+/**
+ * A money figure that counts up the first time it is seen and tweens when its value changes.
+ * The text node always holds the final value (for screen readers, tests and copy); the moving digits are a
+ * CSS overlay (`data-roll`) over the same box, so the layout never shifts.
+ */
+export function CountText({ text, id, fromZero = true, className }: { text: string; id?: string; fromZero?: boolean; className?: string }) {
   const ref = useRef<HTMLSpanElement>(null)
   const shown = useRef<number | null>(null)
+  const firstStart = useRef<number | null | undefined>(undefined)
 
   useLayoutEffect(() => {
     const el = ref.current
-    if (!el) return
-    el.textContent = text
-    const p = parse(text)
+    const f = parseFigure(text)
     const from = shown.current
-    shown.current = p ? p.value : null
-    if (!p || reducedMotion() || (from === null && !fromZero) || from === p.value) return
-    const run = (start: number) => {
-      const o = { v: start }
-      return gsap.to(o, { v: p.value, duration, ease: 'power2.out', onUpdate: () => { el.textContent = render(p, o.v) }, onComplete: () => { el.textContent = text } })
+    if (!el || !f || reducedMotion()) { shown.current = f ? f.value : null; return }
+    let at: number | null = from
+    let stop: (() => void) | null = null
+    let io: IntersectionObserver | null = null
+    const settle = () => { el.classList.remove('is-rolling'); el.removeAttribute('data-roll') }
+    const run = (start: number, duration: number) => {
+      el.classList.add('is-rolling')
+      stop = tween({ duration, onFrame: (p) => { at = start + (f.value - start) * p; el.dataset.roll = figureAt(start, text, p) }, onDone: settle })
     }
     if (from !== null) {
-      const t = run(from)
-      return () => { t.kill(); el.textContent = text }
+      if (from !== f.value) run(from, DUR.change)
+    } else {
+      // computed once per instance, so StrictMode's second effect pass does not lose the count-up
+      if (firstStart.current === undefined) firstStart.current = fromZero ? countStart(id, f.value) : null
+      const start = firstStart.current
+      if (start === null) at = f.value
+      else {
+        io = new IntersectionObserver((entries) => {
+          if (!entries.some((e) => e.isIntersecting)) return
+          io?.disconnect()
+          run(start, DUR.count)
+        }, { threshold: 0.2 })
+        io.observe(el)
+      }
     }
-    let tween: gsap.core.Tween | null = null
-    const io = new IntersectionObserver((entries) => {
-      if (!entries.some((e) => e.isIntersecting)) return
-      io.disconnect()
-      tween = run(0)
-    }, { threshold: 0.4 })
-    io.observe(el)
-    return () => { io.disconnect(); tween?.kill(); el.textContent = text }
-  }, [text, fromZero, duration])
+    return () => { io?.disconnect(); stop?.(); settle(); shown.current = at }
+  }, [text, id, fromZero])
 
-  return <span ref={ref} className={className} />
+  return <span ref={ref} className={`tw${className ? ` ${className}` : ''}`}>{text}</span>
 }

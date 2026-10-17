@@ -77,7 +77,7 @@ export default function Orders() {
               <Figure label="Held milestones" value={orders.data ? String(totals.held) : '…'} tone={totals.held ? 'alert' : undefined} note={totals.held ? 'Need your decision' : 'None'} />
             </Kpis>
             <Section title="All orders">
-              {orders.isLoading ? <Loading what="orders" /> : (
+              {orders.isLoading ? <Loading what="orders" shape="table" /> : (
                 <DataTable label="Orders" rows={rows} columns={columns} rowKey={(o) => o.order.orderId} rowName={(o) => `Order ${o.order.orderId}`}
                   onOpen={(o) => navigate(`/orders/${o.order.orderId}`)}
                   status={{ label: 'Status', get: (o) => orderDisplay(o.order.status), options: STATUS_OPTIONS }}

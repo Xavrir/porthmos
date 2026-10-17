@@ -18,6 +18,7 @@
           var pref = 'light'
           try { pref = localStorage.getItem('porthmos.theme') || 'light' } catch (e) {}
           r.dataset.theme = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'
+          if (/^\/(signin|signup|start)\/?$/.test(location.pathname)) { r.classList.add('auth-theme'); r.dataset.theme = 'dark' }
         }
         if (location.pathname === '/' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
           r.classList.add('motion-pending')

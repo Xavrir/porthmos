@@ -816,6 +816,10 @@ html.app-theme {
   & .glossary .is-hit dt, & .glossary .is-hit dd { background: var(--held-bg); }
   & .glossary .is-hit dt { padding-left: 8px; }
   & .dialog-shortcuts { width: min(460px, calc(100vw - 2rem)); }
+  & .dialog-forget { width: min(480px, calc(100vw - 2rem)); }
+  & .forget-form { display: flex; flex-direction: column; gap: 8px; }
+  & .forget-form label { font-weight: 500; }
+  & .account-foot { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
   & .shortcut-list { display: flex; flex-direction: column; margin: 0; }
   & .shortcut-list > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; border-bottom: 1px solid var(--line-soft); }
   & .shortcut-list > div:last-child { border-bottom: 0; }

@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { usePageTitle } from '../components/chrome'
 import { useAegis } from '../lib/source'
-import { useIdentity } from '../lib/identity'
 import { useBaseSepoliaLive } from '../lib/chain/live'
 import { ArtLock, ArtProof, ArtRelease, ArtShip, ArtVerify, IconArrow, IconBlock, IconCheck, IconContract, IconFreeze, IconGitHub, IconLock, IconOut, IconPlus } from '../landing/art'
 import { prefersStill, rng } from '../landing/canvas'
@@ -147,8 +146,7 @@ function Stripes() {
 export function Landing() {
   usePageTitle(null)
   useLandingDocument()
-  const { tenant, http, service } = useAegis()
-  const { chooser } = useIdentity()
+  const { http, service } = useAegis()
   const live = useBaseSepoliaLive()
   const health = useQuery({
     queryKey: ['landing-health'],
@@ -203,9 +201,7 @@ export function Landing() {
     return () => { cancelled = true; stop?.(); release() }
   }, [])
 
-  const launch = (className: string, arrow = true) => tenant
-    ? <button type="button" className={className} onClick={() => chooser.show('hero')}>Launch app{arrow ? <IconArrow /> : null}</button>
-    : <Link to="/start" className={className}>Launch app{arrow ? <IconArrow /> : null}</Link>
+  const launch = (className: string, arrow = true) => <Link to="/signin" className={className}>Launch app{arrow ? <IconArrow /> : null}</Link>
   const docs = <Ext href={DOCS_URL} className="pm-btn pm-btn-white">Read the docs</Ext>
 
   const stats: Stat[] = [
@@ -231,6 +227,7 @@ export function Landing() {
             <Ext href={DOCS_URL}>Docs<span className="pm-plus pm-plus-out" aria-hidden="true"><IconOut /></span></Ext>
             <Ext href={REPO_URL} className="pm-nav-icon" label="GitHub"><IconGitHub /></Ext>
           </nav>
+          <Link to="/signup" className="pm-nav-signup">Create account</Link>
           {launch('pm-btn pm-btn-green pm-nav-cta', false)}
         </div>
       </header>

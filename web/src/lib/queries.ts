@@ -5,11 +5,11 @@ import { useIdentity } from './identity'
 import type { RequestRecord } from './types'
 import type { ReplayApi } from '../replay/engine'
 
-// A tenant's endpoints all need its session, so live tenant queries wait for it instead of failing with 401.
+// The service answers these reads only within a session, so live queries wait for it instead of failing with 401.
 function useBase() {
-  const { api, mode, phase, sessionEpoch, tenant } = useAegis()
+  const { api, mode, phase, sessionEpoch } = useAegis()
   const { sessionReady } = useIdentity()
-  const ready = phase === 'ready' && (mode !== 'live' || !tenant || sessionReady)
+  const ready = phase === 'ready' && (mode !== 'live' || sessionReady)
   return { api, mode, ready, sessionEpoch }
 }
 

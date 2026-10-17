@@ -3,7 +3,7 @@
 async (page) => {
   const BASE = '__BASE__'
   const OUT = '__OUT__'
-  const routes = [['treasury', 'owner'], ['copilot', 'owner'], ['risk', 'owner'], ['audit', 'owner'], ['bank', 'bank'], ['start', 'owner']]
+  const routes = [['treasury', 'owner'], ['copilot', 'owner'], ['risk', 'owner'], ['audit', 'owner'], ['bank', 'bank'], ['signup', 'owner']]
   const errors = []
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
   page.on('pageerror', (e) => errors.push(String(e)))
@@ -14,7 +14,7 @@ async (page) => {
       for (const [route, seat] of routes) {
         errors.length = 0
         await page.goto(BASE + '/')
-        await page.evaluate(([t, s]) => { localStorage.setItem('porthmos.theme', t); sessionStorage.setItem('aegis.seat', s) }, [theme, seat])
+        await page.evaluate(([t, s]) => { localStorage.setItem('porthmos.theme', t); sessionStorage.setItem('aegis.seat', s); sessionStorage.setItem('aegis.mode', 'replay') }, [theme, seat])
         await page.goto(BASE + '/' + route)
         await page.waitForSelector('main#main h1')
         await page.waitForTimeout(1200)

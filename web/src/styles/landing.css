@@ -124,7 +124,11 @@ html.pm-page { scroll-padding-top: 72px; }
 .pm-nav-icon { justify-content: center; width: 44px; }
 @media (hover: hover) and (pointer: fine) { .pm-nav-links a:hover .pm-plus:not(.pm-plus-out) { transform: rotate(45deg); } .pm-nav-links a:hover .pm-plus-out { transform: translate(2px, -2px); } }
 .pm-nav-cta { margin-left: auto; min-height: 40px; min-width: 0; padding: 0 16px; }
-@media (min-width: 900px) { .pm-nav-links { display: flex; } .pm-nav-cta { margin-left: 0; } }
+.pm-nav-signup { display: none; align-items: center; min-height: 44px; margin-left: auto; color: #fff; font-size: 15px; text-decoration: underline; text-underline-offset: 0.25em; text-decoration-thickness: 1px; white-space: nowrap; }
+.pm-nav-signup + .pm-nav-cta { margin-left: 0; }
+@media (min-width: 480px) { .pm-nav-signup { display: inline-flex; } }
+@media (max-width: 479.98px) { .pm-nav-signup + .pm-nav-cta { margin-left: auto; } }
+@media (min-width: 900px) { .pm-nav-links { display: flex; } .pm-nav-cta { margin-left: 0; } .pm-nav-signup { margin-left: 0; } }
 
 /* hero and curtain */
 .pm-overlap { position: relative; }

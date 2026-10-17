@@ -1,4 +1,5 @@
-// Playwright CLI run-code snippet: replay smoke test of the main flows (palette, shortcuts, menus, drawers, approval, bank freeze, mobile menu).
+// Playwright CLI run-code snippet: replay smoke test of the main flows (sign-in guard, View the demo, palette, shortcuts, menus, drawers,
+// approval, bank freeze, orders, sign out, mobile menu).
 async (page) => {
   const BASE = '__BASE__'
   const log = []
@@ -8,9 +9,20 @@ async (page) => {
   const step = async (name, fn) => { try { await fn(); log.push(`ok   ${name}`) } catch (e) { log.push(`FAIL ${name}: ${String(e).split('\n')[0]}`) } }
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto(BASE + '/')
-  await page.evaluate(() => { localStorage.setItem('porthmos.theme', 'light'); sessionStorage.setItem('aegis.seat', 'owner') })
-  await page.goto(BASE + '/treasury')
-  await page.waitForSelector('main#main h1')
+  await page.evaluate(() => { localStorage.setItem('porthmos.theme', 'light') })
+
+  await step('no session: /treasury redirects to /signin', async () => {
+    await page.goto(BASE + '/treasury')
+    await page.waitForURL('**/signin')
+    await page.locator('h1', { hasText: 'Log in to Porthmos' }).waitFor()
+  })
+  await step('View the demo opens the recorded run as the owner, nothing to sign', async () => {
+    await page.locator('label[for="signin-seat-owner"]').click()
+    await page.locator('#signin-demo').click()
+    await page.waitForURL('**/treasury')
+    await page.waitForSelector('main#main h1')
+    await page.locator('.mode-replay').first().waitFor()
+  })
 
   await step('command palette opens with Ctrl K and navigates', async () => {
     await page.keyboard.press('Control+k')
@@ -138,6 +150,17 @@ async (page) => {
     if (!/^Order 1/.test(title)) throw new Error('first result is ' + title)
     await page.keyboard.press('Enter')
     await page.waitForURL('**/orders/1')
+  })
+  await step('account menu: Sign out returns to /signin and the guard holds', async () => {
+    await page.goto(BASE + '/treasury')
+    await page.waitForSelector('main#main h1')
+    await page.locator('.switcher-button').click()
+    await page.locator('#account-signout').click()
+    await page.waitForURL('**/signin')
+    await page.goto(BASE + '/audit')
+    await page.waitForURL('**/signin')
+    await page.locator('#signin-demo').click()
+    await page.waitForURL('**/audit')
   })
   await step('mobile: menu opens the sidebar and navigates', async () => {
     await page.setViewportSize({ width: 390, height: 844 })

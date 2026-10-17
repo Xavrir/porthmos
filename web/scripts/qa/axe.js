@@ -10,7 +10,7 @@ async (page) => {
     for (const theme of ['light', 'dark']) {
       for (const [route, seat, hash] of targets) {
         await page.goto(BASE + '/')
-        await page.evaluate(([t, s]) => { localStorage.setItem('porthmos.theme', t); sessionStorage.setItem('aegis.seat', s) }, [theme, seat])
+        await page.evaluate(([t, s]) => { localStorage.setItem('porthmos.theme', t); sessionStorage.setItem('aegis.seat', s); sessionStorage.setItem('aegis.mode', 'replay') }, [theme, seat])
         await page.goto(BASE + '/' + route + (hash ?? ''))
         await page.waitForSelector('main#main h1')
         await page.waitForTimeout(1200)

@@ -53,21 +53,28 @@ async (page) => {
   // The faucet allows one onboarding per address per window, so a treasury already in this browser session is reused.
   const reuse = await page.evaluate(() => { localStorage.setItem('porthmos.theme', 'light'); return !!localStorage.getItem('aegis.wallet.v1') })
 
-  if (reuse) await step('reuse the treasury already in this browser', async () => {
-    await page.goto(BASE + '/treasury')
-    await page.waitForSelector('main#main h1')
-    const signIn = page.getByRole('button', { name: /Sign in as owner/ })
-    await signIn.first().click({ timeout: 6000 }).catch(() => {})
+  if (reuse) await step('log in with the treasury already in this browser (/signin, Continue on this device)', async () => {
+    await page.goto(BASE + '/signin')
+    await page.locator('#signin-device', { hasText: 'Safe' }).waitFor({ timeout: 20000 })
+    await page.locator('label[for="signin-seat-owner"]').click()
+    await page.locator('#signin-continue').click()
+    await page.getByRole('button', { name: 'Sign in as owner' }).click()
+    await page.waitForURL('**/treasury', { timeout: 20000 })
     await page.locator('.sw-sub', { hasText: /Signed in as Owner/ }).waitFor({ timeout: 20000 })
   })
 
-  if (!reuse) await step('create a treasury in this browser', async () => {
-    await page.goto(BASE + '/start')
-    await page.getByRole('button', { name: 'Create my treasury' }).click()
-    await page.getByRole('button', { name: 'Open my treasury' }).waitFor({ timeout: 180000 })
-    await page.getByRole('button', { name: 'Open my treasury' }).click()
-    await page.getByRole('button', { name: /Sign in as owner/ }).first().click({ timeout: 20000 })
+  if (!reuse) await step('create an account in this browser (/signup, recovery file, sign in)', async () => {
+    await page.goto(BASE + '/signup')
+    await page.locator('#signup-create').click()
+    await page.locator('#signup-recovery').waitFor({ timeout: 180000 })
+    const download = page.waitForEvent('download')
+    await page.locator('#signup-download').click()
+    await download
+    await page.locator('#signup-recovery input[type=checkbox]').check()
+    await page.locator('#signup-open').click()
+    await page.getByRole('button', { name: 'Sign in as owner' }).click()
     await page.waitForURL('**/treasury', { timeout: 20000 })
+    await page.locator('.sw-sub', { hasText: /Signed in as Owner/ }).waitFor({ timeout: 20000 })
   })
 
   await step('g o opens Orders (empty state on a new treasury)', async () => {

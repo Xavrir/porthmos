@@ -44,6 +44,7 @@ export function startAscii(canvas: HTMLCanvasElement, words: string[], opts: { s
 
     const cols = Math.floor(w / cw)
     const rows = Math.floor(h / lh)
+    if (cols < 1 || rows < 1) { cells = []; return }
     const mask = document.createElement('canvas')
     mask.width = cols
     mask.height = rows

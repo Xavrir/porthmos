@@ -59,6 +59,7 @@ type IdentityValue = {
   sendAs: (role: Role, fn: RegistryFn, args: readonly unknown[]) => Promise<Hex>
   isLocal: boolean
   sessionReady: boolean
+  storedSignIn: boolean
 }
 
 const IdentityContext = createContext<IdentityValue | null>(null)
@@ -264,14 +265,12 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     api.setSession(null)
     setSignedFor(null)
     setSession('none')
-    if (identity.kind === 'local') {
-      const next = confirmedList.filter((c) => c !== `${identity.role}:${identity.address.toLowerCase()}`)
-      setConfirmedList(next)
-      write(CONFIRM_KEY, JSON.stringify(next))
-    }
+    setConfirmedList([])
+    write(CONFIRM_KEY, '[]')
+    if (demoChoice === 'owner' || demoChoice === 'bank') { setDemoChoice('off'); write(DEMO_KEY, 'off') }
     bumpSession()
     qc.invalidateQueries()
-  }, [api, bumpSession, confirmedList, identity, qc])
+  }, [api, bumpSession, demoChoice, qc])
 
   const chooseSeat = useCallback((s: Seat) => {
     setSeat(s)
@@ -358,6 +357,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const value: IdentityValue = {
     identity, role, address, seat, demoAvailable, chooseSeat, chooseDemo, session, sessionError, signedIn, signIn, signOut, walletRole, chooser, sign, sendTx, bankAction,
     localAddress, confirmed, signInLocal, sendAs, isLocal: identity.kind === 'local', sessionReady,
+    storedSignIn: confirmedList.length > 0 || demoChoice === 'owner' || demoChoice === 'bank',
   }
   return <IdentityContext.Provider value={value}>{children}</IdentityContext.Provider>
 }

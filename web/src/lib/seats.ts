@@ -16,7 +16,7 @@ export function useSeatPicker() {
       return 'done'
     }
     if (!tenant) {
-      navigate('/start')
+      navigate('/signup')
       return 'start'
     }
     if (s === 'owner' && wallet?.owner.type === 'injected') {

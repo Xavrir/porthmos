@@ -139,7 +139,7 @@ export function SeatChooser() {
         </div>
         {multi && !tenant ? (
           <div className="seats-foot">
-            <Link to="/start" className="button" onClick={() => chooser.hide()}>{wallet ? 'Continue setup' : 'Create your treasury'}</Link>
+            <Link to="/signup" className="button" onClick={() => chooser.hide()}>{wallet ? 'Continue setup' : 'Create your treasury'}</Link>
           </div>
         ) : null}
       </div>

@@ -18,6 +18,8 @@ import { CommandPalette, SearchField } from './CommandPalette'
 import { GlossaryDialog, ShortcutsDialog, useGlobalShortcuts } from './Shortcuts'
 import type { Role } from '../lib/types'
 import { useTradeFlow } from '../lib/tradeflow/queries'
+import { useSignOut } from '../auth/hooks'
+import { ForgetDevice } from './ForgetDevice'
 
 export const PAGES = [
   { to: '/treasury', label: 'Treasury', icon: 'treasury', hint: 'Balances, reserve and positions', group: 'Treasury' },
@@ -74,8 +76,8 @@ export function ModeIndicator() {
   const close = () => setOpen(false)
   const next = mode !== 'replay' ? null
     : multi && tenant ? <button type="button" className="button small" onClick={() => { close(); chooser.show('switch') }}>Open my treasury</button>
-    : multi && wallet ? <Link to="/start" className="button small" onClick={close}>Continue setup</Link>
-    : multi ? <Link to="/start" className="button small" onClick={close}>Create your treasury</Link>
+    : multi && wallet ? <Link to="/signup" className="button small" onClick={close}>Continue setup</Link>
+    : multi ? <Link to="/signup" className="button small" onClick={close}>Create your treasury</Link>
     : service === 'down' ? <button type="button" className="button small quiet" onClick={() => { close(); refresh(null) }}>Try the live service again</button>
     : null
   return (
@@ -140,7 +142,7 @@ function useSeatLabel(): { prefix: string; name: string; note: string } {
   return { prefix: '', name: 'Choose a seat', note: '' }
 }
 
-export function WalletSignIn({ onDone }: { onDone?: () => void }) {
+export function WalletSignIn({ onDone, signOutButton = true }: { onDone?: () => void; signOutButton?: boolean }) {
   const { identity, signIn, signOut, signedIn, session, sessionError, walletRole } = useIdentity()
   const conn = useConnection()
   const connectors = useConnectors()
@@ -170,7 +172,7 @@ export function WalletSignIn({ onDone }: { onDone?: () => void }) {
           {busy || session === 'pending' ? 'Waiting for the signature…' : `Sign in as ${seatTarget(role)}`}
         </button>
       ) : null}
-      {signedIn ? <button type="button" className="button small quiet" onClick={signOut}>Sign out</button> : null}
+      {signedIn && signOutButton ? <button type="button" className="button small quiet" onClick={signOut}>Sign out</button> : null}
       <button type="button" className="button small quiet" onClick={() => { signOut(); disconnect() }}>Disconnect wallet</button>
       {role && !signedIn ? <p className="muted">Signing in signs a one-line session message (role, address, chain, time). It costs nothing and moves nothing.</p> : null}
       {sessionError ? <p className="error-note" role="alert">{sessionError}</p> : null}
@@ -179,7 +181,7 @@ export function WalletSignIn({ onDone }: { onDone?: () => void }) {
 }
 
 function TenantSeats({ onDone }: { onDone: () => void }) {
-  const { identity, signedIn, session, sessionError, signOut, localAddress, chooser } = useIdentity()
+  const { identity, signedIn, session, sessionError, localAddress, chooser } = useIdentity()
   const { mode } = useAegis()
   const { pick } = useSeatPicker()
   const current = mode === 'replay' ? 'viewer' : identity.kind === 'none' ? null : identity.role
@@ -202,7 +204,6 @@ function TenantSeats({ onDone }: { onDone: () => void }) {
       </div>
       {mode === 'live' ? <p className="session-line muted" aria-live="polite">Session: {session === 'ready' ? (signedIn ? 'signed' : 'open') : session === 'pending' ? 'opening…' : session === 'error' ? 'refused' : 'none'}</p> : null}
       {sessionError ? <p className="error-note" role="alert">{sessionError}</p> : null}
-      {signedIn && identity.kind === 'local' ? <button type="button" className="button small quiet" onClick={() => { signOut(); onDone() }}>Sign out</button> : null}
     </fieldset>
   )
 }
@@ -218,8 +219,10 @@ function initials(name: string) {
 
 export function IdentityControl({ variant = 'chip' }: { variant?: 'chip' | 'switcher' }) {
   const { identity, seat, demoAvailable, chooseDemo, chooseSeat, session, signedIn } = useIdentity()
-  const { mode, tenant, service, onboard } = useAegis()
+  const { mode, tenant, service, onboard, wallet } = useAegis()
   const { open, setOpen, ref } = usePopover()
+  const [forgetting, setForgetting] = useState(false)
+  const signOutAll = useSignOut()
   const id = useId()
   const label = useSeatLabel()
   const name = useTreasuryName()
@@ -250,7 +253,7 @@ export function IdentityControl({ variant = 'chip' }: { variant?: 'chip' | 'swit
           {multi && !tenant ? (
             <div className="seat-set">
               <p>You have no treasury in this browser yet.</p>
-              <Link to="/start" className="button small" onClick={() => setOpen(false)}>Create your treasury</Link>
+              <Link to="/signup" className="button small" onClick={() => setOpen(false)}>Create your treasury</Link>
             </div>
           ) : null}
           {mode === 'replay' ? (
@@ -270,7 +273,7 @@ export function IdentityControl({ variant = 'chip' }: { variant?: 'chip' | 'swit
             <>
               <fieldset className="seat-set">
                 <legend>{signedIn ? `Signed in as ${roleName(identity.kind === 'none' ? null : identity.role).toLowerCase()}` : 'Sign in with your wallet'}</legend>
-                {identity.kind === 'demo' ? <p>Using the local test key for the {seatTarget(identity.role)}, <code>{shortHex(identity.address, 6, 4)}</code>.</p> : <WalletSignIn />}
+                {identity.kind === 'demo' ? <p>Using the local test key for the {seatTarget(identity.role)}, <code>{shortHex(identity.address, 6, 4)}</code>.</p> : <WalletSignIn signOutButton={false} />}
               </fieldset>
               {identity.kind === 'none' ? <button type="button" className="button small quiet" onClick={() => { chooseSeat('viewer'); setOpen(false) }}>Just look (read-only)</button> : null}
               <p className="session-line muted" aria-live="polite">Session: {session === 'ready' ? (signedIn ? 'signed' : 'open') : session === 'pending' ? 'opening…' : session === 'error' ? 'refused' : 'none'}</p>
@@ -288,8 +291,13 @@ export function IdentityControl({ variant = 'chip' }: { variant?: 'chip' | 'swit
               </div>
             </fieldset>
           ) : null}
+          <div className="account-foot">
+            <button type="button" id="account-signout" className="button small quiet" onClick={() => { setOpen(false); signOutAll() }}>Sign out</button>
+            {wallet ? <button type="button" id="account-forget" className="button small quiet" aria-haspopup="dialog" onClick={() => { setOpen(false); setForgetting(true) }}>Forget this device</button> : null}
+          </div>
         </div>
       ) : null}
+      <ForgetDevice open={forgetting} onClose={() => setForgetting(false)} />
     </div>
   )
 }

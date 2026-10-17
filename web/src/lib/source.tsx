@@ -49,6 +49,8 @@ type ApiContextValue = {
   setWallet: (w: WalletFile | null) => void
   tenant: Tenant | null
   refresh: (prefer?: Mode | null) => void
+  replayChosen: boolean
+  forgetReplay: () => void
 }
 
 const ApiContext = createContext<ApiContextValue | null>(null)
@@ -123,6 +125,8 @@ export function ApiProvider({ children }: { children: ReactNode }) {
   const [onboardStatus, setOnboardStatus] = useState<OnboardStatus | null>(null)
   const [wallet, setWalletState] = useState<WalletFile | null>(loadWallet)
   const [tenant, setTenant] = useState<Tenant | null>(null)
+  // Only a replay the visitor asked for (View the demo, ?mode=replay, a switch) opens the app without a session.
+  const [replayChosen, setReplayChosen] = useState(() => forcedMode() === 'replay')
 
   const probe = useCallback(async (prefer: Mode | null, base: string = apiBase) => {
     setPhase('probing')
@@ -184,7 +188,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (phase !== 'ready') return
-    if (mode === 'live' && tenant && api.hasSession?.() === false) return
+    if (mode === 'live' && api.hasSession?.() === false) return
     const invalidate = (keys: string[]) => keys.forEach((k) => qc.invalidateQueries({ queryKey: [k] }))
     const stop = api.stream((event) => {
       const item = { id: ++counter.current, at: Date.now(), event }
@@ -218,6 +222,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     dismissNotice: (id) => setNotices((n) => n.filter((x) => x.id !== id)),
     switchMode: (m) => {
       try { sessionStorage.setItem(MODE_KEY, m) } catch { /* storage may be blocked; the switch still applies this visit */ }
+      setReplayChosen(m === 'replay')
       void probe(m)
     },
     sessionEpoch,
@@ -229,11 +234,13 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       const clean = cleanBase(url.trim())
       if (!clean) { setReason('That is not an http(s) address'); return }
       try { localStorage.setItem(API_KEY, clean); sessionStorage.setItem(MODE_KEY, 'live') } catch { /* the choice still applies to this visit */ }
+      setReplayChosen(false)
       setApiBase(clean)
       void probe('live', clean)
     },
     forgetApi: () => {
       try { localStorage.removeItem(API_KEY); sessionStorage.setItem(MODE_KEY, 'replay') } catch { /* nothing stored */ }
+      setReplayChosen(true)
       setApiBase('')
       void probe('replay', '')
     },
@@ -250,8 +257,16 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     },
     tenant,
     refresh: (prefer = null) => {
-      if (prefer) { try { sessionStorage.setItem(MODE_KEY, prefer) } catch { /* the choice still applies to this visit */ } }
+      if (prefer) {
+        try { sessionStorage.setItem(MODE_KEY, prefer) } catch { /* the choice still applies to this visit */ }
+        setReplayChosen(prefer === 'replay')
+      }
       void probe(prefer ?? forcedMode())
+    },
+    replayChosen,
+    forgetReplay: () => {
+      try { sessionStorage.removeItem(MODE_KEY) } catch { /* nothing stored */ }
+      setReplayChosen(false)
     },
   }
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>

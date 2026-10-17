@@ -920,6 +920,7 @@ html.app-theme {
   & .drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; }
   & .drawer-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 20px 24px 40px; display: flex; flex-direction: column; gap: 24px; }
   & .drawer-section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  & .drawer-section-head { display: flex; align-items: center; gap: 2px; }
   & .drawer-section-head h3 { font-size: var(--step-body); font-weight: 600; }
   & .drawer-lede { font-size: 0.9375rem; line-height: 1.5; }
   & .drawer-note { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--sunken); color: var(--ink-2); font-size: var(--step-small); }
@@ -1070,5 +1071,90 @@ html.app-theme[data-theme='dark'] .brand-mono { display: block; }
     & [data-ui] .sheet-fields dt { border-bottom: 0; padding-bottom: 0; }
     & .test-banner { font-size: 0.6875rem; }
     & .app-top .brand-name { display: none; }
+  }
+}
+
+/* TradeFlow orders */
+html.app-theme {
+  & .pill-row, & .title-pills { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  & .title-pills { margin-left: 10px; vertical-align: middle; }
+  & .pill-reason { font-weight: 500; }
+  & .demo-tag { display: inline-flex; align-items: center; min-height: 18px; padding: 0 5px; border-radius: 4px; border: 1px dashed var(--line-strong); font-size: 0.6875rem; font-weight: 500; color: var(--muted); white-space: nowrap; }
+  & .issuer { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+  & .mono { font-family: var(--mono); font-size: var(--step-small); }
+  & .next-ms { white-space: nowrap; }
+  & .proof-line { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+  & .proof-line code { font-size: var(--step-cap); }
+  & .dt-empty-cta { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
+  & .form-set { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  & .form-set legend { font-size: var(--step-small); font-weight: 500; color: var(--ink-2); margin-bottom: 4px; }
+  & .ms-plan { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); }
+  & .ms-plan li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 8px 12px; border-top: 1px solid var(--line-soft); font-size: var(--step-small); }
+  & .ms-plan li:first-child { border-top: 0; }
+  & .ms-plan-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+  & .ms-plan-amt { text-align: right; font-weight: 600; }
+  & .ms-plan-meta { grid-column: 1 / -1; color: var(--ink-2); }
+  & .ms-num, & .ms-index { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--sunken); color: var(--ink-2); font-size: var(--step-cap); font-weight: 600; flex: none; }
+  & .crumbs { display: flex; align-items: center; gap: 4px; font-size: var(--step-small); color: var(--muted); }
+  & .crumbs a { color: var(--link); }
+  & .crumbs .icon { width: 14px; height: 14px; }
+  & .order-page { gap: 20px; }
+  & .order-summary { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 16px 32px; align-items: start; }
+  & .order-money { display: flex; flex-direction: column; gap: 6px; }
+  & .order-amount { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.015em; line-height: 1.2; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+  & .order-facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  & .ms-line { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  & .ms-step { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 0 14px; padding-bottom: 16px; }
+  & .ms-step:not(:last-child)::before { content: ''; position: absolute; left: 13px; top: 30px; bottom: 0; width: 2px; background: var(--line); }
+  & .ms-step.ms-released:not(:last-child)::before, & .ms-step.ms-waived:not(:last-child)::before { background: var(--ok-dot); }
+  & .ms-node { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--neutral-dot); background: var(--surface); color: var(--neutral-t); }
+  & .ms-node .icon { width: 14px; height: 14px; }
+  & .ms-released .ms-node, & .ms-waived .ms-node { border-color: var(--ok-dot); background: var(--ok-dot); color: var(--surface); }
+  & .ms-held .ms-node { border-color: var(--held-dot); background: var(--held-bg); color: var(--held-t); }
+  & .ms-waiting .ms-node, & .ms-releasing .ms-node { border-color: var(--wait-dot); background: var(--wait-bg); color: var(--wait-t); }
+  & .ms-refunded .ms-node { border-color: var(--refused-dot); background: var(--refused-bg); color: var(--refused-t); }
+  & .ms-card { min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  & .ms-step.is-next .ms-card { border-color: var(--line-strong); }
+  & .ms-held .ms-card { border-color: var(--held-bd); }
+  & .ms-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  & .ms-head h3 { display: inline-flex; align-items: center; gap: 8px; font-size: var(--step-body); font-weight: 600; }
+  & .ms-amount { margin-left: auto; font-weight: 600; }
+  & .ms-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: var(--step-small); }
+  & .ms-facts > div { display: contents; }
+  & .ms-facts dt { color: var(--muted); }
+  & .ms-facts dd { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; overflow-wrap: anywhere; }
+  & .ms-checks { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); overflow: hidden; }
+  & .ms-checks li { display: grid; grid-template-columns: 16px 9rem minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 6px 10px; border-top: 1px solid var(--line-soft); font-size: var(--step-small); }
+  & .ms-checks li:first-child { border-top: 0; }
+  & .ms-checks .icon { width: 14px; height: 14px; align-self: center; color: var(--ok-t); }
+  & .ms-checks li.bad { background: var(--refused-bg); }
+  & .ms-checks li.bad .icon, & .ms-checks li.bad .check-name { color: var(--refused-t); }
+  & .ms-checks .check-name { font-weight: 500; }
+  & .ms-checks .check-detail { color: var(--ink-2); }
+  & .ms-hold { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--sunken); font-size: var(--step-small); }
+  & .ms-hold.is-held { background: var(--held-bg); color: var(--ink); }
+  & .ms-reason { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+  & .agent-note { display: flex; flex-direction: column; gap: 4px; padding-left: 10px; border-left: 2px solid var(--line-strong); }
+  & .agent-who { display: inline-flex; align-items: center; gap: 2px; font-weight: 600; color: var(--ink-2); }
+  & .ms-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  & .attack-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); }
+  & .attack-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border-top: 1px solid var(--line-soft); font-size: var(--step-small); }
+  & .attack-list li:first-child { border-top: 0; }
+  & .drawer-note .icon, & .alert-block h2 .icon { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+}
+
+@media (max-width: 760px) {
+  html.app-theme {
+    & .order-summary { grid-template-columns: minmax(0, 1fr); }
+    & .ms-step { grid-template-columns: 22px minmax(0, 1fr); gap: 0 10px; }
+    & .ms-node { width: 22px; height: 22px; }
+    & .ms-step:not(:last-child)::before { left: 10px; top: 24px; }
+    & .ms-card { padding: 10px 12px; }
+    & .ms-amount { margin-left: 0; flex-basis: 100%; }
+    & .ms-facts { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    & .ms-facts dd { margin-bottom: 6px; }
+    & .ms-checks li { grid-template-columns: 16px minmax(0, 1fr); }
+    & .ms-checks .check-detail { grid-column: 2; }
+    & .title-pills { margin-left: 0; display: flex; margin-top: 6px; }
   }
 }

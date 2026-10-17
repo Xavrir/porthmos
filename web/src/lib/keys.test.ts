@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { bankAddress, clearWallet, loadWallet, newWallet, ownerAddress, parseWallet, saveWallet, serializeWallet, WALLET_KEY, WalletFileError } from './keys'
+import { bankAddress, clearWallet, supplierAddress, withSupplier, loadWallet, newWallet, ownerAddress, parseWallet, saveWallet, serializeWallet, WALLET_KEY, WalletFileError } from './keys'
 
 const store = new Map<string, string>()
 Object.defineProperty(globalThis, 'localStorage', {
@@ -50,5 +50,15 @@ describe('key storage', () => {
     expect(loadWallet()).toBeNull()
     clearWallet()
     expect(store.has(WALLET_KEY)).toBe(false)
+  })
+
+  it('keeps an optional supplier key in the same entry', () => {
+    const w = withSupplier(newWallet(84532))
+    expect(withSupplier(w)).toBe(w)
+    const back = parseWallet(serializeWallet(w))
+    expect(supplierAddress(back)).toBe(supplierAddress(w))
+    expect(supplierAddress(newWallet(84532))).toBeNull()
+    expect(() => parseWallet({ ...w, supplier: { pk: w.owner.type === 'burner' ? w.owner.pk : '0x' } })).toThrow(WalletFileError)
+    expect(() => parseWallet({ ...w, supplier: { pk: '0x12' } })).toThrow(/supplier/)
   })
 })

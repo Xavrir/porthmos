@@ -73,3 +73,12 @@ export function seconds(s: number): string {
 export function pct(v: number, digits = 0): string {
   return `${(v * 100).toFixed(digits)}%`
 }
+
+// Exact token amount from raw units: at least 2 decimals, more only when the units need them.
+export function exactUnits(raw: bigint, decimals = USDC_DECIMALS): string {
+  const neg = raw < 0n
+  const abs = neg ? -raw : raw
+  const base = 10n ** BigInt(decimals)
+  const frac = (abs % base).toString().padStart(decimals, '0').replace(/0+$/, '').padEnd(2, '0')
+  return `${neg ? '-' : ''}${(abs / base).toLocaleString('en-US')}.${frac}`
+}

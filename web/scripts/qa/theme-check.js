@@ -2,7 +2,7 @@
 // in light and dark, even with a host stylesheet that colours #root (the production bug: rgb(20, 25, 36)).
 async (page) => {
   const BASE = '__BASE__'
-  const routes = ['/treasury', '/copilot', '/risk', '/audit', '/bank', '/start']
+  const routes = ['/treasury', '/copilot', '/risk', '/audit', '/bank', '/start', '/orders', '/orders/1', '/o/1']
   const failures = []
   const results = []
   for (const theme of ['light', 'dark']) {

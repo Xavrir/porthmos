@@ -1,6 +1,6 @@
 import { tokens } from './table'
 
-export const PALETTE_GROUPS = ['Pages', 'Actions', 'Treasury', 'Ledger', 'Transactions', 'Terms'] as const
+export const PALETTE_GROUPS = ['Pages', 'Actions', 'Treasury', 'Orders', 'Ledger', 'Transactions', 'Terms'] as const
 export type PaletteGroup = (typeof PALETTE_GROUPS)[number]
 
 export type PaletteTarget =
@@ -20,7 +20,7 @@ export type PaletteItem = {
 
 export type PaletteSection = { group: PaletteGroup; items: PaletteItem[] }
 
-const EMPTY_GROUPS: PaletteGroup[] = ['Pages', 'Actions', 'Treasury', 'Ledger']
+const EMPTY_GROUPS: PaletteGroup[] = ['Pages', 'Actions', 'Treasury', 'Orders', 'Ledger']
 
 function score(item: PaletteItem, words: string[], whole: string): number | null {
   const title = item.title.toLowerCase()

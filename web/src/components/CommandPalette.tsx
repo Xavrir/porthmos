@@ -11,7 +11,9 @@ import { isRecordedTx } from '../replay/hashes'
 import { sentenceCase } from '../lib/vocabulary'
 import { GLOSSARY } from './Glossary'
 import { Icon, type IconName } from './icons'
-import { PAGES } from './chrome'
+import { useVisiblePages } from './chrome'
+import { useOrders } from '../lib/tradeflow/queries'
+import { heldCount, ORDER_LABEL, orderDisplay } from '../lib/tradeflow/state'
 import { toast } from '../lib/toast'
 import type { WorkflowState } from '../lib/types'
 
@@ -21,19 +23,22 @@ const PAGE_HINT: Record<string, string> = {
   '/risk': 'Oracle, vault risk and exit triggers',
   '/audit': 'Decision ledger, on-chain events, evidence',
   '/bank': 'Clients, freezes and escalations',
+  '/orders': 'Trade orders, milestones, proofs and holds',
 }
 
 const GROUP_ICON: Record<PaletteItem['group'], IconName> = {
-  Pages: 'page', Actions: 'keyboard', Treasury: 'safe', Ledger: 'ledger', Transactions: 'tx', Terms: 'terms',
+  Pages: 'page', Actions: 'keyboard', Treasury: 'safe', Orders: 'orders', Ledger: 'ledger', Transactions: 'tx', Terms: 'terms',
 }
 
 function usePaletteItems(enabled: boolean): PaletteItem[] {
   const { deployment, chainId, mode } = useAegis()
   const ledger = useLedger()
   const events = useChainEvents()
+  const pages = useVisiblePages()
+  const orders = useOrders()
   return useMemo(() => {
     if (!enabled) return []
-    const items: PaletteItem[] = PAGES.map((p) => ({ id: `page-${p.to}`, group: 'Pages', title: p.label, hint: PAGE_HINT[p.to], target: { kind: 'route', to: p.to } }))
+    const items: PaletteItem[] = pages.map((p) => ({ id: `page-${p.to}`, group: 'Pages', title: p.label, hint: PAGE_HINT[p.to], target: { kind: 'route', to: p.to } }))
     items.push(
       { id: 'act-shortcuts', group: 'Actions', title: 'Keyboard shortcuts', hint: 'Press ? anywhere', keywords: 'keys help', target: { kind: 'action', action: 'shortcuts' } },
       { id: 'act-terms', group: 'Actions', title: 'What the terms mean', hint: 'Glossary', keywords: 'glossary definitions', target: { kind: 'action', action: 'terms' } },
@@ -46,6 +51,14 @@ function usePaletteItems(enabled: boolean): PaletteItem[] {
     }
     for (const [name, addr] of [['Vault A', deployment.vaultA], ['Vault B', deployment.vaultB]] as const) {
       if (addr && addr !== zeroAddress) items.push({ id: `pos-${addr}`, group: 'Treasury', title: `${name} position`, hint: shortHex(addr, 6, 4), keywords: `${addr} vault erc4626 shares`, target: { kind: 'route', to: `/treasury#pos-${addr}` } })
+    }
+    for (const o of orders.data ?? []) {
+      const held = heldCount(o)
+      items.push({
+        id: `order-${o.order.orderId}`, group: 'Orders', title: `Order ${o.order.orderId}: ${o.order.total.display} USDC`,
+        hint: `${ORDER_LABEL[orderDisplay(o.order.status)]}${held ? ', held' : ''}, supplier ${shortHex(o.order.supplier, 6, 4)}`,
+        keywords: `${o.order.supplier} trade escrow milestone ${held ? 'held' : ''}`, target: { kind: 'route', to: `/orders/${o.order.orderId}` },
+      })
     }
     const rows = [...(ledger.data ?? [])].sort((a, b) => b.seq - a.seq)
     for (const r of rows) {
@@ -67,7 +80,7 @@ function usePaletteItems(enabled: boolean): PaletteItem[] {
     }
     for (const g of GLOSSARY) items.push({ id: `term-${g.term}`, group: 'Terms', title: g.term, hint: g.def, target: { kind: 'term', term: g.term } })
     return items
-  }, [enabled, deployment.safe, deployment.vaultA, deployment.vaultB, chainId, mode, ledger.data, events.data])
+  }, [enabled, pages, orders.data, deployment.safe, deployment.vaultA, deployment.vaultB, chainId, mode, ledger.data, events.data])
 }
 
 export function SearchField() {

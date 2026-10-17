@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { demoIdentitiesAvailable } from './demo/allowed'
 import { toViemMessage } from './eip712'
 import { REGISTRY_ABI } from './deployment'
-import { assertPinnedTarget, guardedSend, pinnedRegistry } from './txguard'
+import { assertPinnedTarget, guardedSend, pinnedRegistry, PINNED, type GuardContext } from './txguard'
 import { bankAddress, ownerAddress } from './keys'
 import { publicClientFor } from './onboard/chain'
 import { localSender } from './onboard/signers'
@@ -178,8 +178,12 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   }, [wallet])
 
   const senders = useRef(new Map<string, ReturnType<typeof localSender>>())
+  // Only the owner key may send a Safe transaction, and only to this session's Safe; the guard checks its exact shape.
+  const guardFor = useCallback((r: Role | null, signer: Address | null): GuardContext => ({
+    safe: tenant?.safe ?? deployment.safe, owner: r === 'owner' ? signer : null,
+  }), [deployment.safe, tenant?.safe])
   const localTx = useCallback((r: Role, tx: TxRequest): Promise<Hex> => {
-    assertPinnedTarget(chainId, tx)
+    assertPinnedTarget(chainId, tx, PINNED, guardFor(r, localAddress(r)))
     if (!wallet) throw new Error('No keys in this browser. Create your treasury first.')
     const pk = r === 'bank' ? wallet.bank.pk : wallet.owner.type === 'burner' ? wallet.owner.pk : null
     if (!pk) throw new Error('Your owner key is your browser wallet.')
@@ -190,7 +194,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
       senders.current.set(k, sender)
     }
     return sender.send({ to: tx.to, data: tx.data })
-  }, [chainId, rpcUrl, wallet])
+  }, [chainId, guardFor, localAddress, rpcUrl, wallet])
 
   const finish = useCallback((p: Promise<{ token: string }>, signed: boolean, forKey: string) => {
     setSession('pending')
@@ -318,7 +322,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     if (identity.kind === 'local') return localTx(identity.role, t)
     if (identity.kind === 'wallet') return sendTransaction(wagmiConfig, { to: t.to, data: t.data, value: 0n })
     throw new Error('Sign in with a wallet to send this transaction.')
-  }), [chainId, identity, localTx])
+  }, PINNED, guardFor(identity.kind === 'none' ? null : identity.role, identity.kind === 'none' ? null : identity.address)), [chainId, guardFor, identity, localTx])
 
   const sendAs = useCallback(async (r: Role, fn: RegistryFn, args: readonly unknown[]): Promise<Hex> => {
     const data = encodeFunctionData({ abi: REGISTRY_ABI, functionName: fn, args } as never)

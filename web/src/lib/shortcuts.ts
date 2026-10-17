@@ -1,4 +1,4 @@
-export const GO_TO: Record<string, string> = { t: '/treasury', c: '/copilot', r: '/risk', a: '/audit', b: '/bank' }
+export const GO_TO: Record<string, string> = { t: '/treasury', c: '/copilot', r: '/risk', a: '/audit', b: '/bank', o: '/orders' }
 
 export const SHORTCUTS: { keys: string[]; what: string }[] = [
   { keys: ['/'], what: 'Search' },
@@ -9,6 +9,7 @@ export const SHORTCUTS: { keys: string[]; what: string }[] = [
   { keys: ['g', 'r'], what: 'Go to Risk' },
   { keys: ['g', 'a'], what: 'Go to Audit' },
   { keys: ['g', 'b'], what: 'Go to Bank desk' },
+  { keys: ['g', 'o'], what: 'Go to Orders' },
   { keys: ['Esc'], what: 'Close a panel, menu or dialog' },
 ]
 

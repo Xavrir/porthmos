@@ -35,7 +35,7 @@ export function aegisDomain(chainId: number, module: Address) {
   return { name: 'AegisModule', version: '1', chainId, verifyingContract: module } as const
 }
 
-const BIG_FIELDS = new Set(['maxAmount', 'approvalNonce', 'amount', 'minOut', 'priceLow', 'priceHigh', 'nonce', 'policyVersion', 'approvalExpiry', 'expiry'])
+const BIG_FIELDS = new Set(['orderId', 'maxAmount', 'approvalNonce', 'amount', 'minOut', 'priceLow', 'priceHigh', 'nonce', 'policyVersion', 'approvalExpiry', 'expiry'])
 
 export function toViemMessage(message: Record<string, string | number>): Record<string, unknown> {
   const out: Record<string, unknown> = {}

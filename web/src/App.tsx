@@ -11,6 +11,8 @@ const Risk = lazy(() => import('./pages/Risk'))
 const Audit = lazy(() => import('./pages/Audit'))
 const Bank = lazy(() => import('./pages/Bank'))
 const Start = lazy(() => import('./pages/Start'))
+const Orders = lazy(() => import('./pages/Orders'))
+const Order = lazy(() => import('./pages/Order'))
 
 function AppLayout() {
   return (
@@ -42,6 +44,9 @@ export function App() {
           <Route path="/risk" element={<Risk />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/bank" element={<Bank />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/orders/:id" element={<Order />} />
+          <Route path="/o/:id" element={<Order />} />
           <Route path="/start" element={<Start />} />
           <Route path="*" element={<NotFound />} />
         </Route>

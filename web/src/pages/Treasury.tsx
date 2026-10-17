@@ -22,6 +22,8 @@ import { explorerAddress } from '../lib/wallet'
 import { toast } from '../lib/toast'
 import { Icon } from '../components/icons'
 import type { Obligation, TreasuryState, TxRequest } from '../lib/types'
+import { useOrders, useTradeFlow } from '../lib/tradeflow/queries'
+import { committedRaw } from '../lib/tradeflow/state'
 
 type ObStatus = 'due' | 'inflow' | 'settled'
 const OB_STATUS: { value: ObStatus; label: string }[] = [
@@ -68,6 +70,8 @@ export default function Treasury() {
   const obs = useObligations()
   const ledger = useLedger()
   const risk = useRisk()
+  const tf = useTradeFlow()
+  const orders = useOrders()
   const [floorTx, setFloorTx] = useState<TxRequest | null>(null)
   const [plan, setPlan] = useState<FloorPlan | null>(null)
   const [sent, setSent] = useState<string | null>(null)
@@ -271,6 +275,19 @@ export default function Treasury() {
             meter={tr ? { value: today, max: cap, label: `Deposited today, ${money(today)} of the ${money(cap)} daily cap`, tone: cap && today / cap > 0.9 ? 'warn' : undefined } : undefined}
             info="Counted per UTC day, the way the contract counts its daily cap." />
         </Kpis>
+
+        {tf.available && tr ? (() => {
+          const committed = tr.figures?.committed.display ?? (orders.data ? money(fromUnits(orders.data.reduce((a, o) => a + committedRaw(o), 0n))) : '…')
+          const active = orders.data?.filter((o) => o.order.status === 'ACTIVE').length
+          return (
+            <Kpis label="Trade position">
+              <Figure label="Cash" value={(tr.figures?.cash ?? tr.balances.safeUsdc).display} note={tr.figures ? 'Safe plus withdrawable vault value' : 'USDC in the Safe'} info="What the treasury can pay from now. Escrowed funds are not part of it." />
+              <Figure label="Committed" value={committed} note={<Link className="card-link" to="/orders">{active === undefined ? 'View orders' : `${active} active order${active === 1 ? '' : 's'}`}</Link>}
+                info="Unreleased funds of active trade orders, read from TradeEscrow.committedOf. They left the Safe and can never be invested." />
+              <Figure label="Free" value={(tr.figures?.free ?? tr.deployable).display} note="Deployable after floor and fees" />
+            </Kpis>
+          )
+        })() : null}
 
         <Section title="Positions" info={<>Two <strong>ERC-4626</strong> vaults the owner added. {GLOSSARY_DEF.erc4626} A quarantined vault refuses deposits; redemptions to the Safe always run.</>}>
           {tr ? (

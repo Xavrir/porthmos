@@ -17,6 +17,7 @@ import { MenuButton } from './Menu'
 import { CommandPalette, SearchField } from './CommandPalette'
 import { GlossaryDialog, ShortcutsDialog, useGlobalShortcuts } from './Shortcuts'
 import type { Role } from '../lib/types'
+import { useTradeFlow } from '../lib/tradeflow/queries'
 
 export const PAGES = [
   { to: '/treasury', label: 'Treasury', icon: 'treasury', hint: 'Balances, reserve and positions', group: 'Treasury' },
@@ -24,6 +25,7 @@ export const PAGES = [
   { to: '/risk', label: 'Risk', icon: 'risk', hint: 'Oracle, triggers and vault risk', group: 'Treasury' },
   { to: '/audit', label: 'Audit', icon: 'audit', hint: 'Decision ledger and on-chain events', group: 'Treasury' },
   { to: '/bank', label: 'Bank desk', icon: 'bank', hint: 'Clients, freezes and escalations', group: 'Oversight' },
+  { to: '/orders', label: 'Orders', icon: 'orders', hint: 'Trade orders paid in milestones from escrow', group: 'TradeFlow' },
 ] as const
 
 export const SEATS: { seat: Seat; name: string; what: string }[] = [
@@ -365,15 +367,21 @@ function useWide() {
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
 
+export function useVisiblePages() {
+  const tf = useTradeFlow()
+  return PAGES.filter((p) => p.group !== 'TradeFlow' || tf.available)
+}
+
 function SideNav() {
-  const groups = [...new Set(PAGES.map((p) => p.group))]
+  const pages = useVisiblePages()
+  const groups = [...new Set(pages.map((p) => p.group))]
   return (
     <nav aria-label="Pages" className="side-nav">
       {groups.map((g) => (
         <div key={g} className="side-group">
           <p className="side-group-label">{g}</p>
           <ul className="side-links">
-            {PAGES.filter((p) => p.group === g).map((p) => (
+            {pages.filter((p) => p.group === g).map((p) => (
               <li key={p.to}>
                 <NavLink to={p.to} className={({ isActive }) => `side-link${isActive ? ' is-active' : ''}`}>
                   <Icon name={p.icon} />
@@ -384,18 +392,6 @@ function SideNav() {
           </ul>
         </div>
       ))}
-      <div className="side-group">
-        <p className="side-group-label">TradeFlow</p>
-        <ul className="side-links">
-          <li>
-            <span className="side-link is-disabled" aria-disabled="true">
-              <Icon name="orders" />
-              <span className="side-label">Orders</span>
-              <span className="side-soon">Soon</span>
-            </span>
-          </li>
-        </ul>
-      </div>
     </nav>
   )
 }

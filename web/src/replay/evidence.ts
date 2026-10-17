@@ -545,3 +545,376 @@ export const EVIDENCE_SCENARIOS: EvidenceScenario[] = [
     "ledgerRows": 0
   }
 ]
+
+export type EvidenceOrderTx = { label: string; hash: Hex; block: number; role: string; reverted: boolean; error: string | null; scriptSigned: boolean }
+export type EvidenceOrderStep = {
+  id: string
+  description: string
+  requestId: string | null
+  proofHash: Hex | null
+  proof: { orderId: string; index: number; kind: number; docHash: Hex; minTempCenti: number; maxTempCenti: number; samples: number; issuedAt: string } | null
+  workflow: string[]
+  explanation: { text: string; proposal: string; source: string } | null
+  ledger: { ledgerId: number; kind: string; reason: string | null; txHash: Hex | null; requestId: string | null; rowHash: string; prevHash: string }[]
+  txs: EvidenceOrderTx[]
+}
+export type EvidenceOrder = {
+  orderId: string
+  buyer: Hex
+  supplier: Hex
+  token: Hex
+  escrow: Hex
+  multiSendCallOnly: Hex
+  total: string
+  termsHash: Hex
+  terms: string
+  milestones: { amount: string; issuer: Hex; kind: number; kindName: string; requireDoc: boolean; checkTemp: boolean; minTempCenti: number; maxTempCenti: number; deadline: number }[]
+  orderStatus: string | null
+  steps: EvidenceOrderStep[]
+}
+
+export const EVIDENCE_ORDER: EvidenceOrder | null = {
+  "orderId": "1",
+  "buyer": "0x2E1c2be3dD6BAa59344EdC6ee6A93D68e2295a0F",
+  "supplier": "0xF64f65B9AaCDCB3F0c619EAA94D631D79841a7Ab",
+  "token": "0x5C02E17b299d7BC9d5Af31128306a8E05e62BE63",
+  "escrow": "0x009ca6F11b24fE0bAb9dE3EBb5dAb9e15f95ce76",
+  "multiSendCallOnly": "0x9641d764fc13c8B624c04430C7356C1C7C8102e2",
+  "total": "1000000000",
+  "termsHash": "0x95504ff4c1aa19ce79fc23f8dfed6adc71808cca07d1885ea50ff3e595402767",
+  "terms": "Porthmos E6 demo order: 1,000 test USDC in three milestones (20/40/40)",
+  "milestones": [
+    {
+      "amount": "200000000",
+      "issuer": "0x4A9Ec1f4d93c4E0ed5888793Ce340F714c869c76",
+      "kind": 0,
+      "kindName": "HANDOVER",
+      "requireDoc": true,
+      "checkTemp": false,
+      "minTempCenti": 0,
+      "maxTempCenti": 0,
+      "deadline": 1792783202
+    },
+    {
+      "amount": "400000000",
+      "issuer": "0xb7F84e62f46608aCA2FC59302132cb8beA754300",
+      "kind": 1,
+      "kindName": "ARRIVAL",
+      "requireDoc": true,
+      "checkTemp": true,
+      "minTempCenti": 200,
+      "maxTempCenti": 800,
+      "deadline": 1793992802
+    },
+    {
+      "amount": "400000000",
+      "issuer": "0x4b304413d432DD917b3171f4DaC7C8C9890c6ee7",
+      "kind": 2,
+      "kindName": "QUALITY",
+      "requireDoc": true,
+      "checkTemp": false,
+      "minTempCenti": 0,
+      "maxTempCenti": 0,
+      "deadline": 1794770402
+    }
+  ],
+  "orderStatus": "COMPLETED",
+  "steps": [
+    {
+      "id": "E6a",
+      "description": "The reference Safe funds a 1,000 test USDC order (200 / 400 / 400) in one owner-signed Safe transaction: a delegatecall to MultiSendCallOnly batching approve(escrow, total) and createOrder.",
+      "requestId": null,
+      "proofHash": null,
+      "proof": null,
+      "workflow": [],
+      "explanation": null,
+      "ledger": [
+        {
+          "ledgerId": 1,
+          "kind": "ORDER_CREATED",
+          "reason": null,
+          "txHash": "0x63a8622b38aa631533900f5cea7b92699132b1d2e1e036bff2fc8f035c1a07f1",
+          "requestId": null,
+          "rowHash": "771ad2f8627dd6226728f73b248775a289acbd6e664929c56f60dd1323de9d88",
+          "prevHash": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "txs": [
+        {
+          "label": "owner funds the order: Safe -> MultiSendCallOnly (approve + createOrder)",
+          "hash": "0x63a8622b38aa631533900f5cea7b92699132b1d2e1e036bff2fc8f035c1a07f1",
+          "block": 48205059,
+          "role": "owner",
+          "reverted": false,
+          "error": null,
+          "scriptSigned": false
+        }
+      ]
+    },
+    {
+      "id": "E6b",
+      "description": "Milestone 1 (handed to carrier): the demo carrier's proof is posted to the service; PROOF_VERIFIED, signed by the Authorizer process, submitted by the Executor.",
+      "requestId": "rel_1d2316e0152e4830",
+      "proofHash": "0x03ca4b6589204baed3c638c4b95a238291a2339e8538c7321d28a26d82c8b9de",
+      "proof": null,
+      "workflow": [
+        "PROOF_RECEIVED",
+        "PROOF_VERIFIED",
+        "RELEASE_SIGNED",
+        "RELEASE_SUBMITTED",
+        "RELEASED"
+      ],
+      "explanation": {
+        "text": "Milestone 1 (handed to carrier) of order 1, 200.00 USDC: the issuer's proof passed every check, so the release to the fixed supplier was requested.",
+        "proposal": "NO_ACTION",
+        "source": "rules"
+      },
+      "ledger": [
+        {
+          "ledgerId": 2,
+          "kind": "PROOF_RECEIVED",
+          "reason": null,
+          "txHash": null,
+          "requestId": "rel_1d2316e0152e4830",
+          "rowHash": "2080f2a5b029b8f02832592466e006934b192911d2b61e2578088938d81c29c8",
+          "prevHash": "771ad2f8627dd6226728f73b248775a289acbd6e664929c56f60dd1323de9d88"
+        },
+        {
+          "ledgerId": 3,
+          "kind": "RELEASE_SIGNED",
+          "reason": null,
+          "txHash": null,
+          "requestId": "rel_1d2316e0152e4830",
+          "rowHash": "cd2b11144e726bc5d52099783b77360b646903b5e9e9c476c4381aa70d839183",
+          "prevHash": "2080f2a5b029b8f02832592466e006934b192911d2b61e2578088938d81c29c8"
+        },
+        {
+          "ledgerId": 4,
+          "kind": "MILESTONE_RELEASED",
+          "reason": null,
+          "txHash": "0x86cbfd7e450b18d54448d7b28c57c20d3ddbeb7308faa5e2eba392fa67402281",
+          "requestId": "rel_1d2316e0152e4830",
+          "rowHash": "c72bace7839d9380064e6dc85967843232d04d162f19b5335b9c8fc36af8fd60",
+          "prevHash": "cd2b11144e726bc5d52099783b77360b646903b5e9e9c476c4381aa70d839183"
+        }
+      ],
+      "txs": [
+        {
+          "label": "Executor submits release of milestone 1 (200 USDC)",
+          "hash": "0x86cbfd7e450b18d54448d7b28c57c20d3ddbeb7308faa5e2eba392fa67402281",
+          "block": 48205076,
+          "role": "executor",
+          "reverted": false,
+          "error": null,
+          "scriptSigned": false
+        }
+      ]
+    },
+    {
+      "id": "E6c",
+      "description": "Milestone 2 (arrived): the sensor proof reports a maximum of 9.40 C against 2.00 to 8.00 C. The service writes MILESTONE_HELD (ConditionNotMet) and requests no release; a release signed with the Authorizer key by this script is then forced and reverts.",
+      "requestId": "rel_4c4a9b3638924703",
+      "proofHash": null,
+      "proof": {
+        "orderId": "1",
+        "index": 1,
+        "kind": 1,
+        "docHash": "0x1c465d55d12a915e33effdfaf718b5aaef2dea956957efe814f80b2aba54b2a9",
+        "minTempCenti": 350,
+        "maxTempCenti": 940,
+        "samples": 96,
+        "issuedAt": "1792178442"
+      },
+      "workflow": [
+        "PROOF_RECEIVED",
+        "HELD"
+      ],
+      "explanation": {
+        "text": "Milestone 2 (arrived) of order 1, 400.00 USDC is held: the signed proof fails the order's condition (document hash present; readings 3.50 to 9.40 C over 96 samples against 2.00 to 8.00 C). Proposed next step: ask the surveyor to inspect the goods, then waive if they are acceptable.",
+        "proposal": "REQUEST_RESURVEY",
+        "source": "rules"
+      },
+      "ledger": [
+        {
+          "ledgerId": 5,
+          "kind": "PROOF_RECEIVED",
+          "reason": null,
+          "txHash": null,
+          "requestId": "rel_4c4a9b3638924703",
+          "rowHash": "f22efc1377ce5444536331e5e95c06aa289837372f6d54976723670d1b242f3f",
+          "prevHash": "c72bace7839d9380064e6dc85967843232d04d162f19b5335b9c8fc36af8fd60"
+        },
+        {
+          "ledgerId": 6,
+          "kind": "MILESTONE_HELD",
+          "reason": "ConditionNotMet",
+          "txHash": null,
+          "requestId": "rel_4c4a9b3638924703",
+          "rowHash": "06d811dd01a9a06509303d44cdc1c1459dd0f601720a3a2fef5db7ef2b0b9f49",
+          "prevHash": "f22efc1377ce5444536331e5e95c06aa289837372f6d54976723670d1b242f3f"
+        }
+      ],
+      "txs": [
+        {
+          "label": "forced release of the held milestone (script-signed)",
+          "hash": "0x71c4032f5926988e7d28ef0e6c5bacda025ffc8ee2800517db885e69408386b6",
+          "block": 48205087,
+          "role": "attacker",
+          "reverted": true,
+          "error": "ConditionNotMet",
+          "scriptSigned": true
+        }
+      ]
+    },
+    {
+      "id": "E6d",
+      "description": "Milestone 2 resolved: the owner waives after a survey (owner-signed Safe transaction).",
+      "requestId": null,
+      "proofHash": null,
+      "proof": null,
+      "workflow": [],
+      "explanation": null,
+      "ledger": [
+        {
+          "ledgerId": 7,
+          "kind": "MILESTONE_WAIVED",
+          "reason": null,
+          "txHash": "0xb7a2a4178f7cbb6cb865244e6bc4a2832f94cbc8d926b848834ff432ef2a6160",
+          "requestId": "rel_4c4a9b3638924703",
+          "rowHash": "513840bc99ce8a68b3836bdf034151a3e2766d630b882eefed5fb7cdfec655f2",
+          "prevHash": "06d811dd01a9a06509303d44cdc1c1459dd0f601720a3a2fef5db7ef2b0b9f49"
+        }
+      ],
+      "txs": [
+        {
+          "label": "owner waives milestone 2 (Safe -> TradeEscrow.waive)",
+          "hash": "0xb7a2a4178f7cbb6cb865244e6bc4a2832f94cbc8d926b848834ff432ef2a6160",
+          "block": 48205089,
+          "role": "owner",
+          "reverted": false,
+          "error": null,
+          "scriptSigned": false
+        }
+      ]
+    },
+    {
+      "id": "E6e",
+      "description": "Milestone 3 (quality accepted): the surveyor's proof is posted after the unfreeze; PROOF_VERIFIED, a new authorization from the Authorizer process, submitted by the Executor; the order completes.",
+      "requestId": "rel_37cdbff9f566483e",
+      "proofHash": "0xcd000fd894f6ca9d47054a7440d657e4ff769fa479e1586dd1e55059cf4e1442",
+      "proof": null,
+      "workflow": [
+        "PROOF_RECEIVED",
+        "PROOF_VERIFIED",
+        "RELEASE_SIGNED",
+        "RELEASE_SUBMITTED",
+        "RELEASED"
+      ],
+      "explanation": {
+        "text": "Milestone 3 (quality accepted) of order 1, 400.00 USDC: the issuer's proof passed every check, so the release to the fixed supplier was requested.",
+        "proposal": "NO_ACTION",
+        "source": "rules"
+      },
+      "ledger": [
+        {
+          "ledgerId": 8,
+          "kind": "PROOF_RECEIVED",
+          "reason": null,
+          "txHash": null,
+          "requestId": "rel_37cdbff9f566483e",
+          "rowHash": "987a483df9e262fabbfda3e1d051c7add17c91a23a5e4be9ba8e588dd8af2de9",
+          "prevHash": "513840bc99ce8a68b3836bdf034151a3e2766d630b882eefed5fb7cdfec655f2"
+        },
+        {
+          "ledgerId": 9,
+          "kind": "RELEASE_SIGNED",
+          "reason": null,
+          "txHash": null,
+          "requestId": "rel_37cdbff9f566483e",
+          "rowHash": "4a08e114fc658e1b73dabb03a5d8329d5ca703c33752db85518899945903c80d",
+          "prevHash": "987a483df9e262fabbfda3e1d051c7add17c91a23a5e4be9ba8e588dd8af2de9"
+        },
+        {
+          "ledgerId": 10,
+          "kind": "MILESTONE_RELEASED",
+          "reason": null,
+          "txHash": "0xf4a27910945cd6e6044bcd7973ee41e066c98762df15218802b70a60f1be1493",
+          "requestId": "rel_37cdbff9f566483e",
+          "rowHash": "6b99a611bcefb9a57d6ccc36e0c95f6f5bddb0d759be4f530f99b715805ac1a4",
+          "prevHash": "4a08e114fc658e1b73dabb03a5d8329d5ca703c33752db85518899945903c80d"
+        }
+      ],
+      "txs": [
+        {
+          "label": "Executor submits release of milestone 3 (400 USDC)",
+          "hash": "0xf4a27910945cd6e6044bcd7973ee41e066c98762df15218802b70a60f1be1493",
+          "block": 48205115,
+          "role": "executor",
+          "reverted": false,
+          "error": null,
+          "scriptSigned": false
+        }
+      ]
+    },
+    {
+      "id": "E6f",
+      "description": "Attack: a valid milestone 3 authorization, script-signed with the Authorizer key, with the amount changed after signing, sent by the attacker role.",
+      "requestId": null,
+      "proofHash": null,
+      "proof": null,
+      "workflow": [],
+      "explanation": null,
+      "ledger": [],
+      "txs": [
+        {
+          "label": "release with the amount changed after signing (script-signed)",
+          "hash": "0x2bbf4bd484f679106d700dd326cb3f6b87052de7b8db709a9884f35a142e0bf5",
+          "block": 48205096,
+          "role": "attacker",
+          "reverted": true,
+          "error": "BadSignature",
+          "scriptSigned": true
+        }
+      ]
+    },
+    {
+      "id": "E6g",
+      "description": "Bank freeze: a valid milestone 3 release, script-signed, submitted while the buyer Safe is bank-frozen; then the bank unfreezes.",
+      "requestId": null,
+      "proofHash": null,
+      "proof": null,
+      "workflow": [],
+      "explanation": null,
+      "ledger": [],
+      "txs": [
+        {
+          "label": "setup: bank freezes the buyer Safe",
+          "hash": "0xddfb6e11f76f453e37f06ac9158f192f8cf15f321e0d1c17f9da22ad6bd2e323",
+          "block": 48205097,
+          "role": "bank",
+          "reverted": false,
+          "error": null,
+          "scriptSigned": false
+        },
+        {
+          "label": "valid release while bank-frozen (script-signed)",
+          "hash": "0x0411d80b31157943150ca5702082dc157afc855da5edad13b4e6ac4bce448a9c",
+          "block": 48205102,
+          "role": "attacker",
+          "reverted": true,
+          "error": "Frozen",
+          "scriptSigned": true
+        },
+        {
+          "label": "cleanup: bank unfreezes",
+          "hash": "0x880659b35223219eeb470ac734e66096ba163eb035d18c7b503e9fc2d9b5223e",
+          "block": 48205104,
+          "role": "bank",
+          "reverted": false,
+          "error": null,
+          "scriptSigned": false
+        }
+      ]
+    }
+  ]
+}

@@ -52,6 +52,8 @@ export type TreasuryState = {
   deployable: Amount
   fees?: Amount
   depositedToday?: Amount
+  // Present when TradeFlow is on: cash L, committed escrow (TradeEscrow.committedOf) and deployable D.
+  figures?: { cash: Amount; committed: Amount; free: Amount }
   policy: {
     autoCap: Amount
     dailyCap: Amount

@@ -11,6 +11,8 @@ export type WalletFile = {
   owner: OwnerKey
   bank: { pk: Hex }
   safe: Address | null
+  // Optional third burner key that plays the TradeFlow supplier, so a visitor can watch the supplier side (TD 02).
+  supplier?: { pk: Hex }
 }
 
 export function newWallet(chainId: number, owner?: OwnerKey): WalletFile {
@@ -23,6 +25,14 @@ export function ownerAddress(w: WalletFile): Address {
 
 export function bankAddress(w: WalletFile): Address {
   return privateKeyToAccount(w.bank.pk).address
+}
+
+export function supplierAddress(w: WalletFile): Address | null {
+  return w.supplier ? privateKeyToAccount(w.supplier.pk).address : null
+}
+
+export function withSupplier(w: WalletFile): WalletFile {
+  return w.supplier ? w : { ...w, supplier: { pk: generatePrivateKey() } }
 }
 
 function isKey(v: unknown): v is Hex {
@@ -46,8 +56,12 @@ export function parseWallet(input: unknown): WalletFile {
   if (!b || !isKey(b.pk)) throw new WalletFileError('The bank key in this file is not valid.')
   const safe = d.safe == null ? null : typeof d.safe === 'string' && isAddress(d.safe) ? getAddress(d.safe) : undefined
   if (safe === undefined) throw new WalletFileError('The Safe address in this file is not valid.')
-  const w: WalletFile = { version: 1, chainId: d.chainId, owner, bank: { pk: b.pk }, safe }
+  const sp = d.supplier as Record<string, unknown> | undefined
+  if (sp !== undefined && sp !== null && !isKey(sp.pk)) throw new WalletFileError('The supplier key in this file is not valid.')
+  const w: WalletFile = { version: 1, chainId: d.chainId, owner, bank: { pk: b.pk }, safe, ...(sp && isKey(sp.pk) ? { supplier: { pk: sp.pk } } : {}) }
   if (bankAddress(w).toLowerCase() === ownerAddress(w).toLowerCase()) throw new WalletFileError('The owner and the bank must be different keys.')
+  const sup = supplierAddress(w)?.toLowerCase()
+  if (sup && (sup === ownerAddress(w).toLowerCase() || sup === bankAddress(w).toLowerCase())) throw new WalletFileError('The supplier key must differ from the owner and bank keys.')
   return w
 }
 

@@ -5,3 +5,4 @@ dist/
 .env*
 !.env.production
 .mock/
+.playwright-cli/

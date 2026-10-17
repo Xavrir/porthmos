@@ -4,6 +4,7 @@ import type {
   Amount, BankClient, ChainEvent, ChatResponse, Health, LedgerRow, Obligation, ObligationCreated, OracleState,
   PendingApproval, RequestRecord, RiskReport, Role, ScenarioName, Session, StreamEvent, TreasuryState, TxRequest,
 } from '../types'
+import type { DemoVariant, OrderView, ProofResult, TradeFlowConfig } from '../tradeflow/types'
 import { ApiError, type AegisApi, type ApprovalSubmission, type NewObligation, type SessionProof, type StreamStatus } from './contract'
 import { amount, PRICE_DECIMALS, fromUnits } from '../format'
 import { reconcile } from '../reconcile'
@@ -39,12 +40,12 @@ export class HttpApi implements AegisApi {
     return !!this.token
   }
 
-  private async call<T>(path: string, init: RequestInit = {}, timeoutMs = 15000): Promise<T> {
+  private async call<T>(path: string, init: RequestInit = {}, timeoutMs = 15000, anonymous = false): Promise<T> {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (init.body) headers['Content-Type'] = 'application/json'
-    if (this.token) headers['X-Aegis-Session'] = this.token
+    if (this.token && !anonymous) headers['X-Aegis-Session'] = this.token
     try {
       let res: Response
       try {
@@ -179,6 +180,27 @@ export class HttpApi implements AegisApi {
   async floorUpdate(): Promise<TxRequest | null> {
     const body = await this.call<{ floorUpdate?: TxRequest | null }>('/api/obligations')
     return body && !Array.isArray(body) && body.floorUpdate?.data ? body.floorUpdate : null
+  }
+
+  tradeflowConfig(): Promise<TradeFlowConfig> {
+    return this.call('/api/tradeflow/config', {}, 8000)
+  }
+
+  async orders(): Promise<OrderView[]> {
+    return asList<OrderView>(await this.call('/api/tradeflow/orders', {}, 20000), 'orders')
+  }
+
+  // The supplier view never sends the session, so the service answers with on-chain fields only (C9).
+  order(id: string, publicView = false): Promise<OrderView> {
+    return this.call(`/api/tradeflow/orders/${encodeURIComponent(id)}`, { credentials: publicView ? 'omit' : 'same-origin' }, 15000, publicView)
+  }
+
+  demoProof(id: string, index: number, variant: DemoVariant): Promise<ProofResult> {
+    return this.call(`/api/tradeflow/orders/${encodeURIComponent(id)}/proofs/demo`, { method: 'POST', body: JSON.stringify({ index, variant }) }, 60000)
+  }
+
+  confirmRelease(id: string, body: { index: number; proofHash: Hex; expiry: number; signature: Hex }): Promise<OrderView> {
+    return this.call(`/api/tradeflow/orders/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: JSON.stringify(body) }, 60000)
   }
 
   scenario(name: ScenarioName) {

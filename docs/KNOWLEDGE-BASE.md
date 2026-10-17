@@ -104,7 +104,7 @@ E6 is recorded on the reference treasury, through the real pipeline: Proof Verif
 
 ## Is it a real app or a demo
 
-It is a real app. Anyone can open aegis-treasury-eta.vercel.app, click Create your treasury, and get their own treasury on Base Sepolia in about a minute: an owner key and a bank key are generated in the browser, our faucet sends test ETH, and the treasury gets 100,000 test USDC. About 13 real transactions set it up. Then they can run the agent, approve plans, freeze it from the bank seat, and try attacks that the contract refuses on-chain. The backend runs on our own server. The contracts did not need any change, because every rule is already stored per treasury. The web Orders page is still in progress. It is testnet only: the contracts are not audited and the vaults are mocks.
+It is a real app. Anyone can open porthmos.vercel.app, click Create your treasury, and get their own treasury on Base Sepolia in about a minute: an owner key and a bank key are generated in the browser, our faucet sends test ETH, and the treasury gets 100,000 test USDC. About 13 real transactions set it up. Then they can run the agent, approve plans, freeze it from the bank seat, and try attacks that the contract refuses on-chain. The backend runs on our own server. The contracts did not need any change, because every rule is already stored per treasury. The web Orders page is still in progress. It is testnet only: the contracts are not audited and the vaults are mocks.
 
 ## Is it just an LLM wrapper
 

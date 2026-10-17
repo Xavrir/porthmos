@@ -89,7 +89,7 @@ OpenAI-compatible via `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`. Production: CL
 
 ## CORS and hosting
 
-- `ALLOWED_ORIGINS` (CSV), default `https://aegis-treasury-eta.vercel.app,http://localhost:5173,http://localhost:4173`. Allow headers `Content-Type, X-Aegis-Session, X-Aegis-Admin`; methods GET, POST, OPTIONS; no credentials.
+- `ALLOWED_ORIGINS` (CSV), default `https://porthmos.vercel.app,http://localhost:5173,http://localhost:4173`. Allow headers `Content-Type, X-Aegis-Session, X-Aegis-Admin`; methods GET, POST, OPTIONS; no credentials.
 - Public API: `https://aegis-api.150-109-23-187.sslip.io` behind the existing RuteAman Caddy on the Tencent CVM. Container files in `deploy/tencent/` (Dockerfile, compose, env example). One image runs all five processes; memory limit 512 MB; SQLite and logs on a volume.
 - Web build reads `VITE_API_URL`. Health check `GET /api/health` must report chain id, block lag, keeper last poke, LLM mode, tenant count, `onboardingOpen`.
 

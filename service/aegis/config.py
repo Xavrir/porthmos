@@ -84,7 +84,7 @@ class Params:
 
 
 CANONICAL_FALLBACK_HANDLER = "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99"
-DEFAULT_ORIGINS = "https://aegis-treasury-eta.vercel.app,http://localhost:5173,http://localhost:4173"
+DEFAULT_ORIGINS = "https://porthmos.vercel.app,https://aegis-treasury-eta.vercel.app,http://localhost:5173,http://localhost:4173"
 
 
 @dataclass

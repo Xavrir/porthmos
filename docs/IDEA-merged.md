@@ -339,7 +339,7 @@ Sudah dibangun dan berjalan di Base Sepolia:
 
 - **Kontrak:** AegisModule (Safe module), PolicyRegistry, dan TradeEscrow (0x009ca6F11b24fE0bAb9dE3EBb5dAb9e15f95ce76, blok 48204293). 106 Foundry test, termasuk 59 test TradeEscrow, serta fuzz dan invariant.
 - **Backend:** service Python 5 proses (API, Authorizer, Exit Agent, Executor, Keeper) di server sendiri, 161 unit test dan 15 integration test. Modul TradeFlow ada di `service/aegis/tradeflow/*` dan `service/aegis/api/tradeflow.py`. LLM `claude-haiku-5-5` lewat CLIProxyAPI di VPS sudah aktif (chat agent menjawab dengan mode=llm).
-- **Web app multi-tenant:** setiap pengunjung bisa membuat treasury sendiri dalam sekitar 1 menit, lalu memakai agent, approval, Bank desk, dan demo serangan. 61 web test. Live di https://aegis-treasury-eta.vercel.app. Halaman Orders untuk TradeFlow: sedang dikerjakan.
+- **Web app multi-tenant:** setiap pengunjung bisa membuat treasury sendiri dalam sekitar 1 menit, lalu memakai agent, approval, Bank desk, dan demo serangan. 61 web test. Live di https://porthmos.vercel.app. Halaman Orders untuk TradeFlow: sedang dikerjakan.
 - **TradeFlow dibangun dan direkam (E6a sampai E6g):** order 1.000 USDC uji dengan tiga milestone (200/400/400) didanai dalam satu transaksi Safe lewat MultiSendCallOnly. Pelepasan dana melewati pipeline asli: Proof Verifier, Authorizer `/sign-release`, lalu Executor, dengan ledger reference. Penolakan terbukti on-chain: ConditionNotMet (suhu 9,40 C di luar batas 2 sampai 8 C), BadSignature (jumlah diubah setelah ditandatangani), dan Frozen (bank freeze). Milestone yang ditahan diselesaikan owner lewat waive, dan order selesai dengan 1.000 USDC terbayar ke pemasok.
 - **Evidence on-chain:** E1 sampai E5 seperti sebelumnya (alokasi normal, depeg dan Exit Agent, obligation baru, BadSignature, NonceUsed, prompt injection, PriceOutOfBand, bank freeze), ditambah E6a sampai E6g. Semua direkam dengan transaction hash asli di `deployments/evidence-84532.json`.
 
@@ -363,7 +363,7 @@ Narasi pitch: **AEGIS Treasury, TradeFlow module.**
 
 ## 18. Keputusan yang masih terbuka
 
-1. **Nama produk (diputuskan).** Nama produk adalah **Porthmos** (bahasa Yunani: selat, jalur penyeberangan yang dijaga). Logo: opsi D. Palet warna: #4EC397 dan #F99510. Nama on-chain dan API tetap memakai Aegis (AegisModule, PolicyRegistry, `aegis-treasury-eta.vercel.app`), karena mengubahnya berarti mengubah bytecode, tanda tangan, alamat Safe, dan URL yang sudah live. Bagian lain dokumen ini masih memakai nama AEGIS untuk konsistensi dengan versi sebelumnya.
+1. **Nama produk (diputuskan).** Nama produk adalah **Porthmos** (bahasa Yunani: selat, jalur penyeberangan yang dijaga). Logo: opsi D. Palet warna: #4EC397 dan #F99510. Nama on-chain dan API tetap memakai Aegis (AegisModule, PolicyRegistry, `porthmos.vercel.app`), karena mengubahnya berarti mengubah bytecode, tanda tangan, alamat Safe, dan URL yang sudah live. Bagian lain dokumen ini masih memakai nama AEGIS untuk konsistensi dengan versi sebelumnya.
 2. **Cakupan TradeFlow sebelum deadline (diputuskan).** Modul dibangun di testnet dan direkam sebagai E6a sampai E6g sebelum code freeze. Halaman web Orders masih dikerjakan.
 3. **Target pengguna di pitch.** Importir/eksportir menengah di Singapura (dokumen feasibility) dengan UMKM lintas negara sebagai segmen lanjutan.
 4. **FISCO BCOS.** Deployment tambahan untuk kesesuaian dengan teknologi WeBank, jika waktu memungkinkan.

@@ -12,7 +12,7 @@
 
 **Build status labels.** **[Built]** means the part runs on Base Sepolia and has tests in the repository. **[In progress]** means the part is being built now. In v0.5 all of TradeFlow is [Built] except the web Orders page, which is [In progress]; the label **[Built]** no longer marks any part, and v0.4 text that used it now reads [Built]. A change made in v0.4 is marked with the finding it answers, for example (v0.4, C1). Text without a label describes the built system. The TradeEscrow contract interface in 04 is unchanged from v0.3.
 
-**Names that do not change.** The product is now Porthmos. On-chain and API identifiers keep the old name, because a change would alter deployed bytecode, signature digests, Safe addresses or live URLs. These stay as they are: the contract names `AegisModule` and `PolicyRegistry`; the EIP-712 domain name `"AegisModule"`; the event `AegisExecuted`; the mock vault token names ("Aegis Vault A", "Aegis Vault B"); the signed message prefixes that the backend verifies (`AEGIS onboarding`, `AEGIS session`); the Safe salt tag `aegis-v2`; the browser storage key `aegis.wallet.v1`; the headers `X-Aegis-Session` and `X-Aegis-Admin` and the cookie `aegis_session`; the Python package `aegis`; the repository `Xavrir/aegis-treasury`; the site `aegis-treasury-eta.vercel.app`; and the API host `aegis-api.150-109-23-187.sslip.io`.
+**Names that do not change.** The product is now Porthmos. On-chain and API identifiers keep the old name, because a change would alter deployed bytecode, signature digests, Safe addresses or live URLs. These stay as they are: the contract names `AegisModule` and `PolicyRegistry`; the EIP-712 domain name `"AegisModule"`; the event `AegisExecuted`; the mock vault token names ("Aegis Vault A", "Aegis Vault B"); the signed message prefixes that the backend verifies (`AEGIS onboarding`, `AEGIS session`); the Safe salt tag `aegis-v2`; the browser storage key `aegis.wallet.v1`; the headers `X-Aegis-Session` and `X-Aegis-Admin` and the cookie `aegis_session`; the Python package `aegis`; the repository `Xavrir/aegis-treasury`; the site `porthmos.vercel.app`; and the API host `aegis-api.150-109-23-187.sslip.io`.
 
 ---
 
@@ -909,7 +909,7 @@ No single compromised component short of the owner's own key can move funds out 
 | Item | Value |
 |---|---|
 | Network | Base Sepolia (chain ID 84532); local Anvil (31337) for development and integration tests |
-| Web app | https://aegis-treasury-eta.vercel.app |
+| Web app | https://porthmos.vercel.app |
 | API | https://aegis-api.150-109-23-187.sslip.io (`GET /api/health`) |
 | Repository | https://github.com/Xavrir/aegis-treasury |
 | Contracts | Solidity 0.8.28 (Cancun), Foundry, OpenZeppelin 5.4 |

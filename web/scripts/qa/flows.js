@@ -17,7 +17,6 @@ async (page) => {
     await page.locator('h1', { hasText: 'Log in to Porthmos' }).waitFor()
   })
   await step('View the demo opens the recorded run as the owner, nothing to sign', async () => {
-    await page.locator('label[for="signin-seat-owner"]').click()
     await page.locator('#signin-demo').click()
     await page.waitForURL('**/treasury')
     await page.waitForSelector('main#main h1')
@@ -76,6 +75,13 @@ async (page) => {
     if (safes) throw new Error('Safe also shown in main')
     await page.locator('.switcher-button').click()
   })
+  // Before the obligation step: a new obligation raises the floor, which holds this pending deposit.
+  await step('copilot: approve with the recorded EIP-712 signature', async () => {
+    await page.goto(BASE + '/copilot')
+    await page.waitForSelector('main#main h1')
+    await page.getByRole('button', { name: /Approve/ }).first().click()
+    await page.waitForFunction(() => /Confirmed|Explained|Approved/.test(document.querySelector('.decision')?.textContent ?? ''), null, { timeout: 15000 })
+  })
   await step('treasury: add obligation drawer adds a row', async () => {
     await page.goto(BASE + '/treasury')
     await page.waitForSelector('main#main h1')
@@ -92,12 +98,6 @@ async (page) => {
     const box = await plot.boundingBox()
     await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2)
     await page.waitForSelector('.today .viz-tip')
-  })
-  await step('copilot: approve with the recorded EIP-712 signature', async () => {
-    await page.goto(BASE + '/copilot')
-    await page.waitForSelector('main#main h1')
-    await page.getByRole('button', { name: /Approve/ }).first().click()
-    await page.waitForFunction(() => /Confirmed|Explained|Approved/.test(document.querySelector('.decision')?.textContent ?? ''), null, { timeout: 15000 })
   })
   await step('bank: freeze the reference treasury from the drawer', async () => {
     await page.evaluate(() => sessionStorage.setItem('aegis.seat', 'bank'))

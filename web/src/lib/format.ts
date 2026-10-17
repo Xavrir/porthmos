@@ -56,7 +56,9 @@ export function clock(ts: number): string {
 }
 
 export function day(ts: number | string): string {
-  const d = typeof ts === 'string' ? new Date(`${ts}T12:00:00Z`) : new Date(ts * 1000)
+  // The service sends obligation due dates as full ISO timestamps; older replay data has bare YYYY-MM-DD dates.
+  const d = typeof ts === 'string' ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(ts) ? `${ts}T12:00:00Z` : ts) : new Date(ts * 1000)
+  if (Number.isNaN(d.getTime())) return String(ts)
   return dayFmt.format(d)
 }
 

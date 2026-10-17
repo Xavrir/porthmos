@@ -55,9 +55,11 @@ async (page) => {
 
   if (reuse) await step('log in with the treasury already in this browser (/signin, Continue on this device)', async () => {
     await page.goto(BASE + '/signin')
+    if (await page.locator('#signin-test[aria-expanded="false"]').count()) await page.locator('#signin-test').click()
     await page.locator('#signin-device', { hasText: 'Safe' }).waitFor({ timeout: 20000 })
     await page.locator('label[for="signin-seat-owner"]').click()
     await page.locator('#signin-continue').click()
+    await page.locator('.sign-confirm .sign-preview', { hasText: 'Sign in to Porthmos as owner.' }).waitFor({ timeout: 15000 })
     await page.getByRole('button', { name: 'Sign in as owner' }).click()
     await page.waitForURL('**/treasury', { timeout: 20000 })
     await page.locator('.sw-sub', { hasText: /Signed in as Owner/ }).waitFor({ timeout: 20000 })
@@ -65,14 +67,14 @@ async (page) => {
 
   if (!reuse) await step('create an account in this browser (/signup, recovery file, sign in)', async () => {
     await page.goto(BASE + '/signup')
-    await page.locator('#signup-create').click()
+    await page.locator('#signup-test').click()
     await page.locator('#signup-recovery').waitFor({ timeout: 180000 })
     const download = page.waitForEvent('download')
     await page.locator('#signup-download').click()
     await download
     await page.locator('#signup-recovery input[type=checkbox]').check()
+    // Activation already signed the SIWE message and opened the owner session, so opening asks for nothing more.
     await page.locator('#signup-open').click()
-    await page.getByRole('button', { name: 'Sign in as owner' }).click()
     await page.waitForURL('**/treasury', { timeout: 20000 })
     await page.locator('.sw-sub', { hasText: /Signed in as Owner/ }).waitFor({ timeout: 20000 })
   })

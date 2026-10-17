@@ -8,6 +8,7 @@ import {
   BaseError, ContractFunctionRevertedError, encodeFunctionData, encodePacked, getAddress, getContractAddress, hexToBigInt,
   keccak256, recoverMessageAddress, recoverTypedDataAddress, toHex, zeroAddress,
 } from 'viem'
+import { parseSiweMessage, validateSiweMessage } from 'viem/siwe'
 import { artifact, clients, MOCK_FILE, RPC } from './chain.mjs'
 
 const PORT = Number(process.env.MOCK_PORT ?? 8790)
@@ -37,6 +38,7 @@ const CONFIG = {
 const tenants = new Map()
 const funded = new Set()
 const sessions = new Map()
+const nonces = new Map()
 const requests = new Map()
 const ledger = new Map()
 const lastDar = new Map()
@@ -116,6 +118,32 @@ async function verifyPersonal(message, signature, expected) {
   let signer
   try { signer = await recoverMessageAddress({ message, signature }) } catch { throw new HttpError(401, 'BadSignature') }
   if (lc(signer) !== lc(expected)) throw new HttpError(401, 'BadSignature')
+}
+
+// Same rules as aegis/siwe.py, in short: allowed domain, its own URI, chain 31337, fresh, unexpired, single-use nonce.
+async function verifySiwe(message, signature, purpose) {
+  const f = parseSiweMessage(message ?? '')
+  if (!f.address || !f.nonce || !f.domain) throw new HttpError(400, 'SiweMalformed')
+  if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(f.domain) || !f.uri?.startsWith(`http://${f.domain}`)) throw new HttpError(401, 'WrongDomain')
+  if (f.chainId !== 31337) throw new HttpError(401, 'WrongChain')
+  if (!f.expirationTime || !validateSiweMessage({ message: f, time: new Date() })) throw new HttpError(401, 'MessageExpired')
+  const n = nonces.get(f.nonce)
+  if (!n) throw new HttpError(401, 'BadNonce')
+  if (n.used) throw new HttpError(401, 'NonceUsed')
+  const role = purpose === 'activate' ? 'owner' : /^Sign in to Porthmos as (owner|bank)\.$/.exec(f.statement ?? '')?.[1]
+  if (!role || JSON.stringify(f.resources ?? []).indexOf(`urn:porthmos:role:${role}`) < 0) throw new HttpError(401, 'WrongRole')
+  if (!(await pub.verifyMessage({ address: f.address, message, signature }).catch(() => false))) throw new HttpError(401, 'BadSignature')
+  n.used = true
+  return { address: getAddress(f.address), role }
+}
+
+function openSession(role, address) {
+  const list = [...tenants.values()]
+  const t = role === 'owner' ? list.find((x) => lc(x.owner) === lc(address)) : list.find((x) => lc(x.bank) === lc(address))
+  if (!t) throw new HttpError(403, role === 'owner' ? 'NotAnOwner' : 'NotABank')
+  const token = randomBytes(24).toString('hex')
+  sessions.set(token, { role, address: getAddress(address), safe: role === 'owner' ? t.safe : null })
+  return { token, role, address: getAddress(address), safe: role === 'owner' ? t.safe : null, expiresAt: Math.floor(Date.now() / 1000) + 12 * 3600 }
 }
 
 function checkAge(issuedAt) {
@@ -323,8 +351,8 @@ const routes = [
     return { txs }
   }],
   ['POST', '/api/onboard/activate', async ({ body }) => {
-    checkAge(body.issuedAt)
-    await verifyPersonal(`AEGIS session\nrole: owner\naddress: ${getAddress(body.owner)}\nchainId: 31337\nissuedAt: ${body.issuedAt}`, body.signature, body.owner)
+    const v = await verifySiwe(body.message, body.signature, 'activate')
+    if (lc(v.address) !== lc(body.owner)) throw new HttpError(401, 'BadSignature')
     const st = await steps(body.owner)
     if (lc(st.safe) !== lc(body.safe)) throw new HttpError(409, 'BadOnboardingState', 'safe is not the predicted address for this owner')
     const CODES = { safeDeployed: 'SafeNotDeployed', moduleEnabled: 'ModuleNotEnabled', registered: 'RegistryOwnerMismatch', vaults: 'VaultMissing:Vault B', authorizer: 'WrongAuthorizer', exitKey: 'WrongExitKey', caps: 'AutoCapOutOfBounds', bankLimit: 'BankLimitOutOfBounds' }
@@ -332,22 +360,27 @@ const routes = [
     if (failed.length) { const e = new HttpError(409, 'BadOnboardingState', 'activation checks failed'); e.failed = failed; throw e }
     if (lc(st.bank) === lc(body.owner) || st.bank === zeroAddress) throw new HttpError(409, 'BadOnboardingState', 'bank must differ from owner')
     const existing = tenants.get(lc(st.safe))
-    if (existing) return { safe: existing.safe, mintTx: existing.mintTx, tenant: existing }
+    if (existing) return { safe: existing.safe, mintTx: existing.mintTx, tenant: existing, session: openSession('owner', body.owner) }
     const { hash } = await send(R.deployer, CONFIG.usdc, A.usdc, 'mint', [st.safe, BigInt(CONFIG.testUsdc)])
     const t = { safe: getAddress(st.safe), owner: getAddress(body.owner), bank: getAddress(st.bank), mintTx: hash, activatedAt: now() }
     tenants.set(lc(st.safe), t)
     appendLedger(t.safe, { kind: 'policy', state: 'POLICY_CHANGED', summary: `Treasury activated, ${amount(CONFIG.testUsdc).display} test USDC minted`, txHash: hash })
-    return { safe: t.safe, mintTx: hash, tenant: t }
+    return { safe: t.safe, mintTx: hash, tenant: t, session: openSession('owner', body.owner) }
+  }],
+  ['GET', '/api/auth/nonce', async () => {
+    const nonce = randomBytes(16).toString('hex')
+    nonces.set(nonce, { at: Date.now(), used: false })
+    return { nonce }
+  }],
+  ['GET', '/api/auth/roles', async ({ url }) => {
+    const a = getAddress(url.searchParams.get('address') ?? zeroAddress)
+    const list = [...tenants.values()]
+    const own = list.find((x) => lc(x.owner) === lc(a))
+    return { address: a, owner: own ? { safe: own.safe, bank: own.bank } : null, bank: list.filter((x) => lc(x.bank) === lc(a)).map((x) => ({ safe: x.safe, owner: x.owner })), pendingOwner: null, contract: false }
   }],
   ['POST', '/api/session', async ({ body }) => {
-    checkAge(body.issuedAt)
-    await verifyPersonal(`AEGIS session\nrole: ${body.role}\naddress: ${getAddress(body.address)}\nchainId: 31337\nissuedAt: ${body.issuedAt}`, body.signature, body.address)
-    const list = [...tenants.values()]
-    const t = body.role === 'owner' ? list.find((x) => lc(x.owner) === lc(body.address)) : list.find((x) => lc(x.bank) === lc(body.address))
-    if (!t) throw new HttpError(403, body.role === 'owner' ? 'NotAnOwner' : 'NotABank')
-    const token = randomBytes(24).toString('hex')
-    sessions.set(token, { role: body.role, address: getAddress(body.address), safe: body.role === 'owner' ? t.safe : null })
-    return { token, role: body.role, safe: body.role === 'owner' ? t.safe : null }
+    const v = await verifySiwe(body.message, body.signature, 'session')
+    return openSession(v.role, v.address)
   }],
   ['GET', '/api/treasury', async ({ s, url }) => snapshot(safeOf(s, url))],
   ['GET', '/api/obligations', async ({ s, url }) => {
@@ -422,7 +455,7 @@ const routes = [
   ['POST', '/api/tenant/attack', async ({ s, body }) => { if (s.role !== 'owner') throw new HttpError(403, 'OwnerOnly'); return attack(s, body.kind) }],
 ]
 
-const PUBLIC = new Set(['/api/health', '/api/onboard/config', '/api/onboard/status', '/api/onboard/fund', '/api/onboard/activate', '/api/session', '/api/market', '/mock/market'])
+const PUBLIC = new Set(['/api/health', '/api/onboard/config', '/api/onboard/status', '/api/onboard/fund', '/api/onboard/activate', '/api/session', '/api/auth/nonce', '/api/auth/roles', '/api/market', '/mock/market'])
 
 createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')

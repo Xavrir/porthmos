@@ -19,11 +19,12 @@ export function useSeatPicker() {
       navigate('/signup')
       return 'start'
     }
-    if (s === 'owner' && wallet?.owner.type === 'injected') {
-      chooseSeat('owner')
+    if (tenant.seats[s] === 'wallet') {
+      chooseSeat(s)
       if (mode !== 'live') refresh('live')
       return 'wallet'
     }
+    if (!tenant.seats[s]) return 'confirm'
     if (confirmed(s)) {
       signInLocal(s)
       return 'done'

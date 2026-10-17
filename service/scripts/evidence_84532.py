@@ -56,7 +56,7 @@ from aegis.eip712 import (  # noqa: E402
     sign_approval_typed,
     sign_digest,
 )
-from aegis.sessions import session_message  # noqa: E402
+from aegis.siwe import client_message  # noqa: E402
 from aegis.tradeflow.typed import (  # noqa: E402
     MilestoneProof,
     MilestoneTerms,
@@ -384,7 +384,7 @@ class Evidence:
             "INTERNAL_TOKEN": secrets.token_hex(32), "REQUIRE_SESSION_SIG": "1", "DEMO_MODE": "0",
             "API_HOST": "127.0.0.1", "API_PORT": str(api_port), "AUTHORIZER_PORT": str(auth_port),
             "AUTHORIZER_URL": f"http://127.0.0.1:{auth_port}", "API_INTERNAL_URL": f"http://127.0.0.1:{api_port}",
-            "PYTHONUNBUFFERED": "1",
+            "PYTHONUNBUFFERED": "1", "SIWE_DOMAINS": f"127.0.0.1:{api_port}",
         }
         self.start("keeper", "KEEPER", env)
         deadline = time.time() + 120
@@ -414,15 +414,15 @@ class Evidence:
         self.bank_h = self.session("bank", "BANK")
 
     def session(self, role: str, key_role: str) -> dict:
-        issued = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         address = to_checksum_address(self.addr(key_role))
-        sig = Account.sign_message(encode_defunct(text=session_message(role, address, self.chain_id, issued)),
-                                   self.key(key_role))
-        r = self.api.post("/api/session", json={"role": role, "address": address,
-                                                "signature": "0x" + bytes(sig.signature).hex(), "issuedAt": issued})
+        nonce = self.api.get("/api/auth/nonce").json()["nonce"]
+        host = str(self.api.base_url.netloc, "ascii")
+        message = client_message(address=address, chain_id=self.chain_id, nonce=nonce, role=role, domain=host)
+        sig = Account.sign_message(encode_defunct(text=message), self.key(key_role))
+        r = self.api.post("/api/session", json={"message": message, "signature": "0x" + bytes(sig.signature).hex()})
         if r.status_code != 200:
             raise StepError(f"{role} session refused: {r.text}")
-        log(f"{role} session opened with a signed message")
+        log(f"{role} session opened with a signed SIWE message")
         return {"X-Aegis-Session": r.json()["token"]}
 
     def call(self, method: str, path: str, headers: dict, **kw) -> dict:

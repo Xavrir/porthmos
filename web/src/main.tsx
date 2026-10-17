@@ -14,9 +14,11 @@ import './styles/app.css'
 import './styles/landing.css'
 import './styles/dashboard.css'
 import './styles/auth.css'
+import './styles/wallet.css'
 import { wagmiConfig } from './lib/wallet'
 import { ApiProvider } from './lib/source'
 import { IdentityProvider } from './lib/identity'
+import { WalletPickerProvider } from './components/wallet/WalletPicker'
 import { App } from './App'
 import { startReveal } from './lib/reveal'
 
@@ -33,9 +35,11 @@ createRoot(document.getElementById('porthmos')!).render(
       <QueryClientProvider client={queryClient}>
         <ApiProvider>
           <IdentityProvider>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
+            <WalletPickerProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </WalletPickerProvider>
           </IdentityProvider>
         </ApiProvider>
       </QueryClientProvider>

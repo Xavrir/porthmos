@@ -1,6 +1,8 @@
 // Playwright CLI run-code snippet: Log in and Create account against a live local stack (Anvil 31337 + service + web dev).
-// Route guard, /start redirect, Help dialog, create an account (mid-onboarding and recovery screenshots), sign out,
-// sign in on this device as bank, forget this device, restore from the recovery file, View the demo.
+// Route guard, /start redirect, wallet-first layout, Help dialog, create an account with the test wallet (mid-onboarding
+// and recovery screenshots; activation signs SIWE and opens the session), sign out, sign in with the test wallet as bank
+// (exact SIWE text shown first), forget this device, restore from the recovery file, View the demo, and an EIP-6963
+// mock wallet that starts on the wrong chain and signs in through the picker.
 // Screenshots at 1440 and 390 plus reduced motion, axe on every state, overflow, console errors, and the ASCII sea's
 // frame cost and CPU. AXE_PATH must point at axe.min.js.
 async (page) => {
@@ -89,15 +91,25 @@ async (page) => {
     await page.waitForURL('**/signup')
   })
 
-  await step('signin: no account yet, Continue disabled; screenshots and axe', async () => {
+  const openTest = async () => {
+    await page.locator('#signin-test').waitFor({ timeout: 15000 })
+    if ((await page.locator('#signin-test').getAttribute('aria-expanded')) !== 'true') await page.locator('#signin-test').click()
+  }
+
+  await step('signin: Connect wallet is the primary pill, the test wallet a small link; screenshots and axe', async () => {
     await page.goto(BASE + '/signin')
-    await page.locator('#signin-device', { hasText: 'No account in this browser yet.' }).waitFor({ timeout: 15000 })
-    if (!(await page.locator('#signin-continue').isDisabled())) throw new Error('Continue is enabled without keys')
+    await page.locator('#signin-wallet.pill-primary', { hasText: 'Connect wallet' }).waitFor({ timeout: 15000 })
+    if ((await page.locator('#signin-test').getAttribute('aria-expanded')) !== 'false') throw new Error('test wallet panel open on a fresh visit')
     await page.waitForTimeout(800)
     await capture('signin-initial')
+    await openTest()
+    await page.locator('#signin-device', { hasText: 'No test wallet in this browser yet.' }).waitFor({ timeout: 15000 })
+    if (!(await page.locator('#signin-continue').isDisabled())) throw new Error('Continue is enabled without keys')
+    await capture('signin-test-wallet')
   })
 
   await step('signin: Help opens the explainer in a dialog and Escape closes it', async () => {
+    await openTest()
     await page.locator('#signin-help').click()
     await page.locator('dialog.dialog-auth-help[open]').waitFor()
     await page.waitForTimeout(400)
@@ -113,21 +125,21 @@ async (page) => {
 
   await step('signin: keyboard order reaches every control', async () => {
     await page.goto(BASE + '/signin')
-    await page.locator('#signin-device').waitFor()
+    await page.locator('#signin-wallet').waitFor()
     const ids = []
     for (let i = 0; i < 16; i++) { await page.keyboard.press('Tab'); ids.push(await page.evaluate(() => document.activeElement?.id || document.activeElement?.className || document.activeElement?.tagName)) }
-    for (const want of ['signin-seat-owner', 'signin-help', 'signin-wallet', 'signin-restore', 'signin-demo', 'signin-to-signup']) if (!ids.includes(want)) throw new Error(`${want} not reached by Tab: ${ids.join(', ')}`)
+    for (const want of ['signin-wallet', 'signin-test', 'signin-demo', 'signin-to-signup']) if (!ids.includes(want)) throw new Error(`${want} not reached by Tab: ${ids.join(', ')}`)
   })
 
   await step('signup: initial screenshots and axe', async () => {
     await page.goto(BASE + '/signup')
-    await page.locator('#signup-create').waitFor({ timeout: 15000 })
+    await page.locator('#signup-wallet.pill-primary').waitFor({ timeout: 15000 })
     await page.waitForTimeout(600)
     await capture('signup-initial')
   })
 
   await step('signup: mid-onboarding screenshots and axe', async () => {
-    await page.locator('#signup-create').click()
+    await page.locator('#signup-test').click()
     await page.locator('.step.s-running').first().waitFor({ timeout: 30000 })
     await page.locator('.step.s-done').nth(2).waitFor({ timeout: 60000 })
     await capture('signup-mid', { focus: '.step.s-running' })
@@ -145,11 +157,10 @@ async (page) => {
     recovery = await (await dl).path()
     if (!(await page.locator('#signup-open').isDisabled())) throw new Error('Open my treasury is enabled before the acknowledgement')
     await page.locator('#signup-recovery input[type=checkbox]').check()
+    // Activation signed a SIWE message and the service returned the owner session, so opening asks for nothing more.
     await page.locator('#signup-open').click()
-    const preview = await page.locator('.sign-confirm .sign-preview').innerText()
-    if (!/^AEGIS session\nrole: owner\naddress: 0x[0-9a-fA-F]{40}\nchainId: 31337\nissuedAt: the time you press Sign in$/.test(preview)) throw new Error('unexpected preview: ' + preview)
-    await page.getByRole('button', { name: 'Sign in as owner' }).click()
     await page.waitForURL('**/treasury', { timeout: 20000 })
+    if (await page.locator('.sign-confirm').count()) throw new Error('asked to sign again after activation')
     await page.locator('.sw-sub', { hasText: /Signed in as Owner/ }).waitFor({ timeout: 20000 })
   })
 
@@ -172,11 +183,14 @@ async (page) => {
     // A same-URL goto keeps history.state (the guard's return path), so leave the page first.
     await page.goto(BASE + '/')
     await page.goto(BASE + '/signin')
+    await openTest()
     await page.locator('#signin-device', { hasText: 'Safe' }).waitFor({ timeout: 15000 })
     await page.locator('label[for="signin-seat-bank"]').click()
     await page.locator('#signin-continue').click()
+    await page.locator('.sign-confirm .sign-preview', { hasText: 'Nonce: ' }).waitFor({ timeout: 15000 })
     const preview = await page.locator('.sign-confirm .sign-preview').innerText()
-    if (!preview.includes('role: bank')) throw new Error('preview is not for the bank: ' + preview)
+    const host = BASE.replace(/^https?:\/\//, '')
+    if (!preview.startsWith(`${host} wants you to sign in with your Ethereum account:\n0x`) || !preview.includes('\n\nSign in to Porthmos as bank.\n\nURI: ' + BASE) || !preview.endsWith('Resources:\n- urn:porthmos:role:bank') || !preview.includes('\nChain ID: 31337\n')) throw new Error('preview is not the bank SIWE message: ' + preview)
     await axe('signin-confirm-1440')
     await page.screenshot({ path: `${OUT}/signin-confirm-1440.png` })
     await page.getByRole('button', { name: 'Sign in as bank' }).click()
@@ -197,16 +211,18 @@ async (page) => {
     await page.screenshot({ path: `${OUT}/forget-dialog-1440.png` })
     await page.locator('#forget-confirm').click()
     await page.waitForURL('**/signin')
-    await page.locator('#signin-device', { hasText: 'No account in this browser yet.' }).waitFor({ timeout: 15000 })
+    await openTest()
+    await page.locator('#signin-device', { hasText: 'No test wallet in this browser yet.' }).waitFor({ timeout: 15000 })
     if (await page.evaluate(() => localStorage.getItem('aegis.wallet.v1'))) throw new Error('keys still stored')
   })
 
   await step('signin: Restore from recovery file, sign in as owner, return to the page asked for', async () => {
     await page.goto(BASE + '/audit')
     await page.waitForURL('**/signin')
+    await openTest()
     await page.locator('label[for="signin-seat-owner"]').click()
     await page.setInputFiles('#signin-restore-file', recovery)
-    await page.locator('.sign-confirm .sign-preview').waitFor({ timeout: 20000 })
+    await page.locator('.sign-confirm .sign-preview', { hasText: 'Sign in to Porthmos as owner.' }).waitFor({ timeout: 20000 })
     await page.getByRole('button', { name: 'Sign in as owner' }).click()
     await page.waitForURL('**/audit', { timeout: 20000 })
     await page.locator('.sw-sub', { hasText: /Signed in as Owner/ }).waitFor({ timeout: 20000 })
@@ -216,7 +232,6 @@ async (page) => {
   })
 
   await step('signin: View the demo opens the replay without signing, and survives a reload', async () => {
-    await page.locator('label[for="signin-seat-owner"]').click()
     await page.locator('#signin-demo').click()
     await page.waitForURL('**/treasury')
     await page.locator('.mode-replay').first().waitFor({ timeout: 15000 })
@@ -288,7 +303,7 @@ async (page) => {
     await page.setViewportSize({ width: 1440, height: 900 })
   })
 
-  await step('signin: Connect wallet (mock injected wallet on Anvil, starts on the wrong chain) signs in as owner', async () => {
+  await step('signin: Connect wallet (EIP-6963 mock wallet on Anvil, starts on the wrong chain) signs SIWE as owner', async () => {
     // Local chain only: the mock signs with public Anvil test account 1, which the dev server exposes in src/lib/demo/keys.ts.
     await page.addInitScript(() => {
       const listeners = {}
@@ -304,41 +319,51 @@ async (page) => {
         return account
       }
       window.__walletCalls = []
-      window.ethereum = {
-        isMetaMask: false,
+      const provider = {
         on: (e, f) => { (listeners[e] ||= []).push(f) },
         removeListener: (e, f) => { listeners[e] = (listeners[e] || []).filter((g) => g !== f) },
         request: async ({ method, params }) => {
           window.__walletCalls.push(method)
           const a = await signer()
-          if (method === 'eth_requestAccounts' || method === 'eth_accounts') return [a.address]
+          // Like a real wallet, eth_accounts stays empty until the site was allowed with eth_requestAccounts.
+          if (method === 'eth_requestAccounts') { window.__allowed = true; return [a.address] }
+          if (method === 'eth_accounts') return window.__allowed ? [a.address] : []
           if (method === 'eth_chainId') return chainId
           if (method === 'wallet_switchEthereumChain') { chainId = params[0].chainId; emit('chainChanged', chainId); return null }
           if (method === 'personal_sign') { window.__signed = params[0]; return a.signMessage({ message: { raw: params[0] } }) }
           if (method === 'wallet_requestPermissions' || method === 'wallet_getPermissions') return [{ parentCapability: 'eth_accounts' }]
+          if (method === 'wallet_revokePermissions') return null
           throw Object.assign(new Error(`mock wallet: ${method} not supported`), { code: 4200 })
         },
       }
+      const icon = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#4ec397"/><path d="M8 11h16v12H8z" fill="#000"/></svg>')
+      const announce = () => window.dispatchEvent(new CustomEvent('eip6963:announceProvider', { detail: Object.freeze({ info: { uuid: '6a1d1b3e-0000-4000-8000-000000000001', name: 'QA Mock Wallet', icon, rdns: 'dev.porthmos.qa' }, provider }) }))
+      window.addEventListener('eip6963:requestProvider', announce)
+      announce()
     })
     await page.goto(BASE + '/')
     await page.evaluate(() => { localStorage.removeItem('aegis.wallet.v1') })
     await page.goto(BASE + '/signin')
-    await page.locator('#signin-device', { hasText: 'No account in this browser yet.' }).waitFor({ timeout: 15000 })
     await page.locator('#signin-wallet').click()
-    await page.locator('.auth-panel .sign-preview').waitFor({ timeout: 20000 })
-    const preview = await page.locator('.auth-panel .sign-preview').innerText()
-    if (!/^AEGIS session\nrole: owner\naddress: 0x[0-9a-fA-F]{40}\nchainId: 31337\nissuedAt: the time you press Sign in$/.test(preview)) throw new Error('unexpected wallet preview: ' + preview)
+    await page.locator('dialog.dialog-wallet[open] button[data-wallet="dev.porthmos.qa"]', { hasText: 'QA Mock Wallet' }).click()
+    await page.locator('#wp-switch').waitFor({ timeout: 15000 })
+    await axe('picker-wrong-network-1440')
+    await page.locator('#wp-switch').click()
+    await page.locator('#wp-continue').click()
+    await page.locator('#signin-siwe').waitFor({ timeout: 20000 })
+    const preview = await page.locator('#signin-siwe').innerText()
+    if (!/^localhost:\d+ wants you to sign in with your Ethereum account:\n0x70997970C51812dc3A010C7d01b50e0d17dc79C8\n\nSign in to Porthmos as owner\.\n/.test(preview)) throw new Error('unexpected wallet preview: ' + preview)
     const calls = await page.evaluate(() => window.__walletCalls)
     if (!calls.includes('wallet_switchEthereumChain')) throw new Error('no chain switch: ' + calls.join(','))
     if (calls.includes('personal_sign')) throw new Error('signed before the confirmation')
     await axe('signin-wallet-confirm-1440')
     await page.screenshot({ path: `${OUT}/signin-wallet-confirm-1440.png` })
-    await page.locator('.auth-panel').getByRole('button', { name: 'Sign in as owner' }).click()
+    await page.locator('#signin-wallet-panel').getByRole('button', { name: 'Sign in as owner' }).click()
     await page.waitForURL('**/treasury', { timeout: 20000 })
-    await page.locator('.sw-sub', { hasText: /Signed in as Owner/ }).waitFor({ timeout: 20000 })
+    await page.locator('#account-menu').waitFor({ timeout: 20000 })
     const signed = await page.evaluate(() => window.__signed)
     const text = await page.evaluate((h) => new TextDecoder().decode(new Uint8Array(h.slice(2).match(/../g).map((b) => parseInt(b, 16)))), signed)
-    if (!text.startsWith(preview.split('\nissuedAt:')[0] + '\nissuedAt: 20')) throw new Error('signed text differs from the preview: ' + text)
+    if (text !== preview) throw new Error('signed text differs from the preview: ' + text)
   })
 
   const bad = axeOut.filter((a) => a.violations.length)

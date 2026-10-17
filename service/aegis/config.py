@@ -85,6 +85,8 @@ class Params:
 
 CANONICAL_FALLBACK_HANDLER = "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99"
 DEFAULT_ORIGINS = "https://porthmos.vercel.app,https://aegis-treasury-eta.vercel.app,http://localhost:5173,http://localhost:4173"
+# SIWE (EIP-4361) domains a signed sign-in may name: host, host:port, or host:* for any port.
+DEFAULT_SIWE_DOMAINS = "porthmos.vercel.app,aegis-treasury-eta.vercel.app,localhost:*,127.0.0.1:*"
 
 
 @dataclass
@@ -135,6 +137,7 @@ class Limits:
     llm_per_hour: int = 300
     llm_per_tenant_hour: int = 60
     attacks_per_tenant_hour: int = 6
+    auth_per_ip_minute: int = 60
 
 
 @dataclass
@@ -176,6 +179,7 @@ class Settings:
     tenant: TenantParams = field(default_factory=TenantParams)
     limits: Limits = field(default_factory=Limits)
     allowed_origins: list[str] = field(default_factory=lambda: DEFAULT_ORIGINS.split(","))
+    siwe_domains: list[str] = field(default_factory=lambda: DEFAULT_SIWE_DOMAINS.split(","))
     admin_token: str = ""
     onboarding_open: bool = True
     public_rpc_url: str = ""
@@ -333,6 +337,7 @@ def load_limits(local: bool) -> Limits:
         llm_per_hour=_env_int("LIMIT_LLM_PER_HOUR", d.llm_per_hour),
         llm_per_tenant_hour=_env_int("LIMIT_LLM_PER_TENANT_HOUR", d.llm_per_tenant_hour),
         attacks_per_tenant_hour=_env_int("LIMIT_ATTACKS_PER_TENANT_HOUR", d.attacks_per_tenant_hour),
+        auth_per_ip_minute=_env_int("LIMIT_AUTH_PER_IP_MINUTE", d.auth_per_ip_minute),
     )
 
 
@@ -373,6 +378,7 @@ def load_settings(**overrides) -> Settings:
         tenant=load_tenant_params(local),
         limits=load_limits(local),
         allowed_origins=[o.strip() for o in (_env("ALLOWED_ORIGINS", DEFAULT_ORIGINS) or "").split(",") if o.strip()],
+        siwe_domains=[d.strip() for d in (_env("SIWE_DOMAINS", DEFAULT_SIWE_DOMAINS) or "").split(",") if d.strip()],
         admin_token=_env("ADMIN_TOKEN", "") or "",
         onboarding_open=_env_bool("ONBOARDING_OPEN", True),
         public_rpc_url=_env("PUBLIC_RPC_URL", DEFAULT_PUBLIC_RPC.get(chain_id)) or "",

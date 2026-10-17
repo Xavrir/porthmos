@@ -43,7 +43,7 @@ blocks (it also has a wall-clock fallback for automine Anvil).
 Environment: `RPC_URL`, `CHAIN_ID`, `DEPLOYMENTS_PATH`, `CONTRACTS_OUT`, `AEGIS_DB`, `INTERNAL_TOKEN`,
 `DEMO_MODE`, `REQUIRE_SESSION_SIG`, `API_PORT`, `AUTHORIZER_URL`, `API_INTERNAL_URL`, `LLM_BASE_URL`,
 `LLM_API_KEY`, `LLM_MODEL`, `LLM_TIMEOUT`, `EXECUTOR_WITHHOLD_EXITS` (A9 demo), `VAULT_A_APY`, `VAULT_B_APY`.
-Multi-tenant (docs/MULTI-TENANT.md): `ALLOWED_ORIGINS`, `ADMIN_TOKEN`, `ONBOARDING_OPEN`, `PUBLIC_RPC_URL`,
+Multi-tenant (docs/MULTI-TENANT.md): `ALLOWED_ORIGINS`, `SIWE_DOMAINS`, `ADMIN_TOKEN`, `ONBOARDING_OPEN`, `PUBLIC_RPC_URL`,
 `EXPLORER_URL`, `TRUST_PROXY`, `IP_HASH_SALT`, `TENANT_*`, `FAUCET_ETH_*`, `TEST_USDC_MINT`, `LIMIT_*`,
 `AEGIS_LOG_DIR`, `API_ACCESS_LOG`. Every variable is documented in `deploy/tencent/aegis.env.example`.
 
@@ -91,19 +91,31 @@ attack phase with `ARGS="--phases attack --clear-quarantine"` once the 24 h cool
 All endpoints of INTERFACES section 2 are implemented. Amounts are `{"raw", "display"}`. Prices are
 `{"raw", "display"}` with 8 decimals.
 
-Session: `POST /api/session {role, address}` returns `{token, role, address, safe, expiresAt, readOnly}` and also
+Session: `GET /api/auth/nonce`, then `POST /api/session {message, signature}` with a Sign-In with Ethereum (EIP-4361)
+message signed by personal_sign. It returns `{token, role, address, safe, safes, expiresAt, readOnly, auth}` and also
 sets an `aegis_session` HttpOnly cookie. Send `X-Aegis-Session: <token>`. An owner session is bound to the Safe
-whose registry owner is `address`; a bank session reads the Safes whose registry bank is `address`. When
-`REQUIRE_SESSION_SIG=1` (default off 31337) the body must also carry `signature` and `issuedAt`, a `personal_sign`
-of:
+whose registry owner is the signed address; a bank session reads the Safes whose registry bank is that address. The
+message (format in docs/TECHNICAL-DOCUMENT.md 04, Signed structures; code in `aegis/siwe.py`):
 
 ```
-AEGIS session
-role: <role>
-address: <checksummed address>
-chainId: <chainId>
-issuedAt: <ISO-8601 time, within 10 minutes>
+localhost:5173 wants you to sign in with your Ethereum account:
+0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+
+Sign in to Porthmos as owner.
+
+URI: http://localhost:5173
+Version: 1
+Chain ID: 31337
+Nonce: <from GET /api/auth/nonce, single use>
+Issued At: <RFC 3339, within 10 minutes>
+Expiration Time: <in the future, within 1 hour of Issued At>
+Resources:
+- urn:porthmos:role:owner
 ```
+
+Domains come from `SIWE_DOMAINS` (default `porthmos.vercel.app,aegis-treasury-eta.vercel.app,localhost:*,127.0.0.1:*`).
+Smart contract wallets sign with ERC-1271 or ERC-6492. With `REQUIRE_SESSION_SIG=0` (the default on 31337 only) an
+unsigned `{role, address}` body still opens a session for local tests.
 
 The owner never passes a Safe. A bank session may pass `?safe=` to pick one of its own Safes. An owner passing
 another Safe gets `403 CrossClientRefused`, and the attempt is written to the ledger.

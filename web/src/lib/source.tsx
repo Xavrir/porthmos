@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { Address } from 'viem'
-import type { AegisApi, Mode, StreamStatus } from './api/contract'
+import { zeroAddress, type Address } from 'viem'
+import { useConnection } from 'wagmi'
+import type { AegisApi, AuthRoles, Mode, StreamStatus } from './api/contract'
 import { HttpApi } from './api/http'
 import { ReplayApi } from '../replay/engine'
 import { deploymentFromConfig, loadDeployment, REPLAY_DEPLOY, type Deployment } from './deployment'
@@ -18,7 +19,12 @@ export type FeedItem = { id: number; at: number; event: StreamEvent }
 // 'off': no API address on a static host, so nothing was called.
 export type ServiceState = 'off' | 'down' | 'up'
 
-export type Tenant = { safe: Address; owner: Address; bank: Address; ownerKind: 'burner' | 'injected' }
+export type SeatKey = 'key' | 'wallet' | null
+
+// via 'file': the keys file in this browser names the owner; via 'wallet': the connected wallet's registry roles.
+export type Tenant = { safe: Address; owner: Address; bank: Address; ownerKind: 'burner' | 'injected'; via: 'file' | 'wallet'; seats: { owner: SeatKey; bank: SeatKey } }
+
+export type AccountSource = 'file' | 'wallet'
 
 type ApiContextValue = {
   api: AegisApi
@@ -51,12 +57,37 @@ type ApiContextValue = {
   refresh: (prefer?: Mode | null) => void
   replayChosen: boolean
   forgetReplay: () => void
+  walletRoles: AuthRoles | null
+  rolesFor: Address | null
+  accountSource: AccountSource
+  chooseAccount: (source: AccountSource) => void
 }
 
 const ApiContext = createContext<ApiContextValue | null>(null)
 
 const MODE_KEY = 'aegis.mode'
 const API_KEY = 'aegis.api'
+const ACCOUNT_KEY = 'porthmos.account'
+
+function readAccount(): AccountSource | null {
+  try {
+    const v = sessionStorage.getItem(ACCOUNT_KEY)
+    return v === 'file' || v === 'wallet' ? v : null
+  } catch {
+    return null
+  }
+}
+
+export function tenantFromRoles(roles: AuthRoles, file: WalletFile | null): Tenant | null {
+  const fileBank = file ? bankAddress(file).toLowerCase() : null
+  if (roles.owner) {
+    const bank = roles.owner.bank ?? zeroAddress
+    return { safe: roles.owner.safe, owner: roles.address, bank, ownerKind: 'injected', via: 'wallet', seats: { owner: 'wallet', bank: fileBank && fileBank === bank.toLowerCase() ? 'key' : null } }
+  }
+  const b = roles.bank[0]
+  if (b) return { safe: b.safe, owner: b.owner, bank: roles.address, ownerKind: 'injected', via: 'wallet', seats: { owner: null, bank: 'wallet' } }
+  return null
+}
 export const DEFAULT_LIVE_URL = 'http://localhost:8787'
 
 function cleanBase(url: string): string | null {
@@ -127,13 +158,28 @@ export function ApiProvider({ children }: { children: ReactNode }) {
   const [tenant, setTenant] = useState<Tenant | null>(null)
   // Only a replay the visitor asked for (View the demo, ?mode=replay, a switch) opens the app without a session.
   const [replayChosen, setReplayChosen] = useState(() => forcedMode() === 'replay')
+  const conn = useConnection()
+  const connected = conn.address ?? null
+  const connectedRef = useRef<Address | null>(connected)
+  const [accountPref, setAccountPref] = useState<AccountSource | null>(readAccount)
+  const accountRef = useRef(accountPref)
+  useLayoutEffect(() => { connectedRef.current = connected; accountRef.current = accountPref }, [connected, accountPref])
+  const seq = useRef(0)
+  const probedAddr = useRef<Address | null>(null)
+  const [walletRoles, setWalletRoles] = useState<AuthRoles | null>(null)
+  const [rolesFor, setRolesFor] = useState<Address | null>(null)
 
   const probe = useCallback(async (prefer: Mode | null, base: string = apiBase) => {
+    const my = ++seq.current
+    const stale = () => seq.current !== my
     setPhase('probing')
     let w = loadWallet()
     setWalletState(w)
+    probedAddr.current = connectedRef.current
     const toReplay = async (why: string, svc: ServiceState) => {
-      setService(svc); setMode('replay'); setReason(why); setHealth(await replay.health()); setDeployment(REPLAY_DEPLOY); setPhase('ready')
+      const rh = await replay.health()
+      if (stale()) return
+      setService(svc); setMode('replay'); setReason(why); setHealth(rh); setDeployment(REPLAY_DEPLOY); setPhase('ready')
     }
     if (!base && !onLocalHost() && prefer !== 'live') {
       setOnboard(null); setTenant(null)
@@ -145,6 +191,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       h = await client.health()
       if (!h.ok) throw new Error('Service reported not ok')
     } catch (e) {
+      if (stale()) return
       const where = base || 'this site'
       setOnboard(null); setTenant(null)
       return toReplay(prefer === 'live' ? `The service at ${where} did not answer (${(e as Error).message || 'no response'})` : `The service at ${where} did not answer`, 'down')
@@ -153,22 +200,36 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     const cfg = await client.onboardConfig().catch(() => null)
     let found: Tenant | null = null
     let st: OnboardStatus | null = null
-    if (cfg && w && w.chainId === cfg.chainId) {
+    const addr = connectedRef.current
+    const fileOwner = w ? ownerAddress(w).toLowerCase() : null
+    // The connected wallet wins when it was chosen at sign-in, or when no keys file in this browser names an owner.
+    const viaWallet = !!cfg && !!addr && (accountRef.current === 'wallet' || !w || w.chainId !== cfg.chainId || fileOwner === addr.toLowerCase())
+    let roles: AuthRoles | null = null
+    if (cfg && addr) roles = await client.authRoles(addr).catch(() => null)
+    if (stale()) return
+    setWalletRoles(roles)
+    setRolesFor(addr)
+    if (cfg && w && w.chainId === cfg.chainId && !(viaWallet && fileOwner !== addr?.toLowerCase())) {
       const owner = ownerAddress(w)
       st = await client.onboardStatus(owner).catch(() => null)
+      if (stale()) return
       const safe = st?.safe ?? w.safe
       if (st?.safe && st.safe !== w.safe) {
         w = { ...w, safe: st.safe }
         saveWallet(w)
         setWalletState(w)
       }
-      if (st?.steps.activated && safe) found = { safe, owner, bank: bankAddress(w), ownerKind: w.owner.type }
+      if (st?.steps.activated && safe) {
+        found = { safe, owner, bank: bankAddress(w), ownerKind: w.owner.type, via: 'file', seats: { owner: w.owner.type === 'burner' ? 'key' : 'wallet', bank: 'key' } }
+      }
     }
+    if (!found && viaWallet && roles) found = tenantFromRoles(roles, w)
     setOnboard(cfg)
     setOnboardStatus(st)
     setTenant(found)
     setService('up')
     const fileDep = (await loadDeployment(chainId)) ?? (chainId === REPLAY_DEPLOY.chainId ? REPLAY_DEPLOY : null)
+    if (stale()) return
     const canLive = !cfg || !!found || demoIdentitiesAvailable(chainId)
     if (prefer === 'replay' || !canLive) {
       return toReplay(prefer === 'replay' ? 'Replay chosen' : w ? 'Your treasury is not set up yet' : 'No treasury in this browser yet', 'up')
@@ -180,9 +241,25 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     setPhase('ready')
   }, [apiBase, http, replay])
 
+  // wagmi starts reconnecting the last wallet while it renders; the first probe waits for that (at most 1.5 s), so a
+  // returning wallet user is not sent to sign in before the wallet is back.
+  const settled = conn.status !== 'connecting' && conn.status !== 'reconnecting'
+  const [waitedOut, setWaitedOut] = useState(false)
   useEffect(() => {
+    const t = setTimeout(() => setWaitedOut(true), 1500)
+    return () => clearTimeout(t)
+  }, [])
+  const started = useRef(false)
+  useEffect(() => {
+    if (!settled && !waitedOut) return
+    if (!started.current) {
+      started.current = true
+      void probe(forcedMode())
+      return
+    }
+    if (!settled || (probedAddr.current ?? '').toLowerCase() === (connected ?? '').toLowerCase()) return
     void probe(forcedMode())
-  }, [probe])
+  }, [settled, waitedOut, connected, probe])
 
   const api: AegisApi = mode === 'live' ? http : replay
 
@@ -264,6 +341,15 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       void probe(prefer ?? forcedMode())
     },
     replayChosen,
+    walletRoles: rolesFor && connected && rolesFor.toLowerCase() === connected.toLowerCase() ? walletRoles : null,
+    rolesFor,
+    accountSource: accountPref ?? (wallet ? 'file' : 'wallet'),
+    chooseAccount: (src) => {
+      try { sessionStorage.setItem(ACCOUNT_KEY, src) } catch { /* the choice lasts for this page */ }
+      accountRef.current = src
+      setAccountPref(src)
+      void probe(forcedMode())
+    },
     forgetReplay: () => {
       try { sessionStorage.removeItem(MODE_KEY) } catch { /* nothing stored */ }
       setReplayChosen(false)

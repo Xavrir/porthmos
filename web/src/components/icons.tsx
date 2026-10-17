@@ -37,6 +37,11 @@ const PATHS = {
   clock: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17z M12 7.5V12l3 2',
   lock: 'M6 10.5h12v9H6z M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5',
   stop: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17z M8 8l8 8',
+  wallet: 'M3.5 7.5h17v12h-17z M3.5 7.5l12.5-3.5v3.5 M15.5 13.5h2.5',
+  qr: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h2.5v2.5H14z M17.5 17.5H20V20h-2.5z M14 20h2.5 M20 14v2.5',
+  key: 'M7.5 9.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z M11 13h9.5 M17.5 13v3 M20.5 13v2.5',
+  logout: 'M14 4.5H5v15h9 M10 12h10.5 M17 8.5l3.5 3.5l-3.5 3.5',
+  swap: 'M4 8h13l-3-3 M20 16H7l3 3',
 } as const
 
 export type IconName = keyof typeof PATHS

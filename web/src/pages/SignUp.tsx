@@ -1,31 +1,34 @@
 import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useConnect, useConnection, useConnectors } from 'wagmi'
+import { useConnection } from 'wagmi'
 import type { Address, Hex } from 'viem'
 import { AuthLayout } from '../auth/AuthLayout'
 import { useViewDemo } from '../auth/hooks'
 import { usePageTitle } from '../components/chrome'
-import { SignConfirm } from '../components/SignConfirm'
+import { SiweConfirm } from '../components/SignConfirm'
 import { Term } from '../components/Glossary'
+import { keyLabel, useSwitchToApp } from '../components/wallet/AccountMenu'
+import { WalletAvatar } from '../components/wallet/WalletAvatar'
+import { useWalletPicker } from '../components/wallet/WalletPicker'
 import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
 import { bankAddress, newWallet, ownerAddress, parseWallet, WalletFileError, type WalletFile } from '../lib/keys'
 import { downloadRecovery } from '../lib/recovery'
 import { publicClientFor } from '../lib/onboard/chain'
 import { plainError, type Plain } from '../lib/onboard/errors'
-import { initialSteps, OnboardRunner, STEP_LABELS, TX_STEPS, type StepGroup, type StepState } from '../lib/onboard/runner'
+import { initialSteps, OnboardRunner, STEP_LABELS, STEP_WHY, TX_STEPS, type OwnerSession, type StepGroup, type StepState, type WalletPrompt } from '../lib/onboard/runner'
 import { burnerOwner, injectedOwner, localSender } from '../lib/onboard/signers'
 import type { OnboardConfig } from '../lib/onboard/types'
 import { fromUnits, money, shortHex } from '../lib/format'
 import { chainName } from '../lib/wallet'
 
 const GROUPS: { id: StepGroup; title: string; what: (c: OnboardConfig) => string }[] = [
-  { id: 'fund', title: 'Test ETH for gas', what: () => 'The faucet sends a little test ETH to both keys so they can pay for gas. You sign a message; nothing is spent.' },
-  { id: 'safe', title: 'Create your Safe', what: () => 'A Safe smart account at an address fixed by your owner key. You are its only owner.' },
+  { id: 'fund', title: 'Test ETH for gas', what: () => 'The faucet sends a little test ETH to the owner and the bank key so they can pay for gas. You sign a message; nothing is spent.' },
+  { id: 'safe', title: 'Create your Safe', what: () => 'A Safe smart account at an address fixed by your owner address. You are its only owner.' },
   { id: 'module', title: 'Turn on the Porthmos module', what: () => 'The Safe lets the Porthmos module deposit into allowed vaults and redeem back. It can do nothing else.' },
   { id: 'policy', title: 'Write your rules', what: (c) => `Nine calls to the PolicyRegistry: owner and bank, two vaults, the Porthmos keys, an auto cap of ${usd(c.params.autoCap)} and a daily cap of ${usd(c.params.dailyCap)}.` },
-  { id: 'bank', title: 'Bank sets its limit', what: (c) => `Your bank key says above which amount the bank must also sign: ${usd(c.params.bankLimit)}.` },
-  { id: 'activate', title: 'Activate', what: (c) => `The server checks every rule on-chain, then sends ${usd(c.testUsdc)} test USDC to your Safe.` },
+  { id: 'bank', title: 'Bank sets its limit', what: (c) => `The bank key in this browser says above which amount the bank must also sign: ${usd(c.params.bankLimit)}.` },
+  { id: 'activate', title: 'Activate and sign in', what: (c) => `You sign in with Ethereum. The server checks every rule on-chain, then sends ${usd(c.testUsdc)} test USDC to your Safe.` },
 ]
 
 function usd(raw: string | number) {
@@ -48,20 +51,54 @@ function groupStatus(steps: StepState[]): StepState['status'] {
   return 'idle'
 }
 
+function WalletPlan() {
+  return (
+    <div className="wallet-plan" id="signup-plan">
+      <p className="auth-label">What your wallet will ask</p>
+      <ol>
+        <li><strong>One signature</strong> to ask the faucet for test ETH. It costs nothing.</li>
+        <li><strong>One transaction</strong> to create your Safe.</li>
+        <li><strong>Ten setup calls</strong>: in one confirmation if your wallet can batch them, otherwise one at a time, numbered 1 of 10 to 10 of 10.</li>
+        <li><strong>One Sign-In with Ethereum signature</strong> to activate your treasury and sign you in.</li>
+      </ol>
+      <p className="auth-sub">Each request is explained here while your wallet is open. Porthmos never asks for a token approval here.</p>
+    </div>
+  )
+}
+
+function PromptCard({ prompt }: { prompt: WalletPrompt }) {
+  return (
+    <div className="wallet-prompt" id="signup-prompt" role="status" aria-live="polite">
+      <p className="wallet-prompt-head"><span className="wp-spinner" aria-hidden="true" />Your wallet asks: <strong>{prompt.kind === 'tx' && prompt.index ? `${prompt.title} (step ${prompt.index} of ${prompt.total})` : prompt.title}</strong></p>
+      <p>{prompt.why}</p>
+      {prompt.kind === 'sign' ? <pre className="sign-preview" tabIndex={0} aria-label="Message your wallet shows">{prompt.text}</pre> : null}
+      {prompt.kind === 'tx' ? <p className="auth-sub">To <code>{prompt.to}</code>. No ETH or tokens are sent with it.</p> : null}
+      {prompt.kind === 'batch' ? (
+        <ol className="wallet-prompt-calls">
+          {prompt.calls.map((c) => <li key={c.step}>{c.title} <span className="auth-sub">to <code>{shortHex(c.to)}</code></span></li>)}
+        </ol>
+      ) : null}
+      <p className="auth-sub">Confirm it in your wallet. If you decline, nothing is sent and you can retry.</p>
+    </div>
+  )
+}
+
 export default function SignUp() {
   usePageTitle('Create your account')
-  const { http, service, onboard: config, onboardStatus, wallet, setWallet, refresh, tenant, phase } = useAegis()
-  const { signInLocal, signedIn, identity, chooser } = useIdentity()
+  const { http, service, onboard: config, onboardStatus, wallet, setWallet, refresh, tenant, phase, walletRoles, chooseAccount } = useAegis()
+  const { signInLocal, signedIn, identity, chooser, adoptSession } = useIdentity()
   const navigate = useNavigate()
   const conn = useConnection()
-  const connectors = useConnectors()
-  const { mutateAsync: connectWallet, isPending: connecting } = useConnect()
+  const picker = useWalletPicker()
+  const sw = useSwitchToApp()
   const [steps, setSteps] = useState<StepState[]>(() => initialSteps(onboardStatus?.steps))
   const [running, setRunning] = useState(false)
   const [failure, setFailure] = useState<Plain | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [opening, setOpening] = useState<'confirm' | 'signing' | null>(null)
   const [forget, setForget] = useState(false)
+  const [prompt, setPrompt] = useState<WalletPrompt | null>(null)
+  const [ownerSession, setOwnerSession] = useState<OwnerSession | null>(null)
   const runner = useRef<{ r: OnboardRunner; key: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const importId = useId()
@@ -73,9 +110,13 @@ export default function SignUp() {
 
   const owner = wallet ? ownerAddress(wallet) : null
   const bank = wallet ? bankAddress(wallet) : null
+  const viaWallet = wallet?.owner.type === 'injected'
   const wrongChain = !!wallet && !!config && wallet.chainId !== config.chainId
   const activated = steps.find((s) => s.id === 'activate')?.status === 'done' || steps.find((s) => s.id === 'activate')?.status === 'skipped'
   const started = steps.some((s) => s.status !== 'idle')
+  const walletMismatch = viaWallet && !!owner && (!conn.address || conn.address.toLowerCase() !== owner.toLowerCase())
+  const walletWrongNet = viaWallet && !!conn.address && !!config && conn.chainId !== config.chainId
+  const alreadyOwns = !!walletRoles?.owner && !!conn.address && (!owner || owner.toLowerCase() === conn.address.toLowerCase()) && !started
 
   useEffect(() => {
     if (running || runner.current) return
@@ -101,15 +142,18 @@ export default function SignUp() {
           config, api: http, client, owner: ownerSigner, bank: localSender(w.bank.pk, config, client), safe: w.safe,
           onSafe: (safe) => { current = { ...current, safe }; setWallet(current) },
           onUpdate: setSteps,
+          onPrompt: setPrompt,
+          onSession: setOwnerSession,
         }, steps)
         runner.current = { r, key }
       }
       await runner.current.r.run()
       refresh('live')
     } catch (e) {
-      setFailure((e as { plain?: Plain }).plain ?? plainError(e))
+      setFailure((e as { plain?: Plain }).plain ?? plainError(e, w.owner.type === 'injected' ? 'Your wallet' : 'This key'))
     } finally {
       setRunning(false)
+      setPrompt(null)
     }
   }
 
@@ -120,26 +164,21 @@ export default function SignUp() {
       w = newWallet(config.chainId)
       setWallet(w)
     }
+    chooseAccount('file')
     void run(w)
   }
 
-  const useOwnWallet = async () => {
+  const connectOwner = async () => {
     if (!config) return
     setNote(null)
-    try {
-      let address = conn.address
-      if (!address) {
-        const injected = connectors.find((c) => c.type === 'injected') ?? connectors[0]
-        if (!injected) { setNote('No browser wallet found. The burner keys work without one.'); return }
-        address = (await connectWallet({ connector: injected })).accounts[0]
-      }
-      const base = wallet && !started ? wallet : newWallet(config.chainId)
-      setWallet({ ...base, owner: { type: 'injected', address: address as Address }, safe: null })
-      runner.current = null
-      setNote(`Your wallet ${shortHex(address)} is the owner. The bank stays a key in this browser.`)
-    } catch (e) {
-      setNote(plainError(e, 'Your wallet').message)
-    }
+    const picked = await picker.open({ reason: 'The wallet you connect becomes the only owner of your new Safe. Connecting shares only your address.' })
+    if (!picked) return
+    if (walletRoles?.owner && walletRoles.address.toLowerCase() === picked.address.toLowerCase()) return
+    const base = wallet && !started ? wallet : newWallet(config.chainId)
+    setWallet({ ...base, owner: { type: 'injected', address: picked.address as Address }, safe: null })
+    runner.current = null
+    chooseAccount('wallet')
+    setNote(`Your wallet ${shortHex(picked.address)} is the owner. The bank seat is a key kept in this browser for testnet.`)
   }
 
   const onImport = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -152,7 +191,7 @@ export default function SignUp() {
       runner.current = null
       setFailure(null)
       setNote(`Imported the keys for owner ${shortHex(ownerAddress(w))}. Checking the chain…`)
-      refresh(null)
+      chooseAccount('file')
     } catch (err) {
       setNote(err instanceof WalletFileError ? err.message : 'That file could not be read.')
     }
@@ -165,14 +204,91 @@ export default function SignUp() {
   const safe = wallet?.safe ?? onboardStatus?.safe ?? null
   const mintTx = steps.find((s) => s.id === 'activate')?.hashes[0]
 
-
   const network = config ? chainName(config.chainId).replace(/ \(\d+\)$/, '') : 'Base Sepolia'
-  const openTreasury = () => (signedIn && identity.kind !== 'none' && identity.role === 'owner' ? navigate('/treasury') : wallet?.owner.type === 'burner' ? setOpening('confirm') : chooser.show('switch', 'owner'))
+  const openTreasury = () => {
+    if (signedIn && identity.kind !== 'none' && identity.role === 'owner') { navigate('/treasury'); return }
+    if (ownerSession && owner && ownerSession.address.toLowerCase() === owner.toLowerCase()) {
+      setOpening('signing')
+      adoptSession({ token: ownerSession.token, role: 'owner', address: ownerSession.address, expiresAt: ownerSession.expiresAt })
+      if (!viaWallet) signInLocal('owner')
+      return
+    }
+    if (wallet?.owner.type === 'burner') setOpening('confirm')
+    else chooser.show('switch', 'owner')
+  }
+
+  const startBlock = (config: OnboardConfig) => {
+    if (activated) return null
+    if (failure) {
+      return (
+        <div className="step-failure" role="alert">
+          <p><strong>Stopped.</strong> {failure.message}</p>
+          {failure.retry ? <button type="button" id="signup-retry" className="pill pill-primary" disabled={running || walletMismatch} onClick={() => wallet && run(wallet)}>{running ? 'Working…' : 'Retry this step'}</button> : null}
+        </div>
+      )
+    }
+    if (running) {
+      return (
+        <div className="auth-actions">
+          <button type="button" id="signup-create" className="pill pill-primary" disabled>{prompt && prompt.kind !== 'tx' ? 'Confirm in your wallet…' : current?.txIndex ? `Step ${current.txIndex} of ${TX_STEPS.length}…` : 'Working…'}</button>
+          {viaWallet ? <span className="auth-note">{txDone} of {TX_STEPS.length} setup calls done.</span> : null}
+        </div>
+      )
+    }
+    if (alreadyOwns) {
+      return <p className="auth-note" role="status">This wallet already owns a Porthmos treasury. <Link to="/signin">Log in with it</Link>.</p>
+    }
+    if (!wallet || (!viaWallet && !started)) {
+      return (
+        <div className="auth-stack">
+          <button type="button" id="signup-wallet" className="pill pill-primary pill-block" disabled={!config.onboardingOpen || wrongChain} onClick={() => void connectOwner()}>Connect wallet</button>
+          <p className="auth-quiet">Your wallet becomes the owner of a new Safe. The bank seat is a key kept in this browser for testnet.</p>
+          <p className="auth-quiet">
+            <button type="button" id="signup-test" className="auth-link" disabled={!config.onboardingOpen || wrongChain} onClick={begin}>{wallet ? 'Continue with the test wallet in this browser' : 'Try with a test wallet'}</button>
+            {' '}A throwaway owner key made in this browser and saved to a recovery file. No extension, no prompts.
+          </p>
+        </div>
+      )
+    }
+    if (viaWallet && walletMismatch) {
+      return (
+        <div className="auth-stack">
+          <p className="auth-note">This account's owner is wallet <code>{shortHex(owner!)}</code>. Connect it to continue.</p>
+          <button type="button" id="signup-wallet" className="pill pill-primary" onClick={() => void connectOwner()}>Connect wallet</button>
+        </div>
+      )
+    }
+    return (
+      <div className="auth-stack">
+        {viaWallet && owner ? (
+          <div className="auth-panel auth-wallet">
+            <div className="auth-wallet-id">
+              <WalletAvatar address={owner} size={32} />
+              <div>
+                <p className="auth-wallet-addr"><code>{shortHex(owner)}</code></p>
+                <p className={`auth-sub auth-net${walletWrongNet ? ' is-wrong' : ''}`}><span className={`net-dot ${walletWrongNet ? 'is-bad' : 'is-ok'}`} aria-hidden="true" />{chainName(conn.chainId).replace(/ \(\d+\)$/, '')}</p>
+              </div>
+              {!started ? <button type="button" id="signup-own-wallet" className="auth-link auth-wallet-other" onClick={() => void connectOwner()}>Use a different wallet</button> : null}
+            </div>
+            {!started ? <WalletPlan /> : null}
+          </div>
+        ) : null}
+        {walletWrongNet ? (
+          <button type="button" id="signup-switch-chain" className="pill pill-primary" disabled={sw.isPending} onClick={() => sw.run().catch((e) => setNote(plainError(e, 'Your wallet').message))}>{sw.isPending ? 'Approve in your wallet…' : `Switch to ${network}`}</button>
+        ) : (
+          <div className="auth-actions">
+            <button type="button" id="signup-create" className="pill pill-primary" disabled={wrongChain || (!config.onboardingOpen && !started)} onClick={() => wallet && run(wallet)}>{started ? 'Continue' : 'Create my treasury'}</button>
+            {!started ? <span className="auth-note">Free. Test network only.</span> : null}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <AuthLayout
       title="Create your Porthmos account"
-      lede={<>Your account is your treasury: two keys made in this browser, then a few short transactions set it up. About a minute on {network}. Free, test network only.</>}
+      lede={<>Your wallet is your account: it becomes the owner of a new Safe treasury, then a few short steps set it up. About a minute on {network}. Free, test network only.</>}
       footer={<>Already have an account? <Link to="/signin" id="signup-to-signin">Log in</Link></>}
     >
       {config ? (
@@ -220,44 +336,30 @@ export default function SignUp() {
               {activated ? (
                 <div className="auth-recovery" id="signup-recovery">
                   <h2>Download your recovery file</h2>
-                  <p>Your treasury is ready: Safe <code className="break">{safe}</code>{mintTx ? <> received its test USDC in <TxLink hash={mintTx} explorer={config.explorer} /></> : null}. The recovery file holds both keys. Without it, no other browser can open this treasury, and clearing this browser loses it.</p>
+                  <p>Your treasury is ready: Safe <code className="break">{safe}</code>{mintTx ? <> received its test USDC in <TxLink hash={mintTx} explorer={config.explorer} /></> : null}. The recovery file holds {viaWallet ? 'the bank seat key (your wallet stays the owner)' : 'both keys'}. Without it, no other browser can {viaWallet ? 'use the bank seat' : 'open this treasury'}, and clearing this browser loses it.</p>
                   {wallet ? <button type="button" id="signup-download" className="pill pill-primary" onClick={() => saveFile(wallet)}>{downloaded ? 'Download it again' : 'Download your recovery file'}</button> : null}
                   <label className="auth-check" htmlFor={ackId} aria-disabled={!downloaded}>
                     <input type="checkbox" id={ackId} name="signup-ack" disabled={!downloaded} checked={saved} onChange={(e) => setSaved(e.target.checked)} />
-                    <span>I saved my recovery file somewhere safe. Anyone with it controls this test treasury.</span>
+                    <span>I saved my recovery file somewhere safe. Anyone with it controls {viaWallet ? 'the bank seat of' : ''} this test treasury.</span>
                   </label>
                   {opening === 'confirm' && owner && wallet?.owner.type === 'burner' ? (
-                    <SignConfirm role="owner" address={owner} what="a one-line session message" confirmLabel="Sign in as owner" onCancel={() => setOpening(null)}
-                      onConfirm={() => { setOpening('signing'); signInLocal('owner') }}>
-                      <pre className="sign-preview">{`AEGIS session\nrole: owner\naddress: ${owner}\nchainId: ${config.chainId}\nissuedAt: the time you press Sign in`}</pre>
-                    </SignConfirm>
+                    <SiweConfirm role="owner" address={owner} onCancel={() => setOpening(null)} onConfirm={(p) => { setOpening('signing'); signInLocal('owner', p) }} />
                   ) : (
                     <button type="button" id="signup-open" className="pill pill-outline" disabled={!saved || opening === 'signing' || !tenant} onClick={openTreasury}>
-                      {opening === 'signing' ? 'Signing in…' : tenant ? 'Open my treasury' : 'Loading your treasury…'}
+                      {opening === 'signing' ? 'Opening…' : tenant ? 'Open my treasury' : 'Loading your treasury…'}
                     </button>
                   )}
+                  {ownerSession && !signedIn ? <p className="auth-sub">You already signed in when you activated, so opening needs no new signature.</p> : null}
                 </div>
-              ) : failure ? (
-                <div className="step-failure" role="alert">
-                  <p><strong>Stopped.</strong> {failure.message}</p>
-                  {failure.retry ? <button type="button" id="signup-retry" className="pill pill-primary" disabled={running} onClick={() => wallet && run(wallet)}>{running ? 'Working…' : 'Retry this step'}</button> : null}
-                </div>
-              ) : (
-                <div className="auth-actions">
-                  <button type="button" id="signup-create" className="pill pill-primary" disabled={running || wrongChain || (!config.onboardingOpen && !started)} onClick={begin}>
-                    {running ? (current?.txIndex ? `Transaction ${current.txIndex} of ${TX_STEPS.length}…` : 'Working…') : started ? 'Continue' : 'Create my treasury'}
-                  </button>
-                  {running && wallet?.owner.type === 'injected' ? <span className="auth-note">Confirm each request in your wallet. {txDone} of {TX_STEPS.length} sent.</span> : null}
-                  {!running && !started ? <span className="auth-note">Free. Test network only.</span> : null}
-                </div>
-              )}
+              ) : startBlock(config)}
+              {prompt ? <PromptCard prompt={prompt} /> : null}
             </div>
             <ol className="stepper">
               <li className={`step s-${wallet ? 'done' : 'idle'}`}>
                 <span className="step-n" aria-hidden="true">1</span>
                 <div className="step-body">
-                  <p className="step-title"><span>Two keys in this browser</span><span className="step-state">{wallet ? 'Done' : 'Waiting'}</span></p>
-                  <p className="step-what">An owner key and a bank key, so you can sit in both seats. They never leave this browser.</p>
+                  <p className="step-title"><span>{viaWallet ? 'Your wallet and a bank key' : 'Owner and bank keys'}</span><span className="step-state">{wallet ? 'Done' : 'Waiting'}</span></p>
+                  <p className="step-what">{viaWallet ? 'Your wallet is the owner. A bank key is made in this browser so you can also sit in the bank seat on testnet.' : 'An owner key and a bank key, so you can sit in both seats. They never leave this browser.'}</p>
                 </div>
               </li>
               {byGroup.map((g, i) => {
@@ -271,11 +373,11 @@ export default function SignUp() {
                       <p className="step-title"><span>{g.title}</span><span className="step-state">{STATUS_TEXT[st]}</span></p>
                       <p className="step-what">{g.what(config)}</p>
                       {g.id === 'safe' && safe ? <p className="step-tx">Address <code className="break">{safe}</code></p> : null}
-                      {hashes.length ? <p className="step-tx">{hashes.length > 1 ? 'Transactions' : 'Transaction'} {hashes.map((h, k) => <span key={h}>{k ? ', ' : ''}<TxLink hash={h} explorer={config.explorer} /></span>)}</p> : null}
+                      {hashes.length ? <p className="step-tx">{hashes.length > 1 ? 'Transactions' : 'Transaction'} {[...new Set(hashes)].map((h, k) => <span key={h}>{k ? ', ' : ''}<TxLink hash={h} explorer={config.explorer} /></span>)}</p> : null}
                       {g.id === 'policy' ? (
                         <ol className="substeps">
                           {g.steps.map((s) => (
-                            <li key={s.id} className={`s-${s.status}`}>
+                            <li key={s.id} className={`s-${s.status}`} title={STEP_WHY[s.id]}>
                               <span className="sub-label"><span className="nums sub-n">{s.txIndex! - 1}.</span> {s.label}</span>
                               <span className="sub-state">{s.hashes[0] ? <TxLink hash={s.hashes[s.hashes.length - 1]} explorer={config.explorer} /> : null} {STATUS_TEXT[s.status]}</span>
                             </li>
@@ -291,7 +393,7 @@ export default function SignUp() {
                 <span className="step-n" aria-hidden="true">{byGroup.length + 2}</span>
                 <div className="step-body">
                   <p className="step-title"><span>Download your recovery file</span><span className="step-state">{saved ? 'Done' : 'Waiting'}</span></p>
-                  <p className="step-what">One file with both keys. Restore it on another browser to log in there. Required before you enter the app.</p>
+                  <p className="step-what">{viaWallet ? 'One file with the bank seat key. Restore it on another browser to use the bank seat there.' : 'One file with both keys. Restore it on another browser to log in there.'} Required before you enter the app.</p>
                 </div>
               </li>
             </ol>
@@ -299,29 +401,29 @@ export default function SignUp() {
 
           <section className="auth-section auth-keys keys" aria-labelledby="signup-keys-title">
             <h2 id="signup-keys-title">Your keys</h2>
-            <p className="keys-warning"><strong>Test network only.</strong> Anyone with these keys or the recovery file controls this test treasury. Never send real funds to it. No key is ever sent to the server.</p>
+            <p className="keys-warning"><strong>Test network only.</strong> Anyone with the browser keys or the recovery file controls this test treasury's {viaWallet ? 'bank seat' : 'seats'}. Never send real funds to it. No key is ever sent to the server.</p>
             <dl className="facts">
-              <div><dt>Owner</dt><dd>{owner ? <><code className="break">{owner}</code>{wallet?.owner.type === 'injected' ? ' (your wallet)' : ''}</> : 'Made when you start'}</dd></div>
-              <div><dt>Bank</dt><dd>{bank ? <code className="break">{bank}</code> : 'Made when you start'}</dd></div>
+              <div><dt>Owner</dt><dd>{owner ? <><code className="break">{owner}</code><span className="auth-sub"> · {viaWallet ? keyLabel('wallet', 'owner') : keyLabel('local', 'owner')}</span></> : 'Your wallet, or a test key made when you start'}</dd></div>
+              <div><dt>Bank</dt><dd>{bank ? <><code className="break">{bank}</code><span className="auth-sub"> · {keyLabel('local', 'bank')}</span></> : 'Made when you start'}</dd></div>
             </dl>
             <div className="row-actions">
               {wallet ? <button type="button" id="signup-keys-download" className="button secondary" onClick={() => saveFile(wallet)}>Download recovery file</button> : null}
               <button type="button" id="signup-import" className="button quiet" onClick={() => fileRef.current?.click()}>Restore from recovery file</button>
               <input ref={fileRef} id={importId} type="file" accept="application/json,.json" hidden onChange={onImport} />
             </div>
-            {!started && !running ? (
+            {!started && !running && wallet && !viaWallet ? (
               <div className="own-wallet">
-                <p><Term def="An extension such as MetaMask, Rabby or Coinbase Wallet. It becomes the Safe owner and asks you to confirm each transaction. The bank always stays a key in this browser.">Use my own wallet</Term> as the owner instead.</p>
-                <button type="button" id="signup-own-wallet" className="button small quiet" disabled={connecting} onClick={useOwnWallet}>{connecting ? 'Waiting for the wallet…' : wallet?.owner.type === 'injected' ? 'Use a different wallet' : 'Use my own wallet'}</button>
+                <p><Term def="An extension such as MetaMask, Rabby or Coinbase Wallet, or a Coinbase Smart Wallet. It becomes the Safe owner and asks you to confirm each request. The bank seat stays a key in this browser.">Use my own wallet</Term> as the owner instead.</p>
+                <button type="button" id="signup-own-wallet" className="button small quiet" onClick={() => void connectOwner()}>Use my own wallet</button>
               </div>
             ) : null}
             {note ? <p className="ok-line" role="status">{note}</p> : null}
             {wallet ? (
               forget ? (
                 <div className="forget" role="group" aria-label="Forget keys">
-                  <p>This removes both keys from this browser. Without the recovery file you lose this test treasury.</p>
+                  <p>This removes the keys from this browser. Without the recovery file you lose this test treasury's {viaWallet ? 'bank seat' : 'keys'}.</p>
                   <div className="row-actions">
-                    <button type="button" id="signup-forget-confirm" className="button small danger" onClick={() => { setWallet(null); runner.current = null; setForget(false); setFailure(null); refresh(null) }}>Forget the keys</button>
+                    <button type="button" id="signup-forget-confirm" className="button small danger" onClick={() => { setWallet(null); runner.current = null; setForget(false); setFailure(null); setOwnerSession(null); refresh(null) }}>Forget the keys</button>
                     <button type="button" className="button small quiet" onClick={() => setForget(false)}>Keep them</button>
                   </div>
                 </div>

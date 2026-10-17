@@ -32,7 +32,7 @@ All parameters come from `GET /api/onboard/config`, never hard-coded in the web 
 4. Owner sends `Safe.execTransaction(safe, 0, enableModule(module), 0, 0, 0, 0, 0x0, 0x0, sig)` with the pre-validated signature form (`r = owner`, `s = 0`, `v = 1`, valid because `msg.sender == owner`).
 5. Owner sends, in order: `register(safe, owner, bank)`, `addVault(vaultA)`, `addVault(vaultB)`, `setAuthorizer(authorizer)`, `setExitKey(exitKey)`, `setAutoCap`, `setDailyCap`, `setMaxBandWidth`, `setMaxOracleAge` (values from config `params`). Reserve floor starts at 0 and is set later by the obligation flow.
 6. Bank sends `setBankLimit(safe, params.bankLimit)`.
-7. `POST /api/onboard/activate {safe, owner, issuedAt, signature}` (same message format as the session message in v1 with role `owner`). Server verifies on-chain: Safe threshold 1 with `owner` as an owner, module enabled, `registry.owner == owner`, `bank != 0 && bank != owner`, authorizer and exitKey equal the server keys, both vaults allowed, every cap within `paramBounds`. Then it mints `testUsdc` to the Safe once (recorded so a second call never mints again), stores the tenant, and starts serving it. Returns `{safe, mintTx, tenant}`.
+7. `POST /api/onboard/activate {safe, owner, message, signature}`: a Sign-In with Ethereum message (TECHNICAL-DOCUMENT 04, Signed structures) with the statement `Activate my Porthmos treasury and sign in as owner.` and the resources `urn:porthmos:role:owner` and `urn:porthmos:safe:<safe>`, nonce from `GET /api/auth/nonce`. Server verifies on-chain: Safe threshold 1 with `owner` as an owner, module enabled, `registry.owner == owner`, `bank != 0 && bank != owner`, authorizer and exitKey equal the server keys, both vaults allowed, every cap within `paramBounds`. Then it mints `testUsdc` to the Safe once (recorded so a second call never mints again), stores the tenant, and starts serving it. Returns `{safe, mintTx, tenant, session}`; `session` is the owner session, so no second signature is needed to enter the app.
 
 Steps 3 to 6 are skipped if the chain already shows them done. `GET /api/onboard/status?owner=0x..` returns `{safe, steps:{funded, safeDeployed, moduleEnabled, registered, vaults, authorizer, exitKey, caps, bankLimit, activated}}` read from the chain and DB, so the client resumes after a reload.
 
@@ -59,7 +59,8 @@ Burner path: the client sends steps 3 to 6 automatically and shows a stepper wit
 
 ## Sessions and isolation
 
-- `REQUIRE_SESSION_SIG=1` in production: every `POST /api/session` needs the v1 signed message.
+- `REQUIRE_SESSION_SIG=1` in production: every `POST /api/session {message, signature}` carries a Sign-In with Ethereum message (EIP-4361) with a single-use nonce from `GET /api/auth/nonce`, a domain on `SIWE_DOMAINS`, the service chain id and the statement `Sign in to Porthmos as owner.` or `… as bank.` with the matching `urn:porthmos:role:<role>` resource. Signatures from EOAs, ERC-1271 and ERC-6492 wallets are accepted, here and for the faucet message.
+- `GET /api/auth/roles?address=` returns `{address, owner:{safe, bank}|null, bank:[{safe, owner}], pendingOwner, contract}`, so a connected wallet finds its treasury in a browser with no keys. A connected wallet may also hold the bank seat when the registry bank equals it.
 - Owner session binds to the one tenant where `registry.owner(safe) == address`. Bank session binds to the tenants where `registry.bank(safe) == address`, read-only in the API except the bank actions it signs itself on-chain.
 - Every endpoint, tool and the LLM agent read the Safe from the session only. `/api/stream`, `/api/ledger`, `/api/events`, `/api/approvals/pending`, `/api/requests/*`, `/api/bank/clients` return only the session's tenants. A test proves tenant A cannot read or act on tenant B by any endpoint, including the SSE stream.
 
@@ -105,7 +106,8 @@ OpenAI-compatible via `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`. Production: CL
 
 Additive to the shapes above unless marked as a change.
 
-- `POST /api/session`: the response adds `safes` (owner: `[safe]`; bank: every tenant whose registry bank is the address).
+- `POST /api/session`: the response adds `safes` (owner: `[safe]`; bank: every tenant whose registry bank is the address) and `auth` (`eoa`, `erc1271`, `erc6492`, or `unsigned` on a local chain).
+- `GET /api/auth/nonce` returns `{nonce, issuedAt, expiresAt, chainId, statement}` with `Cache-Control: no-store`; `LIMIT_AUTH_PER_IP_MINUTE` (default 60) limits it and `/api/auth/roles` per IP.
 - `GET /api/onboard/status?owner=` returns `{safe, owner, bank, steps, tenant}`. `safe` is the predicted address; `bank` is set once registered; `tenant` is set once activated.
 - `POST /api/onboard/fund` returns `{txs:[{address, hash, amountWei, pending}], pending}`.
 - `POST /api/onboard/activate`: `safe` must equal the address predicted for `owner` (genuine proxy of the configured singleton, factory and fallback handler), and one owner holds at most one treasury. On failure: 409 `{error:"BadOnboardingState", detail, failed:[...]}` with codes `SafeNotDeployed ThresholdNotOne OwnerNotOnSafe ModuleNotEnabled RegistryOwnerMismatch BadBank WrongAuthorizer WrongExitKey VaultMissing:<name> AutoCapOutOfBounds DailyCapOutOfBounds MaxBandWidthOutOfBounds MaxOracleAgeOutOfBounds BankLimitOutOfBounds UnexpectedSafeAddress OwnerHasTreasury ActivationInProgress`. Every cap must be above 0 and at most its bound.

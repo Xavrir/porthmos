@@ -15,7 +15,7 @@ from eth_utils import is_address, to_checksum_address
 from aegis.chain.base import ChainClient
 from aegis.config import has_key, load_key
 from aegis.services import Services
-from aegis.sessions import SIG_MAX_AGE, session_message, verify_signed_message
+from aegis.sessions import SessionManager, verify_signed_message
 from aegis.tenants import present
 from aegis.workflow import WorkflowError
 
@@ -40,9 +40,10 @@ def utc_day(ts: float | None = None) -> int:
 
 
 class Onboarding:
-    def __init__(self, services: Services):
+    def __init__(self, services: Services, sessions: SessionManager | None = None):
         self.s = services
         self.settings = services.settings
+        self.sessions = sessions or SessionManager(services)
         self._faucet_lock = threading.Lock()
 
     @property
@@ -85,7 +86,7 @@ class Onboarding:
         if owner == bank:
             raise WorkflowError(400, "BadOnboardingState", "owner and bank must be different keys")
         verify_signed_message(onboarding_message(owner, bank, self.settings.chain_id, issued_at or ""),
-                              owner, signature, issued_at, FUND_SIG_MAX_AGE)
+                              owner, signature, issued_at, FUND_SIG_MAX_AGE, chain=self.chain)
         if not self.s.tenants.by_owner(owner) and not self.is_open():
             raise WorkflowError(403, "OnboardingClosed", "this demo is not accepting new treasuries right now")
         t = self.settings.tenant
@@ -204,10 +205,23 @@ class Onboarding:
         failed += self._cap_failures(pol)
         return failed
 
-    def activate(self, safe: str, owner: str, issued_at: str | None, signature: str | None, ip: str) -> dict:
+    def activate(self, safe: str, owner: str, message: str | None, signature: str | None, ip: str,
+                 legacy_issued_at: str | None = None) -> dict:
+        """The owner signs a SIWE message naming this Safe; a valid one also opens the owner session."""
         safe, owner = _address(safe, "safe"), _address(owner, "owner")
-        verify_signed_message(session_message("owner", owner, self.settings.chain_id, issued_at or ""),
-                              owner, signature, issued_at, SIG_MAX_AGE)
+        if message is None:
+            code = "SiweRequired" if legacy_issued_at or signature else "SignatureRequired"
+            raise WorkflowError(400 if code == "SiweRequired" else 401, code,
+                                "sign the SIWE activation message: GET /api/auth/nonce, then send message and "
+                                "signature")
+        signed = self.sessions.siwe.verify(message, signature, purpose="activate", safe=safe)
+        if signed.address.lower() != owner.lower():
+            raise WorkflowError(401, "BadSignature", "the signed message is not from this owner")
+        result = self._activate(safe, owner, ip)
+        result["session"] = self.sessions.open("owner", owner, auth=signed.method)
+        return result
+
+    def _activate(self, safe: str, owner: str, ip: str) -> dict:
         if self.chain.predict_safe(owner).lower() != safe.lower():
             raise WorkflowError(409, "BadOnboardingState", "safe is not the AEGIS Safe address for this owner",
                                 {"failed": ["UnexpectedSafeAddress"]})

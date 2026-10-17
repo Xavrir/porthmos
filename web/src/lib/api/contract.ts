@@ -17,7 +17,16 @@ export const REPLAY_SIMULATED_SIGNATURE = '0x' as Hex
 
 export type BankAction = 'bankFreeze' | 'bankUnfreeze' | 'revokeAuthorizer'
 
-export type SessionProof = { signature: Hex; issuedAt: string }
+// A signed Sign-In with Ethereum (EIP-4361) message; the service reads the role and address from the text.
+export type SessionProof = { message: string; signature: Hex }
+
+export type AuthRoles = {
+  address: Address
+  owner: { safe: Address; bank: Address | null } | null
+  bank: { safe: Address; owner: Address }[]
+  pendingOwner: { safe: Address } | null
+  contract: boolean
+}
 
 export interface AegisApi {
   readonly mode: Mode

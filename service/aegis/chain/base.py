@@ -233,6 +233,14 @@ class ChainClient(ABC):
     def escrow_events(self, from_block: int, to_block: int) -> list[dict]:
         """OrderCreated, MilestoneReleased and OrderRefunded in [from_block, to_block], in log order."""
 
+    def erc1271_valid(self, account: str, digest: bytes, signature: bytes) -> bool:
+        """ERC-1271 isValidSignature(digest, signature) on a deployed contract account returns the magic value."""
+        return False
+
+    def erc6492_valid(self, account: str, digest: bytes, signature: bytes) -> bool:
+        """ERC-6492: the deployless universal validator accepts a signature from a wallet not deployed yet."""
+        return False
+
     def address_of(self, key: str) -> str:
         from eth_account import Account
 

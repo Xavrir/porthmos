@@ -6,7 +6,7 @@ import { useSeatPicker } from '../lib/seats'
 import { chainName } from '../lib/wallet'
 import { Dialog } from './Dialog'
 import { SEATS, WalletSignIn } from './chrome'
-import { SignConfirm } from './SignConfirm'
+import { SiweConfirm } from './SignConfirm'
 import type { Role } from '../lib/types'
 
 const HOME: Record<Seat, string> = { owner: '/copilot', bank: '/bank', viewer: '/treasury' }
@@ -105,22 +105,19 @@ export function SeatChooser() {
               ) : null}
               {multi && wanted === s.seat ? (
                 <div className="seat-signin">
-                  {s.seat === 'owner' && wallet?.owner.type === 'injected' ? (
+                  {tenant?.seats[s.seat as Role] === 'wallet' ? (
                     <WalletSignIn />
                   ) : localAddress(s.seat) ? (
-                    <SignConfirm
+                    <SiweConfirm
                       role={s.seat}
                       address={localAddress(s.seat)!}
-                      what="a one-line session message"
-                      confirmLabel={`Sign in as ${s.seat === 'owner' ? 'owner' : 'bank'}`}
                       busy={waiting === s.seat}
-                      onConfirm={() => { setWaiting(s.seat as Role); setWanted(null); signInLocal(s.seat as Role) }}
+                      onConfirm={(p) => { setWaiting(s.seat as Role); setWanted(null); signInLocal(s.seat as Role, p) }}
                       onCancel={() => setWanted(null)}
-                    >
-                      <pre className="sign-preview">{`AEGIS session\nrole: ${s.seat}\naddress: ${localAddress(s.seat)}\nchainId: ${chainId}\nissuedAt: the time you press Sign in`}</pre>
-                      <p>It proves you hold the key. It costs nothing and moves nothing.</p>
-                    </SignConfirm>
-                  ) : null}
+                    />
+                  ) : (
+                    <p className="muted">This seat's key is not in this browser. {s.seat === 'bank' ? 'The bank seat key stays in the browser where the account was made; restore its recovery file there, or here from the sign-in page.' : 'Connect the owner wallet to use it.'}</p>
+                  )}
                   {demoAvailable ? (
                     <button type="button" className="button small quiet" onClick={() => { chooseDemo(s.seat as Role); done(s.seat) }}>Use the local {s.seat === 'owner' ? 'owner' : 'bank'} test key (reference treasury)</button>
                   ) : null}

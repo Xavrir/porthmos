@@ -5,7 +5,8 @@ import type {
   PendingApproval, RequestRecord, RiskReport, Role, ScenarioName, Session, StreamEvent, TreasuryState, TxRequest,
 } from '../types'
 import type { DemoVariant, OrderView, ProofResult, TradeFlowConfig } from '../tradeflow/types'
-import { ApiError, type AegisApi, type ApprovalSubmission, type NewObligation, type SessionProof, type StreamStatus } from './contract'
+import { ApiError, type AegisApi, type ApprovalSubmission, type AuthRoles, type NewObligation, type SessionProof, type StreamStatus } from './contract'
+import type { AuthNonce } from '../siwe'
 import { amount, PRICE_DECIMALS, fromUnits } from '../format'
 import { reconcile } from '../reconcile'
 import { bankClientFrom, eventsFrom, ledgerFrom, pendingFrom, requestFrom, riskVaultFrom } from './normalize'
@@ -27,6 +28,8 @@ export class HttpApi implements AegisApi {
   readonly mode = 'live' as const
   private token: string | null = null
   private readonly base: string
+  // Called when the service answers SessionRequired to a request that carried a token: the session expired or was revoked.
+  onSessionLost: (() => void) | null = null
 
   constructor(base: string) {
     this.base = base.replace(/\/$/, '')
@@ -55,6 +58,9 @@ export class HttpApi implements AegisApi {
       }
       const text = await res.text()
       const body = text ? safeJson(text) : undefined
+      if (res.status === 401 && headers['X-Aegis-Session'] && (body as { error?: string } | undefined)?.error === 'SessionRequired' && this.token === headers['X-Aegis-Session']) {
+        this.onSessionLost?.()
+      }
       if (!res.ok) throw new ApiError(errorText(body) || res.statusText || `HTTP ${res.status}`, res.status, body)
       return body as T
     } finally {
@@ -71,7 +77,16 @@ export class HttpApi implements AegisApi {
   }
 
   createSession(role: Role, address: Address, proof?: SessionProof): Promise<Session> {
-    return this.call<Session>('/api/session', { method: 'POST', body: JSON.stringify({ role, address, ...(proof ?? {}) }) })
+    const body = proof ? { message: proof.message, signature: proof.signature } : { role, address }
+    return this.call<Session>('/api/session', { method: 'POST', body: JSON.stringify(body) }, 20000, true)
+  }
+
+  authNonce(): Promise<AuthNonce> {
+    return this.call<AuthNonce>('/api/auth/nonce', { cache: 'no-store' }, 10000, true)
+  }
+
+  authRoles(address: Address): Promise<AuthRoles> {
+    return this.call<AuthRoles>(`/api/auth/roles?address=${address}`, {}, 10000, true)
   }
 
   async treasury(): Promise<TreasuryState> {
@@ -165,7 +180,7 @@ export class HttpApi implements AegisApi {
     return this.call('/api/onboard/fund', { method: 'POST', body: JSON.stringify(body) }, 75000)
   }
 
-  onboardActivate(body: { safe: Address; owner: Address; issuedAt: string; signature: Hex }): Promise<ActivateResult> {
+  onboardActivate(body: { safe: Address; owner: Address; message: string; signature: Hex }): Promise<ActivateResult> {
     return this.call('/api/onboard/activate', { method: 'POST', body: JSON.stringify(body) }, 75000)
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { zeroAddress } from 'viem'
-import { useConnect, useConnection, useConnectors, useDisconnect } from 'wagmi'
+import { useConnection, useDisconnect } from 'wagmi'
 import { DEFAULT_LIVE_URL, useAegis } from '../lib/source'
 import { useIdentity, type Seat } from '../lib/identity'
 import { chainName } from '../lib/wallet'
@@ -20,6 +20,9 @@ import type { Role } from '../lib/types'
 import { useTradeFlow } from '../lib/tradeflow/queries'
 import { useSignOut } from '../auth/hooks'
 import { ForgetDevice } from './ForgetDevice'
+import { AccountMenu, NetworkBanner } from './wallet/AccountMenu'
+import { useWalletPicker } from './wallet/WalletPicker'
+import { useSiwePreview } from '../lib/useSiwePreview'
 
 export const PAGES = [
   { to: '/treasury', label: 'Treasury', icon: 'treasury', hint: 'Balances, reserve and positions', group: 'Treasury' },
@@ -144,37 +147,39 @@ function useSeatLabel(): { prefix: string; name: string; note: string } {
 
 export function WalletSignIn({ onDone, signOutButton = true }: { onDone?: () => void; signOutButton?: boolean }) {
   const { identity, signIn, signOut, signedIn, session, sessionError, walletRole } = useIdentity()
+  const { chainId } = useAegis()
   const conn = useConnection()
-  const connectors = useConnectors()
-  const { mutate: connect, isPending, error: connectError } = useConnect()
+  const picker = useWalletPicker()
   const { mutate: disconnect } = useDisconnect()
-  const injected = connectors.find((c) => c.type === 'injected') ?? connectors[0]
   const [busy, setBusy] = useState(false)
+  const role = identity.kind === 'wallet' ? identity.role : null
+  const wrong = !!conn.address && conn.chainId !== chainId
+  const preview = useSiwePreview(role, identity.kind === 'wallet' ? identity.address : null, !!role && !signedIn && !wrong)
 
   if (!conn.address) {
-    return injected ? (
+    return (
       <div className="wallet">
-        <button type="button" className="button small secondary" disabled={isPending} onClick={() => connect({ connector: injected })}>
-          {isPending ? 'Waiting for the wallet…' : 'Connect wallet'}
-        </button>
-        {connectError ? <p className="error-note" role="alert">{connectError.message.split('\n')[0]}</p> : null}
+        <button type="button" className="button small secondary" onClick={() => void picker.open()}>Connect wallet</button>
       </div>
-    ) : <p className="muted">No browser wallet found. You can still look around read-only.</p>
+    )
   }
-  const role = identity.kind === 'wallet' ? identity.role : null
   return (
     <div className="wallet">
       <p>Wallet <code>{shortHex(conn.address)}</code> on {chainName(conn.chainId)}.{' '}
-        {walletRole.status === 'loading' ? 'Reading its role from the PolicyRegistry…' : role ? (walletRole.status === 'error' ? `The registry could not be read; the deployment file lists it as the ${seatTarget(role)}. The service checks the registry when you sign in.` : `The PolicyRegistry lists it as the ${seatTarget(role)} of this Safe.`) : 'This wallet holds no Porthmos role, so you can look around read-only.'}
+        {wrong ? `Porthmos runs on ${chainName(chainId)}.` : walletRole.status === 'loading' ? 'Reading its role from the PolicyRegistry…' : role ? (walletRole.status === 'error' ? `The registry could not be read; the deployment file lists it as the ${seatTarget(role)}. The service checks the registry when you sign in.` : `The PolicyRegistry lists it as the ${seatTarget(role)} of this Safe.`) : 'This wallet holds no Porthmos role, so you can look around read-only.'}
       </p>
-      {role && !signedIn ? (
-        <button type="button" className="button small" disabled={busy || session === 'pending'} onClick={async () => { setBusy(true); try { await signIn(); onDone?.() } finally { setBusy(false) } }}>
-          {busy || session === 'pending' ? 'Waiting for the signature…' : `Sign in as ${seatTarget(role)}`}
-        </button>
+      {wrong ? <button type="button" className="button small" onClick={() => void picker.open()}>Switch network</button> : null}
+      {role && !signedIn && !wrong ? (
+        <>
+          <p className="muted">You sign this Sign-In with Ethereum message. It costs nothing and moves nothing.</p>
+          <pre className="sign-preview">{preview.prepared?.message ?? (preview.error ? preview.error : 'Preparing the message…')}</pre>
+          <button type="button" className="button small" disabled={busy || session === 'pending' || !preview.prepared} onClick={async () => { if (!preview.prepared) return; setBusy(true); try { await signIn(preview.prepared); onDone?.() } finally { setBusy(false); preview.retry() } }}>
+            {busy || session === 'pending' ? 'Waiting for the signature…' : `Sign in as ${seatTarget(role)}`}
+          </button>
+        </>
       ) : null}
       {signedIn && signOutButton ? <button type="button" className="button small quiet" onClick={signOut}>Sign out</button> : null}
       <button type="button" className="button small quiet" onClick={() => { signOut(); disconnect() }}>Disconnect wallet</button>
-      {role && !signedIn ? <p className="muted">Signing in signs a one-line session message (role, address, chain, time). It costs nothing and moves nothing.</p> : null}
       {sessionError ? <p className="error-note" role="alert">{sessionError}</p> : null}
     </div>
   )
@@ -357,6 +362,7 @@ function TopTools() {
       <ModeIndicator />
       <ThemeMenu />
       <HelpMenu />
+      <AccountMenu />
     </div>
   )
 }
@@ -520,6 +526,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app">
       <a className="skip" href="#main">Skip to content</a>
       <TestModeBanner />
+      <NetworkBanner />
       <header className="app-head">
         <div className="app-top">
           <button type="button" className="icon-button menu-button" ref={menuRef} aria-expanded={drawer} aria-controls="app-side" aria-label="Menu" onClick={() => setOpen(true)}>

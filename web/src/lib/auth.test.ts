@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { deviceStatus, forgetConfirmed, gate, homeFor, isAppPath, returnPath, type DeviceInput, type GateInput } from './auth'
-import { sessionMessage, sessionPreview } from './session'
 
 const base: GateInput = { phase: 'ready', mode: 'live', replayChosen: false, identity: 'none', localConfirmed: false, signedIn: false, storedSignIn: false }
 const OWNER = '0x1111111111111111111111111111111111111111'
@@ -94,13 +93,6 @@ describe('sign in on this device', () => {
 })
 
 describe('signing previews and confirmations', () => {
-  it('previews exactly the session message, except for the time', () => {
-    const preview = sessionPreview('owner', OWNER, 84532).split('\n')
-    const signed = sessionMessage('owner', OWNER, 84532, '2026-10-17T00:00:00.000Z').split('\n')
-    expect(preview.slice(0, 4)).toEqual(signed.slice(0, 4))
-    expect(preview[4]).toBe('issuedAt: the time you press Sign in')
-  })
-
   it('forgets the device only after the typed word', () => {
     expect(forgetConfirmed('forget')).toBe(true)
     expect(forgetConfirmed(' FORGET ')).toBe(true)

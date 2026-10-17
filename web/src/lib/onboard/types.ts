@@ -39,7 +39,7 @@ export type OnboardStatus = { safe: Address | null; steps: OnboardSteps }
 
 export type FundResult = { txs: { address: Address; hash: Hex; amountWei: string; pending?: boolean }[] }
 
-export type ActivateResult = { safe: Address; mintTx: Hex | null; tenant?: unknown }
+export type ActivateResult = { safe: Address; mintTx: Hex | null; tenant?: unknown; session?: { token: string; role: 'owner'; address: Address; safe: Address; expiresAt: number } }
 
 export type AttackKind = 'tampered' | 'replay'
 

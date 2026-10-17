@@ -25,7 +25,7 @@ from aegis.config import ANVIL_KEYS, USDC, load_key, load_settings
 from aegis.eip712 import DAR, Approval, sign_approval_typed
 from aegis.onboarding import onboarding_message
 from aegis.runtime import Runtime
-from aegis.sessions import session_message
+from aegis.siwe import client_message
 from tests.integration.test_anvil import _reachable
 
 pytestmark = pytest.mark.integration
@@ -84,11 +84,14 @@ def fund(live, v: Visitor) -> dict:
     return r.json()
 
 
+def nonce(live) -> str:
+    return live.client.get("/api/auth/nonce").json()["nonce"]
+
+
 def activate(live, v: Visitor):
-    issued = datetime.now(UTC).isoformat()
+    message = client_message(address=v.owner.address, chain_id=31337, nonce=nonce(live), activate_safe=v.safe)
     return live.client.post("/api/onboard/activate", json={
-        "safe": v.safe, "owner": v.owner.address, "issuedAt": issued,
-        "signature": sign_text(v.owner, session_message("owner", v.owner.address, 31337, issued))})
+        "safe": v.safe, "owner": v.owner.address, "message": message, "signature": sign_text(v.owner, message)})
 
 
 def deploy_safe(live, v: Visitor) -> None:
@@ -131,10 +134,8 @@ def set_bank_limit(live, v: Visitor) -> None:
 
 
 def login(live, acct, role: str) -> dict:
-    issued = datetime.now(UTC).isoformat()
-    r = live.client.post("/api/session", json={"role": role, "address": acct.address, "issuedAt": issued,
-                                               "signature": sign_text(acct, session_message(role, acct.address,
-                                                                                            31337, issued))})
+    message = client_message(address=acct.address, chain_id=31337, nonce=nonce(live), role=role)
+    r = live.client.post("/api/session", json={"message": message, "signature": sign_text(acct, message)})
     assert r.status_code == 200, r.text
     return {"X-Aegis-Session": r.json()["token"]}
 

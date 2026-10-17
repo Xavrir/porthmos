@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY, role TEXT NOT NULL, address TEXT NOT NULL, safe TEXT,
   created_at REAL NOT NULL, expires_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS auth_nonces (
+  nonce TEXT PRIMARY KEY, created_at REAL NOT NULL, expires_at REAL NOT NULL, used_at REAL
+);
 CREATE TABLE IF NOT EXISTS obligations (
   id TEXT PRIMARY KEY, safe TEXT NOT NULL, label TEXT NOT NULL, amount TEXT NOT NULL, due INTEGER NOT NULL,
   kind TEXT NOT NULL, confirmed INTEGER NOT NULL, settled INTEGER NOT NULL DEFAULT 0,

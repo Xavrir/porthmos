@@ -33,7 +33,7 @@ export type Health = {
   tenants?: number
 }
 
-export type Session = { token: string; role: Role; safe?: Address; expiresAt?: number }
+export type Session = { token: string; role: Role; address?: Address; safe?: Address | null; safes?: Address[]; expiresAt?: number; auth?: string }
 
 export type VaultPosition = {
   address: Address

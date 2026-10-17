@@ -3,7 +3,9 @@ import { decodeFunctionData, recoverMessageAddress, zeroAddress, type Address, t
 import { privateKeyToAccount } from 'viem/accounts'
 import { REGISTRY_ABI } from '../deployment'
 import { FACTORY_ABI, SAFE_ABI } from './safe'
-import { OnboardRunner, type Call, type OwnerSigner, type Sender } from './runner'
+import { parseSiweMessage } from 'viem/siwe'
+import { OnboardRunner, type Call, type OwnerSigner, type Sender, type WalletPrompt } from './runner'
+import { ACTIVATION_STATEMENT } from '../siwe'
 import type { OnboardConfig, OnboardSteps } from './types'
 
 const config: OnboardConfig = {
@@ -86,16 +88,27 @@ function world() {
       s.balance.set(b.owner, 10n ** 15n); s.balance.set(b.bank, 10n ** 15n); s.funded = true
       return { txs: [{ address: b.owner, hash: `0x${'aa'.repeat(32)}` as Hex, amountWei: '1' }] }
     },
-    onboardActivate: async (b: { safe: Address; owner: Address; issuedAt: string; signature: Hex }) => {
-      const signer = await recoverMessageAddress({ message: `AEGIS session\nrole: owner\naddress: ${b.owner}\nchainId: 84532\nissuedAt: ${b.issuedAt}`, signature: b.signature })
-      calls.activate.push(signer)
+    authNonce: async () => ({ nonce: `n0nce${++nonces}abcdef` }),
+    onboardActivate: async (b: { safe: Address; owner: Address; message: string; signature: Hex }) => {
+      const m = parseSiweMessage(b.message)
+      expect(m.statement).toBe(ACTIVATION_STATEMENT)
+      expect(m.resources).toEqual(['urn:porthmos:role:owner', `urn:porthmos:safe:${b.safe}`])
+      expect([m.domain, m.uri, m.chainId, m.address]).toEqual(['porthmos.vercel.app', 'https://porthmos.vercel.app', 84532, b.owner])
+      calls.activate.push(await recoverMessageAddress({ message: b.message, signature: b.signature }))
       s.activated = true
-      return { safe: b.safe, mintTx: `0x${'bb'.repeat(32)}` as Hex }
+      return { safe: b.safe, mintTx: `0x${'bb'.repeat(32)}` as Hex, session: { token: 'tok', role: 'owner' as const, address: b.owner, safe: b.safe, expiresAt: 1 } }
     },
   }
+  let nonces = 0
   let saved: Address | null = null
-  const runner = (seed?: OnboardRunner['state']) => new OnboardRunner({ config, api, client, owner, bank, onSafe: (a) => { saved = a }, onUpdate: () => undefined }, seed)
-  return { s, log, calls, runner, owner, saved: () => saved }
+  const sessions: string[] = []
+  const prompts: (WalletPrompt | null)[] = []
+  const origin = { domain: 'porthmos.vercel.app', uri: 'https://porthmos.vercel.app' }
+  const runner = (seed?: OnboardRunner['state'], o: OwnerSigner = owner) => new OnboardRunner({
+    config, api, client, owner: o, bank, origin, onSafe: (a) => { saved = a }, onUpdate: () => undefined,
+    onSession: (x) => sessions.push(x.token), onPrompt: (p) => prompts.push(p),
+  }, seed)
+  return { s, log, calls, runner, owner, saved: () => saved, sessions, prompts, apply, ownerAcct }
 }
 
 describe('OnboardRunner', () => {
@@ -112,6 +125,36 @@ describe('OnboardRunner', () => {
     expect(w.saved()).toMatch(/^0x[0-9a-fA-F]{40}$/)
     expect(r.state.every((x) => x.status === 'done')).toBe(true)
     expect(r.state.find((x) => x.id === 'activate')!.hashes).toEqual([`0x${'bb'.repeat(32)}`])
+    expect(w.sessions).toEqual(['tok'])
+    expect(w.prompts).toEqual([])
+  })
+
+  it('explains every wallet request in plain words and batches the ten setup calls when the wallet can', async () => {
+    const w = world()
+    const batches: Call[][] = []
+    const wallet: OwnerSigner = {
+      ...w.owner, kind: 'injected',
+      sendBatch: async (calls) => { batches.push(calls); return calls.map((c) => w.apply(w.ownerAcct.address, c)) },
+    }
+    await w.runner(undefined, wallet).run()
+    const shown = w.prompts.filter((p): p is WalletPrompt => p !== null)
+    expect(shown.map((p) => p.kind)).toEqual(['sign', 'tx', 'batch', 'sign'])
+    expect(w.prompts.filter((p) => p === null).length).toBe(shown.length)
+    const fund = shown[0] as Extract<WalletPrompt, { kind: 'sign' }>
+    expect(fund.text.startsWith('AEGIS onboarding\n')).toBe(true)
+    const batch = shown[2] as Extract<WalletPrompt, { kind: 'batch' }>
+    expect(batch.calls.map((c) => c.step)).toEqual(['module', 'register', 'vaultA', 'vaultB', 'authorizer', 'exitKey', 'autoCap', 'dailyCap', 'maxBandWidth', 'maxOracleAge'])
+    expect(batches.length).toBe(1)
+    const act = shown[3] as Extract<WalletPrompt, { kind: 'sign' }>
+    expect(act.text).toContain('wants you to sign in with your Ethereum account')
+  })
+
+  it('without batching, asks for each transaction with its number', async () => {
+    const w = world()
+    await w.runner(undefined, { ...w.owner, kind: 'injected' }).run()
+    const txs = w.prompts.filter((p): p is Extract<WalletPrompt, { kind: 'tx' }> => p?.kind === 'tx')
+    expect(txs.map((p) => p.index)).toEqual([undefined, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(txs.every((p) => p.why.length > 10)).toBe(true)
   })
 
   it('resumes: steps already on-chain are skipped, not sent again', async () => {
@@ -139,7 +182,7 @@ describe('OnboardRunner', () => {
 
   it('stops with a plain message when onboarding is closed', async () => {
     const w = world()
-    const r = new OnboardRunner({ config: { ...config, onboardingOpen: false }, api: { onboardStatus: async () => ({ safe: null, steps: { funded: false, safeDeployed: false, moduleEnabled: false, registered: false, vaults: false, authorizer: false, exitKey: false, caps: false, bankLimit: false, activated: false } }), onboardFund: async () => ({ txs: [] }), onboardActivate: async () => ({ safe: zeroAddress, mintTx: null }) }, client: { readContract: async () => CODE } as unknown as PublicClient, owner: w.owner, bank: { address: zeroAddress, send: async () => '0x' }, onSafe: () => undefined, onUpdate: () => undefined })
+    const r = new OnboardRunner({ config: { ...config, onboardingOpen: false }, api: { onboardStatus: async () => ({ safe: null, steps: { funded: false, safeDeployed: false, moduleEnabled: false, registered: false, vaults: false, authorizer: false, exitKey: false, caps: false, bankLimit: false, activated: false } }), onboardFund: async () => ({ txs: [] }), onboardActivate: async () => ({ safe: zeroAddress, mintTx: null }), authNonce: async () => ({ nonce: 'abcdefgh1' }) }, client: { readContract: async () => CODE } as unknown as PublicClient, owner: w.owner, bank: { address: zeroAddress, send: async () => '0x' }, onSafe: () => undefined, onUpdate: () => undefined })
     await expect(r.run()).rejects.toThrow(/closed/)
     expect(w.log).toEqual([])
   })

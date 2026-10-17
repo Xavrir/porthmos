@@ -8,11 +8,11 @@
 | Team name | TBD |
 | Competition track | International AI Track, Topic F: Agent Wallet |
 | Submission date | TBD (deadline 20 Oct 2026, 23:59 UTC+8) |
-| Document status | Draft v0.5. TradeFlow is now built and recorded on Base Sepolia (E6a to E6g). v0.4 applied the eleven confirmed findings of the design tribunal on v0.3 (see "Changes from v0.3"); v0.5 records what was built (see "Changes from v0.4"). The previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.4.md`. Values marked TBD are filled in after testing. |
+| Document status | Draft v0.6. v0.6 adds wallet sign-in with Sign-In with Ethereum (EIP-4361), smart contract wallet signatures (ERC-1271, ERC-6492) and the wallet picker (see "Changes from v0.5"); the previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.5.md`. TradeFlow is now built and recorded on Base Sepolia (E6a to E6g). v0.4 applied the eleven confirmed findings of the design tribunal on v0.3 (see "Changes from v0.3"); v0.5 records what was built (see "Changes from v0.4"). The previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.4.md`. Values marked TBD are filled in after testing. |
 
 **Build status labels.** **[Built]** means the part runs on Base Sepolia and has tests in the repository. **[In progress]** means the part is being built now. In v0.5 all of TradeFlow is [Built] except the web Orders page, which is [In progress]; the label **[Built]** no longer marks any part, and v0.4 text that used it now reads [Built]. A change made in v0.4 is marked with the finding it answers, for example (v0.4, C1). Text without a label describes the built system. The TradeEscrow contract interface in 04 is unchanged from v0.3.
 
-**Names that do not change.** The product is now Porthmos. On-chain and API identifiers keep the old name, because a change would alter deployed bytecode, signature digests, Safe addresses or live URLs. These stay as they are: the contract names `AegisModule` and `PolicyRegistry`; the EIP-712 domain name `"AegisModule"`; the event `AegisExecuted`; the mock vault token names ("Aegis Vault A", "Aegis Vault B"); the signed message prefixes that the backend verifies (`AEGIS onboarding`, `AEGIS session`); the Safe salt tag `aegis-v2`; the browser storage key `aegis.wallet.v1`; the headers `X-Aegis-Session` and `X-Aegis-Admin` and the cookie `aegis_session`; the Python package `aegis`; the repository `Xavrir/porthmos`; the site `porthmos.vercel.app`; and the API host `aegis-api.150-109-23-187.sslip.io`.
+**Names that do not change.** The product is now Porthmos. On-chain and API identifiers keep the old name, because a change would alter deployed bytecode, signature digests, Safe addresses or live URLs. These stay as they are: the contract names `AegisModule` and `PolicyRegistry`; the EIP-712 domain name `"AegisModule"`; the event `AegisExecuted`; the mock vault token names ("Aegis Vault A", "Aegis Vault B"); the faucet message prefix that the backend verifies (`AEGIS onboarding`; the old `AEGIS session` message is retired in v0.6 and replaced by Sign-In with Ethereum); the Safe salt tag `aegis-v2`; the browser storage key `aegis.wallet.v1`; the headers `X-Aegis-Session` and `X-Aegis-Admin` and the cookie `aegis_session`; the Python package `aegis`; the repository `Xavrir/porthmos`; the site `porthmos.vercel.app`; and the API host `aegis-api.150-109-23-187.sslip.io`.
 
 ---
 
@@ -210,12 +210,12 @@ Browser key storage is `localStorage["aegis.wallet.v1"] = {version:1, chainId:84
 | Step | Sender | Transaction or call | Notes |
 |---|---|---|---|
 | 1 | Browser | Create or load the owner and bank keys | Kept in browser storage |
-| 2 | Browser to API | `POST /api/onboard/fund {owner, bank, issuedAt, signature}`; the owner signs `AEGIS onboarding\nowner: …\nbank: …\nchainId: 84532\nissuedAt: …` with personal_sign (max age 5 min) | The server tops up each address to its target (owner 0.00005 ETH, bank 0.00002 ETH) only if it is below half, once per address ever, and waits up to 60 s for receipts |
+| 2 | Browser to API | `POST /api/onboard/fund {owner, bank, issuedAt, signature}`; the owner signs `AEGIS onboarding\nowner: …\nbank: …\nchainId: 84532\nissuedAt: …` with personal_sign (max age 5 min). The format is unchanged in v0.6; the signature may come from an EOA, a deployed smart wallet (ERC-1271) or a not yet deployed one (ERC-6492) | The server tops up each address to its target (owner 0.00005 ETH, bank 0.00002 ETH) only if it is below half, once per address ever, and waits up to 60 s for receipts |
 | 3 | Owner | `SafeProxyFactory.createProxyWithNonce(SafeL2 v1.4.1, setup([owner], 1, 0x0, 0x, fallbackHandler, 0x0, 0, 0x0), saltNonce)` with `saltNonce = uint256(keccak256(abi.encodePacked(owner, "aegis-v2")))` | The client predicts the Safe address first and skips this step if code exists there |
 | 4 | Owner | `Safe.execTransaction(safe, 0, enableModule(AegisModule), …)` with the pre-validated signature form (`r = owner`, `s = 0`, `v = 1`) | Valid because `msg.sender` is the owner |
 | 5 | Owner | `register(safe, owner, bank)`, `addVault(A)`, `addVault(B)`, `setAuthorizer`, `setExitKey`, `setAutoCap`, `setDailyCap`, `setMaxBandWidth`, `setMaxOracleAge` | Nine transactions with values from config. The reserve floor starts at 0. An injected wallet may batch steps 4 and 5 with EIP-5792 when it reports atomic batch support |
 | 6 | Bank | `setBankLimit(safe, bankLimit)` | Always the bank burner key |
-| 7 | Browser to API | `POST /api/onboard/activate {safe, owner, issuedAt, signature}` with the owner session message | The server verifies the chain, mints 100,000 test USDC to the Safe once, stores the tenant and starts serving it |
+| 7 | Browser to API | `POST /api/onboard/activate {safe, owner, message, signature}`: a SIWE message (see 04, Signed structures) with the statement `Activate my Porthmos treasury and sign in as owner.` and the resources `urn:porthmos:role:owner` and `urn:porthmos:safe:<safe>` | The server verifies the chain, mints 100,000 test USDC to the Safe once, stores the tenant, starts serving it, and returns the owner session as `session`, so the visitor signs once to activate and sign in |
 
 In total: 11 owner transactions, 1 bank transaction, and up to 3 server transactions (2 gas drips, 1 mint). `GET /api/onboard/status?owner=` reads every step from the chain and the database, so the client resumes after a reload and skips steps that are already done.
 
@@ -235,7 +235,8 @@ In total: 11 owner transactions, 1 bank transaction, and up to 3 server transact
 The mint is claimed with one atomic database update, so concurrent calls cannot mint twice. A mint still pending after 60 s is kept as recorded and never retried.
 
 **Sessions and isolation.**
-- On 84532, every `POST /api/session` needs the owner or bank to sign `AEGIS session\nrole: …\naddress: …\nchainId: 84532\nissuedAt: …` with personal_sign (max age 10 min). Sessions last 12 hours.
+- Sessions open with Sign-In with Ethereum (EIP-4361, v0.6). The browser asks `GET /api/auth/nonce` (random, stored server-side, 10 min, rate limited per IP), builds the message, shows its exact text, and the key or wallet signs it with personal_sign. `POST /api/session {message, signature}` parses the text strictly (it must rebuild byte for byte), then checks: the domain is on the `SIWE_DOMAINS` allowlist; the URI is the https origin of that domain (http only on localhost); version 1; the chain id is the service chain; Issued At is at most 10 min old and not in the future; Expiration Time is present, in the future and at most 1 h after Issued At; the statement is `Sign in to Porthmos as owner.` or `… as bank.` and the only role resource matches it. Then it verifies the signature (EOA ecrecover, else ERC-6492 through the deployless universal validator, else ERC-1271 `isValidSignature` by `eth_call`) and only then consumes the nonce, once. Role and address come from the signed text. Sessions last 12 hours. `REQUIRE_SESSION_SIG=0` (Anvil default) still allows an unsigned session for local tests; the old `{signature, issuedAt}` body is refused with `400 SiweRequired`.
+- `GET /api/auth/roles?address=` returns what an address may sign in as: `{owner: {safe, bank} | null, bank: [{safe, owner}], pendingOwner, contract}`. Everything in it is public on-chain; it lets a returning wallet find its treasury in a browser that holds no keys.
 - An owner session binds to the one activated tenant where `registry.owner(safe)` equals the address, read from the chain when the session is created. A bank session is read-only across the tenants whose registry bank is the address; the bank acts on-chain with its own key.
 - Every endpoint, tool and the LLM agent read the Safe from the session only. The stream, ledger, events, pending approvals, requests and bank client list return only the session's tenants. Stream events that carry a Safe reach only that tenant's sessions; market-wide events (oracle pokes, market scenarios) carry no Safe and reach everyone.
 - The Authorizer refuses to sign for a Safe that is not a served tenant (`UnknownSafe`).
@@ -642,12 +643,31 @@ DAR { safe, op, vault, amount, minOut, policyVersion, priceLow, priceHigh,
 
 The DAR expiry (120 s) is shorter than `maxOracleAge` (180 s), so a DAR never outlives the market data it was planned on. Nonces are random 256-bit values tracked in a used-set, so independent signers never collide. The EIP-712 domain is `name = "AegisModule"`, `version = "1"`, the chain id and the module address. `approvalHash` is the EIP-712 struct hash of the Approval, or zero for T1 and T2.
 
-Off-chain signed messages (personal_sign, verified by the backend; the prefixes keep the old name):
+Off-chain signed messages (personal_sign, verified by the backend for EOAs, ERC-1271 and ERC-6492 wallets):
 
 ```
-AEGIS onboarding\nowner: <checksum>\nbank: <checksum>\nchainId: 84532\nissuedAt: <ISO-8601>     max age 5 min
-AEGIS session\nrole: owner|bank\naddress: <checksum>\nchainId: 84532\nissuedAt: <ISO-8601>     max age 10 min
+AEGIS onboarding\nowner: <checksum>\nbank: <checksum>\nchainId: 84532\nissuedAt: <ISO-8601>     max age 5 min (faucet, unchanged)
 ```
+
+Sessions and activation use Sign-In with Ethereum (EIP-4361) since v0.6, in the exact layout of viem's `createSiweMessage`:
+
+```
+<domain> wants you to sign in with your Ethereum account:
+<EIP-55 address>
+
+Sign in to Porthmos as owner.            (or: as bank.)
+
+URI: https://<domain>                    (http only for localhost and 127.0.0.1)
+Version: 1
+Chain ID: 84532
+Nonce: <32 hex chars from GET /api/auth/nonce, single use, 10 min>
+Issued At: <RFC 3339, at most 10 min old, at most 60 s in the future>
+Expiration Time: <after now, at most 1 h after Issued At; the web uses 10 min>
+Resources:
+- urn:porthmos:role:owner                (exactly one role resource, matching the statement)
+```
+
+Activation uses the same layout with the statement `Activate my Porthmos treasury and sign in as owner.` and the two resources `urn:porthmos:role:owner` and `urn:porthmos:safe:<EIP-55 Safe>`. A session message cannot activate and an activation message cannot open a plain session, because the statements differ. The faucet message keeps its fixed format on purpose: it carries no session, a replay only re-asks a drip that is paid once per address ever, and keeping it leaves the recorded evidence and the evidence script's faucet path unchanged.
 
 **TradeFlow structures [Built].** EIP-712 domain: `name = "TradeEscrow"`, `version = "1"`, the chain id and the TradeEscrow address. The separate domain means a DAR signature can never be read as a release authorization, and the reverse.
 
@@ -1201,6 +1221,18 @@ Remaining plan (dates in UTC+8):
 ---
 
 ## Changes
+
+### Changes from v0.5
+
+| Change | Section |
+|---|---|
+| Wallet sign-in: an own wallet picker lists every EIP-6963 wallet with its own name and icon, the Coinbase Smart Wallet (wagmi `coinbaseWallet`, smart wallet only) and WalletConnect when `VITE_WALLETCONNECT_PROJECT_ID` is set; states for connecting, declined, wrong network (one-click switch or add of Base Sepolia, RPC `https://sepolia.base.org`, explorer `https://sepolia.basescan.org`) and no wallet installed; the last used wallet is listed first | 02 |
+| Sign-In with Ethereum replaces the `AEGIS session` message: `GET /api/auth/nonce`, `POST /api/session {message, signature}`, domain allowlist `SIWE_DOMAINS`, single-use nonce, time window, role resource; activation signs a SIWE message naming the Safe and returns the owner session | 02 Sessions, 04 Signed structures |
+| Smart contract wallets: every backend signature check (session, activation, faucet) accepts ERC-1271 and ERC-6492, so a Coinbase Smart Wallet can own a Safe, ask the faucet before its first transaction and sign in | 02, 04 |
+| Wallet = account: `GET /api/auth/roles` finds a connected wallet's treasury without keys in the browser; the bank seat can be a connected wallet when the registry bank equals it; the browser bank key is labelled "Bank seat key, kept in this browser for testnet" | 02 |
+| Account menu (local identicon, ENS name from mainnet when it resolves fast, network, copy, Basescan, disconnect); a changed account ends the session at once and asks to sign in again; a changed chain shows a wrong-network banner; wallet sessions survive a reload in the same tab only | 02 |
+| Onboarding with a wallet explains each wallet request in plain words while the wallet is open, and batches the ten setup calls in one EIP-5792 call when the wallet supports atomic batches | 02 |
+| Tests: the service adds 25 unit tests (`tests/test_siwe.py`: message format, nonce single use and expiry, domain, URI, chain, time window, replay, role binding, ERC-1271 and ERC-6492) and 2 integration tests (`tests/integration/test_smart_wallet_anvil.py`: a Coinbase-style smart wallet onboards and signs in on Anvil); the web adds 34 (SIWE, wallet list, wrong network, identicon, onboarding prompts, dates); browser QA adds `scripts/qa/wallet.js` | 05 |
 
 ### Changes from v0.4
 

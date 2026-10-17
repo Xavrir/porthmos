@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { privateKeyToAccount } from 'viem/accounts'
 import { recoverMessageAddress } from 'viem'
-import { onboardingMessage, sessionMessage } from './messages'
+import { onboardingMessage } from './messages'
 
 const owner = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8'
 const bank = '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc'
@@ -19,13 +19,5 @@ describe('onboarding message', () => {
     const message = onboardingMessage(acct.address, bank, 84532, at)
     const signature = await acct.signMessage({ message })
     expect(await recoverMessageAddress({ message, signature })).toBe(acct.address)
-  })
-})
-
-describe('activation message', () => {
-  it('is the v1 session message with role owner', () => {
-    expect(sessionMessage('owner', owner, 84532, at)).toBe(
-      'AEGIS session\nrole: owner\naddress: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8\nchainId: 84532\nissuedAt: 2026-10-15T12:00:00.000Z',
-    )
   })
 })

@@ -6,12 +6,14 @@ import threading
 import time
 
 import httpx
+from eth_abi import encode as abi_encode
 from eth_account import Account
-from eth_utils import to_checksum_address
+from eth_utils import keccak, to_checksum_address
 
 from aegis.chain import safe as safe_lib
 from aegis.chain.abi import Contract, decode_revert, error_name
 from aegis.chain.base import ChainClient, CheckResult, PolicyState, Receipt, Round, SimResult
+from aegis.chain.erc6492 import ERC6492_VALIDATOR_BYTECODE
 from aegis.config import UINT256_MAX, Settings
 from aegis.eip712 import DAR, Approval, hex32, to_bytes32
 from aegis.tradeflow.typed import MilestoneTerms, Order
@@ -141,6 +143,24 @@ class RpcChain(ChainClient):
     def code_size(self, who: str) -> int:
         code = self._rpc("eth_getCode", [to_checksum_address(who), "latest"])
         return max(0, (len(code) - 2) // 2)
+
+    def erc1271_valid(self, account: str, digest: bytes, signature: bytes) -> bool:
+        selector = keccak(text="isValidSignature(bytes32,bytes)")[:4]
+        data = selector + abi_encode(["bytes32", "bytes"], [digest, signature])
+        try:
+            out = self._eth_call(account, data)
+        except (CallReverted, RpcError):
+            return False
+        return len(out) >= 4 and out[:4] == bytes.fromhex("1626ba7e")
+
+    def erc6492_valid(self, account: str, digest: bytes, signature: bytes) -> bool:
+        data = ERC6492_VALIDATOR_BYTECODE + abi_encode(["address", "bytes32", "bytes"],
+                                                       [to_checksum_address(account), digest, signature])
+        try:
+            out = self._rpc("eth_call", [{"data": "0x" + data.hex()}, "latest"])
+        except RpcError:
+            return False
+        return isinstance(out, str) and out.lower() in ("0x01", "0x" + "00" * 31 + "01")
 
     def send_value(self, key: str, to: str, value: int) -> str:
         return self._send(key, to, b"", value=value, gas=21_000)

@@ -146,6 +146,9 @@ class FakeChain(ChainClient):
         self.escrowed_total = 0
         self.escrow_nonces: set[tuple[str, int]] = set()
         self.escrow_logs: list[dict] = []
+        # Smart contract wallets for signature tests: address -> owner EOA; deployed ones also have code.
+        self.contract_wallets: dict[str, str] = {}
+        self.counterfactual_wallets: dict[str, str] = {}
 
     def add_vault(self, address: str, name: str) -> FakeVault:
         v = FakeVault(to_checksum_address(address), name)
@@ -604,7 +607,21 @@ class FakeChain(ChainClient):
         w = who.lower()
         known = {self.module_address.lower(), self.registry_address.lower(), self.usdc_address.lower(),
                  self.feed_address.lower(), self.escrow_address.lower(), self.multisend_address.lower()}
-        return 1 if (w in self.safe_accounts or w in self.vaults or w in known) else 0
+        return 1 if (w in self.safe_accounts or w in self.vaults or w in known or w in self.contract_wallets) else 0
+
+    def erc1271_valid(self, account: str, digest: bytes, signature: bytes) -> bool:
+        owner = self.contract_wallets.get(account.lower())
+        return bool(owner) and _recover_digest(digest, signature) == owner.lower()
+
+    def erc6492_valid(self, account: str, digest: bytes, signature: bytes) -> bool:
+        from eth_abi import decode as abi_decode
+
+        owner = self.contract_wallets.get(account.lower()) or self.counterfactual_wallets.get(account.lower())
+        try:
+            _factory, _calldata, inner = abi_decode(["address", "bytes", "bytes"], signature[:-32])
+        except Exception:
+            return False
+        return bool(owner) and _recover_digest(digest, inner) == owner.lower()
 
     def send_value(self, key: str, to: str, value: int) -> str:
         with self.lock:
@@ -847,3 +864,12 @@ class FakeChain(ChainClient):
 
     def escrow_events(self, from_block: int, to_block: int) -> list[dict]:
         return [dict(e) for e in self.escrow_logs if from_block <= e["blockNumber"] <= to_block]
+
+
+def _recover_digest(digest: bytes, signature: bytes) -> str | None:
+    from eth_account import Account
+
+    try:
+        return Account._recover_hash(digest, signature=signature).lower()
+    except Exception:
+        return None

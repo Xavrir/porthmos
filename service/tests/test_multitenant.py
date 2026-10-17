@@ -29,7 +29,7 @@ from aegis.eip712 import Approval, sign_approval_typed
 from aegis.onboarding import onboarding_message
 from aegis.procs.authorizer import Authorizer
 from aegis.runtime import Runtime
-from aegis.sessions import session_message
+from aegis.siwe import client_message
 from aegis.supervisor import child_env
 from aegis.tenants import TenantStore
 
@@ -60,10 +60,20 @@ def configure(env, owner, bank, module: bool = True, **overrides) -> str:
     return safe
 
 
-def activation(owner, safe: str, chain_id: int = 31337) -> dict:
-    issued = iso()
-    return {"safe": safe, "owner": owner.address, "issuedAt": issued,
-            "signature": sign_text(owner, session_message("owner", owner.address, chain_id, issued))}
+def nonce(client) -> str:
+    r = client.get("/api/auth/nonce")
+    assert r.status_code == 200, r.text
+    return r.json()["nonce"]
+
+
+def activation(client, owner, safe: str, chain_id: int = 31337, signer=None) -> dict:
+    message = client_message(address=owner.address, chain_id=chain_id, nonce=nonce(client), activate_safe=safe)
+    return {"safe": safe, "owner": owner.address, "message": message, "signature": sign_text(signer or owner, message)}
+
+
+def siwe_session(client, acct, role: str, chain_id: int = 31337, **kw) -> dict:
+    message = client_message(address=acct.address, chain_id=chain_id, nonce=nonce(client), role=role, **kw)
+    return {"message": message, "signature": sign_text(acct, message)}
 
 
 def fund_body(owner, bank, issued: str | None = None, chain_id: int = 31337) -> dict:
@@ -80,7 +90,7 @@ def sync_floor(env, safe: str) -> None:
 def onboard(client, env) -> Tenant:
     owner, bank = Account.create(), Account.create()
     safe = configure(env, owner, bank)
-    r = client.post("/api/onboard/activate", json=activation(owner, safe))
+    r = client.post("/api/onboard/activate", json=activation(client, owner, safe))
     assert r.status_code == 200, r.text
     sync_floor(env, safe)
     return Tenant(safe, owner, bank)
@@ -171,7 +181,7 @@ def test_activation_rejects_misconfiguration(api, expected):
         safe = configure(env, owner, bank, allowed={env.vault_a.lower()})
     else:
         safe = configure(env, owner, bank, **change)
-    r = client.post("/api/onboard/activate", json=activation(owner, safe))
+    r = client.post("/api/onboard/activate", json=activation(client, owner, safe))
     assert r.status_code == 409 and r.json()["error"] == "BadOnboardingState"
     assert expected in r.json()["failed"]
     assert env.chain.usdc_balance(safe) == 0 and safe not in env.services.safes
@@ -182,13 +192,12 @@ def test_activation_rejects_misconfiguration(api, expected):
 def test_activation_rejects_wrong_or_missing_safe(api):
     client, env = api
     owner, other = Account.create(), Account.create()
-    r = client.post("/api/onboard/activate", json=activation(owner, env.chain.predict_safe(owner.address)))
+    r = client.post("/api/onboard/activate", json=activation(client, owner, env.chain.predict_safe(owner.address)))
     assert r.json()["failed"] == ["SafeNotDeployed"]
     foreign = configure(env, other, Account.create())
-    r = client.post("/api/onboard/activate", json=activation(owner, foreign))
+    r = client.post("/api/onboard/activate", json=activation(client, owner, foreign))
     assert r.json()["failed"] == ["UnexpectedSafeAddress"]
-    body = activation(owner, env.chain.predict_safe(owner.address))
-    body["signature"] = sign_text(other, session_message("owner", owner.address, 31337, body["issuedAt"]))
+    body = activation(client, owner, env.chain.predict_safe(owner.address), signer=other)
     assert client.post("/api/onboard/activate", json=body).json()["error"] == "BadSignature"
 
 
@@ -196,13 +205,13 @@ def test_activation_mints_exactly_once(api):
     client, env = api
     owner, bank = Account.create(), Account.create()
     safe = configure(env, owner, bank)
-    first = client.post("/api/onboard/activate", json=activation(owner, safe)).json()
+    first = client.post("/api/onboard/activate", json=activation(client, owner, safe)).json()
     assert first["safe"] == safe and first["mintTx"] and first["tenant"]["activatedAt"]
-    second = client.post("/api/onboard/activate", json=activation(owner, safe)).json()
+    second = client.post("/api/onboard/activate", json=activation(client, owner, safe)).json()
     assert second["mintTx"] == first["mintTx"]
     assert env.chain.usdc_balance(safe) == env.settings.tenant.test_usdc
     env.services.db.execute("UPDATE tenants SET activated_at=NULL WHERE safe=?", (safe,))
-    client.post("/api/onboard/activate", json=activation(owner, safe))
+    client.post("/api/onboard/activate", json=activation(client, owner, safe))
     assert env.chain.usdc_balance(safe) == env.settings.tenant.test_usdc
     kinds = [r["kind"] for r in env.services.ledger.rows(safe)]
     assert kinds.count("TENANT_ACTIVATED") == 2
@@ -218,7 +227,7 @@ def test_status_reports_each_step(api):
     st = client.get(f"/api/onboard/status?owner={owner.address}").json()
     assert st["bank"] == bank.address
     assert {k for k, v in st["steps"].items() if not v} == {"activated"}
-    client.post("/api/onboard/activate", json=activation(owner, safe))
+    client.post("/api/onboard/activate", json=activation(client, owner, safe))
     st = client.get(f"/api/onboard/status?owner={owner.address}").json()
     assert all(st["steps"].values()) and st["tenant"]["safe"] == safe
 
@@ -250,7 +259,7 @@ def test_onboarding_closed_at_tenant_cap(api):
     assert client.get("/api/onboard/config").json()["onboardingOpen"] is False
     owner, bank = Account.create(), Account.create()
     safe = configure(env, owner, bank)
-    assert client.post("/api/onboard/activate", json=activation(owner, safe)).json()["error"] == "OnboardingClosed"
+    assert client.post("/api/onboard/activate", json=activation(client, owner, safe)).json()["error"] == "OnboardingClosed"
     assert client.post("/api/onboard/fund", json=fund_body(owner, bank)).json()["error"] == "OnboardingClosed"
     assert client.get("/api/health").json()["onboardingOpen"] is False
 
@@ -267,17 +276,14 @@ def test_sessions_bind_to_tenants(api):
     assert client.post("/api/session", json={"role": "bank", "address": a.owner.address}).status_code == 403
     env.settings.require_session_sig = True
     assert client.post("/api/session", json={"role": "owner", "address": a.owner.address}).status_code == 401
-    issued = iso()
-    signed = {"role": "owner", "address": a.owner.address, "issuedAt": issued,
-              "signature": sign_text(a.owner, session_message("owner", a.owner.address, 31337, issued))}
-    assert client.post("/api/session", json=signed).json()["safe"] == a.safe
+    assert client.post("/api/session", json=siwe_session(client, a.owner, "owner")).json()["safe"] == a.safe
 
 
 def test_owner_cannot_onboard_a_second_treasury(api):
     client, env = api
     owner, bank = Account.from_key(ANVIL_KEYS["owner"]), Account.create()
     safe = configure(env, owner, bank)
-    r = client.post("/api/onboard/activate", json=activation(owner, safe))
+    r = client.post("/api/onboard/activate", json=activation(client, owner, safe))
     assert r.json()["failed"] == ["OwnerHasTreasury"]
 
 
@@ -560,7 +566,7 @@ def test_obligations_expose_floor_update_for_new_tenant(api):
     client, env = api
     owner, bank = Account.create(), Account.create()
     safe = configure(env, owner, bank)
-    client.post("/api/onboard/activate", json=activation(owner, safe))
+    client.post("/api/onboard/activate", json=activation(client, owner, safe))
     h = login(client, owner, "owner")
     ob = client.get("/api/obligations", headers=h).json()
     assert ob["reserve"]["inSync"] is False and ob["floorUpdate"]["floor"]["raw"] == str(500 * USDC)
@@ -612,13 +618,13 @@ def test_testnet_onboarding_needs_faucet_key_and_owner_mint(testnet, monkeypatch
                          "vault_b": rt.settings.addresses.vaults[1].address})()
     safe = configure(env, owner, bank)
     assert client.post("/api/onboard/activate",
-                       json=activation(owner, safe, 84532)).json()["error"] == "OnboardingClosed"
+                       json=activation(client, owner, safe, 84532)).json()["error"] == "OnboardingClosed"
     monkeypatch.setenv("DEPLOYER_KEY", ANVIL_KEYS["attacker"])
-    r = client.post("/api/onboard/activate", json=activation(owner, safe, 84532))
+    r = client.post("/api/onboard/activate", json=activation(client, owner, safe, 84532))
     assert r.status_code == 503 and r.json()["error"] == "FaucetEmpty"
     assert rt.services.tenants.get(safe)["mint_tx"] is None
     monkeypatch.setenv("DEPLOYER_KEY", ANVIL_KEYS["admin"])
-    r = client.post("/api/onboard/activate", json=activation(owner, safe, 84532))
+    r = client.post("/api/onboard/activate", json=activation(client, owner, safe, 84532))
     assert r.status_code == 200 and chain.usdc_balance(safe) == rt.settings.tenant.test_usdc
     assert client.post("/api/session", json={"role": "owner", "address": owner.address}).status_code == 401
 

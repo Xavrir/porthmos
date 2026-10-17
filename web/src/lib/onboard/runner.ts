@@ -1,12 +1,14 @@
 import { encodeFunctionData, getAddress, zeroAddress, type Address, type Hex, type PublicClient } from 'viem'
 import { ApiError } from '../api/contract'
 import { REGISTRY_ABI } from '../deployment'
-import { sessionMessage } from '../session'
+import { buildSiwe, pageOrigin, type AuthNonce, type SiweOrigin } from '../siwe'
 import { pollUntil, sleep, waitForReceipt } from './chain'
 import { plainError, type Plain } from './errors'
 import { onboardingMessage } from './messages'
 import { createProxyCall, enableModuleCall, FACTORY_ABI, predictSafeAddress, SAFE_ABI, safeInitializer, saltNonceFor } from './safe'
 import type { ActivateResult, FundResult, OnboardConfig, OnboardStatus, OnboardSteps } from './types'
+
+export type OwnerSession = NonNullable<ActivateResult['session']>
 
 export type Call = { to: Address; data: Hex }
 
@@ -36,8 +38,15 @@ export type StepState = { id: StepId; group: StepGroup; label: string; status: S
 export type OnboardApi = {
   onboardFund(body: { owner: Address; bank: Address; issuedAt: string; signature: Hex }): Promise<FundResult>
   onboardStatus(owner: Address): Promise<OnboardStatus>
-  onboardActivate(body: { safe: Address; owner: Address; issuedAt: string; signature: Hex }): Promise<ActivateResult>
+  onboardActivate(body: { safe: Address; owner: Address; message: string; signature: Hex }): Promise<ActivateResult>
+  authNonce(): Promise<AuthNonce>
 }
+
+// What the owner's wallet is about to ask, in plain words, shown while the wallet window is open.
+export type WalletPrompt =
+  | { kind: 'sign'; step: StepId; title: string; why: string; text: string }
+  | { kind: 'tx'; step: StepId; title: string; why: string; to: Address; index?: number; total?: number }
+  | { kind: 'batch'; title: string; why: string; calls: { step: StepId; title: string; to: Address }[] }
 
 export type RunnerDeps = {
   config: OnboardConfig
@@ -48,7 +57,27 @@ export type RunnerDeps = {
   safe?: Address | null
   onSafe(safe: Address): void
   onUpdate(steps: StepState[]): void
+  onPrompt?(prompt: WalletPrompt | null): void
+  onSession?(session: OwnerSession): void
+  origin?: SiweOrigin
   now?: () => Date
+}
+
+export const STEP_WHY: Record<StepId, string> = {
+  fund: 'Asks the Porthmos faucet for a little test ETH for gas. A signature only: it costs nothing and moves nothing.',
+  safe: 'Creates your Safe smart account. You are its only owner. Test ETH pays the gas.',
+  module: 'Lets the Porthmos module deposit into your allowed vaults and redeem back. It can do nothing else.',
+  register: 'Writes your wallet as the owner and the browser bank key as the bank in the PolicyRegistry.',
+  vaultA: 'Allows Vault A, so the agent may deposit there.',
+  vaultB: 'Allows Vault B, so the agent may deposit there.',
+  authorizer: 'Names the Porthmos Authorizer key that co-signs every agent action.',
+  exitKey: 'Names the Porthmos exit key, which may only redeem back to your Safe.',
+  autoCap: 'Sets the largest deposit the agent may make without asking you.',
+  dailyCap: 'Sets the most the agent may deposit in one day.',
+  maxBandWidth: 'Sets how far the price may move before deposits stop.',
+  maxOracleAge: 'Sets how old the price may be before deposits stop.',
+  bankLimit: 'The bank key in this browser sets the amount above which the bank must also sign.',
+  activate: 'Signs you in with Ethereum (SIWE). The server checks every rule on-chain, then sends test USDC to your Safe. A signature only.',
 }
 
 export const TX_STEPS: StepId[] = ['module', 'register', 'vaultA', 'vaultB', 'authorizer', 'exitKey', 'autoCap', 'dailyCap', 'maxBandWidth', 'maxOracleAge']
@@ -128,6 +157,17 @@ export class OnboardRunner {
     return (this.d.now?.() ?? new Date()).toISOString()
   }
 
+  // A browser key signs silently; only a wallet opens a window, so only a wallet gets the plain-words prompt.
+  private async prompted<T>(prompt: WalletPrompt, ask: () => Promise<T>): Promise<T> {
+    if (this.d.owner.kind !== 'injected') return ask()
+    this.d.onPrompt?.(prompt)
+    try {
+      return await ask()
+    } finally {
+      this.d.onPrompt?.(null)
+    }
+  }
+
   private async refreshStatus(): Promise<OnboardStatus | null> {
     try {
       this.status = await this.d.api.onboardStatus(this.d.owner.address)
@@ -163,7 +203,12 @@ export class OnboardRunner {
     const [vaultA, vaultB] = c.vaults
     const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
     const ownerTx = (id: StepId, call: () => Call, done: () => Promise<boolean>): Step => ({
-      id, who: ownerWho, done, batchable: call, run: async () => [await owner.send(call())],
+      id, who: ownerWho, done, batchable: call,
+      run: async () => {
+        const tx = call()
+        const index = TX_STEPS.indexOf(id) + 1
+        return [await this.prompted({ kind: 'tx', step: id, title: STEP_LABELS[id], why: STEP_WHY[id], to: tx.to, index, total: TX_STEPS.length }, () => owner.send(tx))]
+      },
     })
     const capStep = (id: StepId, fn: string, value: string | number) =>
       ownerTx(id, () => reg(fn, [safe, BigInt(value)]), async () => (await this.read<bigint>(fn.replace(/^set(.)/, (_, x: string) => x.toLowerCase()), [safe])) === BigInt(value))
@@ -178,7 +223,8 @@ export class OnboardRunner {
         },
         run: async () => {
           const issuedAt = this.now()
-          const signature = await owner.signMessage(onboardingMessage(owner.address, bank.address, c.chainId, issuedAt))
+          const text = onboardingMessage(owner.address, bank.address, c.chainId, issuedAt)
+          const signature = await this.prompted({ kind: 'sign', step: 'fund', title: STEP_LABELS.fund, why: STEP_WHY.fund, text }, () => owner.signMessage(text))
           const res = await this.d.api.onboardFund({ owner: getAddress(owner.address), bank: getAddress(bank.address), issuedAt, signature })
           return (res.txs ?? []).map((t) => t.hash)
         },
@@ -189,7 +235,8 @@ export class OnboardRunner {
           const code = await client.getCode({ address: safe })
           return !!code && code !== '0x'
         },
-        run: async () => [await owner.send({ to: c.safeProxyFactory, data: createProxyCall(c.safeSingleton, safeInitializer(owner.address, c.fallbackHandler), saltNonceFor(owner.address)) })],
+        run: async () => [await this.prompted({ kind: 'tx', step: 'safe', title: STEP_LABELS.safe, why: STEP_WHY.safe, to: c.safeProxyFactory },
+          () => owner.send({ to: c.safeProxyFactory, data: createProxyCall(c.safeSingleton, safeInitializer(owner.address, c.fallbackHandler), saltNonceFor(owner.address)) }))],
       },
       ownerTx('module', () => ({ to: safe, data: enableModuleCall(safe, c.module, owner.address) }),
         async () => (await client.readContract({ address: safe, abi: SAFE_ABI, functionName: 'isModuleEnabled', args: [c.module] })) as boolean),
@@ -211,9 +258,11 @@ export class OnboardRunner {
         id: 'activate', who: ownerWho,
         done: async () => !!(await this.refreshStatus())?.steps.activated,
         run: async () => {
-          const issuedAt = this.now()
-          const signature = await owner.signMessage(sessionMessage('owner', owner.address, c.chainId, issuedAt))
-          const res = await this.d.api.onboardActivate({ safe, owner: getAddress(owner.address), issuedAt, signature })
+          const { nonce } = await this.d.api.authNonce()
+          const message = buildSiwe({ purpose: { kind: 'activate', safe }, address: owner.address, chainId: c.chainId, nonce, origin: this.d.origin ?? pageOrigin(), now: this.d.now?.() })
+          const signature = await this.prompted({ kind: 'sign', step: 'activate', title: STEP_LABELS.activate, why: STEP_WHY.activate, text: message }, () => owner.signMessage(message))
+          const res = await this.d.api.onboardActivate({ safe, owner: getAddress(owner.address), message, signature })
+          if (res.session) this.d.onSession?.(res.session)
           return res.mintTx ? [res.mintTx] : []
         },
       },
@@ -289,7 +338,12 @@ export class OnboardRunner {
     open.forEach((s) => this.patch(s.id, { status: 'running', error: undefined }))
     let hashes: Hex[]
     try {
-      hashes = await send(open.map((s) => s.batchable!()))
+      const calls = open.map((s) => s.batchable!())
+      hashes = await this.prompted({
+        kind: 'batch', title: `${calls.length} setup calls in one confirmation`,
+        why: 'Your wallet can run these calls together. Either all of them happen or none does.',
+        calls: open.map((s, i) => ({ step: s.id, title: STEP_LABELS[s.id], to: calls[i].to })),
+      }, () => send(calls))
     } catch (e) {
       const plain = plainError(e, open[0].who)
       if (plain.code === 'Rejected') {

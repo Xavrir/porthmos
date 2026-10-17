@@ -30,9 +30,10 @@ from aegis.workflow import Session, WorkflowError
 
 
 class SessionBody(BaseModel):
-    role: str
-    address: str
+    message: str | None = None
     signature: str | None = None
+    role: str | None = None
+    address: str | None = None
     issuedAt: str | None = None
 
 
@@ -77,8 +78,9 @@ class FundBody(BaseModel):
 class ActivateBody(BaseModel):
     safe: str
     owner: str
-    issuedAt: str | None = None
+    message: str | None = None
     signature: str | None = None
+    issuedAt: str | None = None
 
 
 class AttackBody(BaseModel):
@@ -103,7 +105,7 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
                        allow_methods=["GET", "POST", "OPTIONS"],
                        allow_headers=["Content-Type", "X-Aegis-Session", "X-Aegis-Admin"], allow_credentials=False)
     s = rt.services
-    onboarding = Onboarding(s)
+    onboarding = Onboarding(s, rt.sessions)
     attacks = Attacks(s, rt.authorizer)
 
     @app.exception_handler(WorkflowError)
@@ -218,9 +220,22 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
             out["chain"] = f"unreachable: {type(e).__name__}"
         return out
 
+    @app.get("/api/auth/nonce")
+    def auth_nonce(request: Request):
+        resp = JSONResponse(rt.sessions.siwe.issue_nonce(onboarding.ip_hash(client_ip(request))))
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    @app.get("/api/auth/roles")
+    def auth_roles(address: str, request: Request):
+        if not s.limiter.hit("auth_roles_ip", onboarding.ip_hash(client_ip(request)),
+                             rt.settings.limits.auth_per_ip_minute, 60):
+            raise WorkflowError(429, "RateLimited", "too many requests from this address; wait a minute")
+        return rt.sessions.roles(address)
+
     @app.post("/api/session")
     def create_session(body: SessionBody):
-        result = rt.sessions.create(body.role, body.address, body.signature, body.issuedAt)
+        result = rt.sessions.create(body.role, body.address, body.message, body.signature, body.issuedAt)
         resp = JSONResponse(result)
         resp.set_cookie("aegis_session", result["token"], httponly=True, samesite="lax", max_age=12 * 3600)
         return resp
@@ -425,7 +440,8 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
 
     @app.post("/api/onboard/activate")
     def onboard_activate(body: ActivateBody, request: Request):
-        return onboarding.activate(body.safe, body.owner, body.issuedAt, body.signature, client_ip(request))
+        return onboarding.activate(body.safe, body.owner, body.message, body.signature, client_ip(request),
+                                   legacy_issued_at=body.issuedAt)
 
     @app.post("/api/tenant/attack")
     def tenant_attack(body: AttackBody, sess: Session = Depends(owner_dep)):

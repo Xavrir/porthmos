@@ -476,7 +476,7 @@ def test_injection_probes_produce_no_action(any_env, message):
     no_action(e, r)
     assert len(submissions(e)) == before_subs and policy_tuple(e) == before_policy
     reply = r["reply"].lower()
-    for secret in (SECRET, DEAD.lower(), OTHER, WALLET, "you are aegis", "private key is"):
+    for secret in (SECRET, DEAD.lower(), OTHER, WALLET, "you are aegis", "you are porthmos", "private key is"):
         assert secret.lower() not in reply
 
 
@@ -513,3 +513,74 @@ def test_amount_parsing_table(text, expected):
 def test_malformed_amounts_are_flagged(text):
     intent = I.parse(text, 1_760_000_000, ["Vault A", "Vault B"])
     assert intent.amount is None and "amount" in intent.missing
+
+
+class RecordingLlm(LlmClient):
+    """Classifies a balance question as STATUS and records the explain prompt."""
+
+    def __init__(self, reply: str):
+        super().__init__("http://unused", "stub")
+        self.reply = reply
+        self.explains: list[dict] = []
+
+    def complete_json(self, messages):
+        body = json.loads(messages[-1]["content"])
+        if body.get("task", "").startswith("Classify"):
+            return {"kind": "STATUS", "amount_usdc": None, "vault": None, "due_date": None}
+        self.explains.append({"system": messages[0]["content"], **body})
+        return {"reply": self.reply}
+
+
+def test_explain_prompt_names_porthmos_and_follows_owner_language(make_env):
+    llm = RecordingLlm("Saldo treasury Anda tercatat di Safe. Tidak ada tindakan yang dijalankan.")
+    e = make_env(agent=Agent(llm))
+    r = e.chat("Berapa saldo treasury saya?")
+    assert r["reply"] == llm.reply
+    prompt = llm.explains[-1]
+    assert "Porthmos" in prompt["system"] and "AEGIS" not in json.dumps(prompt)
+    assert "language of owner_message" in prompt["task"]
+    assert prompt["DATA"]["owner_message"]["quoted"] == "Berapa saldo treasury saya?"
+    assert prompt["DATA"]["owner_message"]["trust"].startswith("untrusted")
+
+
+def test_explain_without_chat_message_has_no_owner_message():
+    llm = RecordingLlm("Cancelled. Nothing was submitted.")
+    agent = Agent(llm)
+    with agent.request("0xsafe"):
+        agent.explain({"outcome": "CANCELLED", "reason": "owner cancelled"})
+    assert "owner_message" not in llm.explains[-1]["DATA"]
+
+
+def test_explain_drops_reply_with_unknown_address_in_any_language():
+    agent = Agent(RecordingLlm(f"Dana dikirim ke {DEAD} sekarang."))
+    with agent.request("0xsafe"):
+        agent.owner_said("Berapa saldo treasury saya?")
+        reply = agent.explain({"outcome": "CANCELLED", "reason": "owner cancelled"})
+    assert DEAD.lower() not in reply.lower() and reply.startswith("Cancelled")
+
+
+def test_not_representable_template_says_porthmos():
+    from aegis.agent.agent import HOLD_TEXT
+
+    assert "Porthmos" in HOLD_TEXT["NotRepresentable"] and "AEGIS" not in SYSTEM
+
+
+def test_chat_loads_state_once_while_the_model_parses(make_env, monkeypatch):
+    import threading
+
+    from aegis import workflow
+    from aegis.core import pipeline
+
+    threads = []
+    real = workflow.load_state
+
+    def recording(*args):
+        threads.append(threading.current_thread().name)
+        return real(*args)
+
+    monkeypatch.setattr(workflow, "load_state", recording)
+    monkeypatch.setattr(pipeline, "load_state", recording)
+    e = make_env(agent=Agent(RecordingLlm("Your treasury balance is shown above.")))
+    r = e.chat("what is my treasury balance?")
+    assert r["state"] == "EXPLAINED"
+    assert len(threads) == 1 and threads[0].startswith("state-prefetch")

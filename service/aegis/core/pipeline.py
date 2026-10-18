@@ -30,8 +30,8 @@ class Snapshot:
 
 
 def snapshot(chain: ChainClient, settings: Settings, safe: str, obligations: list[Obligation],
-             last_trigger_at: dict | None = None) -> Snapshot:
-    state = load_state(chain, settings, safe)
+             last_trigger_at: dict | None = None, state: TreasuryState | None = None) -> Snapshot:
+    state = state or load_state(chain, settings, safe)
     reserve = required_reserve(obligations, state.timestamp, settings.params)
     risk = assess(state, settings.params, last_trigger_at)
     plan = build_plan(state, risk, reserve, settings.params)

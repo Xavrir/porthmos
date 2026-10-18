@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import itertools
 import os
 import threading
@@ -19,6 +20,9 @@ from aegis.eip712 import DAR, Approval, hex32, to_bytes32
 from aegis.tradeflow.typed import MilestoneTerms, Order
 
 LOG_WINDOW = int(os.environ.get("LOG_WINDOW", "5000"))
+RPC_BATCH_SIZE = int(os.environ.get("RPC_BATCH_SIZE", "50"))
+
+_local = threading.local()
 
 
 class RpcError(Exception):
@@ -51,6 +55,100 @@ def _addr_topic(addr: str) -> str:
     return "0x" + "0" * 24 + addr.lower().removeprefix("0x")
 
 
+def _result(payload: dict):
+    if "error" in payload:
+        err = payload["error"]
+        raise RpcError(err.get("code", -1), err.get("message", ""), _hex_to_bytes(err.get("data")))
+    return payload["result"]
+
+
+class _Pending:
+    __slots__ = ("body", "done", "result", "error")
+
+    def __init__(self, body: dict):
+        self.body = body
+        self.done = False
+        self.result = None
+        self.error: Exception | None = None
+
+
+class _Rounds:
+    """Runs gather() tasks on threads and parks each RPC call they make. Once every task is parked or finished, the
+    parked calls go out as one JSON-RPC batch, so a stage of independent reads costs one round trip."""
+
+    def __init__(self, send):
+        self._send = send
+        self._cond = threading.Condition()
+        self._running = 0
+        self._queue: list[_Pending] = []
+
+    def call(self, body: dict):
+        p = _Pending(body)
+        with self._cond:
+            self._queue.append(p)
+            self._running -= 1
+            self._cond.notify_all()
+            self._cond.wait_for(lambda: p.done)
+        if p.error is not None:
+            raise p.error
+        return p.result
+
+    def run(self, fns: list, nested: bool) -> list:
+        if not fns:
+            return []
+        results: list = [None] * len(fns)
+        errors: list[BaseException | None] = [None] * len(fns)
+        left = len(fns)
+
+        def work(i, fn):
+            nonlocal left
+            _local.rounds = self
+            try:
+                results[i] = fn()
+            except BaseException as e:
+                errors[i] = e
+            finally:
+                with self._cond:
+                    self._running -= 1
+                    left -= 1
+                    if left == 0 and nested:
+                        # Counted for the parent before it wakes, so no round fires while it is about to resume.
+                        self._running += 1
+                    self._cond.notify_all()
+
+        with self._cond:
+            self._running += len(fns) - (1 if nested else 0)
+        for i, fn in enumerate(fns):
+            threading.Thread(target=work, args=(i, fn), daemon=True).start()
+        if nested:
+            with self._cond:
+                self._cond.wait_for(lambda: left == 0)
+        else:
+            self._drive(lambda: left == 0)
+        for e in errors:
+            if e is not None:
+                raise e
+        return results
+
+    def _drive(self, finished) -> None:
+        while True:
+            with self._cond:
+                self._cond.wait_for(lambda: finished() or (self._running == 0 and bool(self._queue)))
+                if finished():
+                    return
+                batch, self._queue = self._queue, []
+            try:
+                self._send(batch)
+            except Exception as e:
+                for p in batch:
+                    p.error = e
+            with self._cond:
+                self._running += len(batch)
+                for p in batch:
+                    p.done = True
+                self._cond.notify_all()
+
+
 class RpcChain(ChainClient):
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -71,27 +169,68 @@ class RpcChain(ChainClient):
         self._send_locks: dict[str, threading.Lock] = {}
         self._send_guard = threading.Lock()
         self._proxy_code: bytes | None = None
+        self._block_tag = "latest"
+        self._caps = {"batch": True}
 
-    def _rpc(self, method: str, params: list):
-        body = {"jsonrpc": "2.0", "id": next(self._ids), "method": method, "params": params}
+    def _post(self, body):
         for attempt in range(5):
             resp = self._http.post(self.url, json=body)
             if resp.status_code != 429:
                 break
             time.sleep(0.5 * 2**attempt)
         resp.raise_for_status()
-        payload = resp.json()
-        if "error" in payload:
-            err = payload["error"]
-            raise RpcError(err.get("code", -1), err.get("message", ""), _hex_to_bytes(err.get("data")))
-        return payload["result"]
+        return resp.json()
 
-    def _eth_call(self, to: str, data: bytes, sender: str | None = None, block: str = "latest") -> bytes:
+    def _rpc(self, method: str, params: list):
+        body = {"jsonrpc": "2.0", "id": next(self._ids), "method": method, "params": params}
+        rounds = getattr(_local, "rounds", None)
+        if rounds is not None:
+            return rounds.call(body)
+        return _result(self._post(body))
+
+    def _send_round(self, batch: list[_Pending]) -> None:
+        for i in range(0, len(batch), RPC_BATCH_SIZE):
+            chunk = batch[i:i + RPC_BATCH_SIZE]
+            replies = self._post_batch([p.body for p in chunk]) if len(chunk) > 1 and self._caps["batch"] else None
+            for p in chunk:
+                try:
+                    p.result = _result(replies[p.body["id"]] if replies is not None else self._post(p.body))
+                except Exception as e:
+                    p.error = e
+
+    def _post_batch(self, bodies: list[dict]) -> dict | None:
+        """Replies by id, or None when the endpoint does not take batches; the calls then go one by one."""
+        try:
+            payload = self._post(bodies)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code >= 500:
+                raise
+            payload = None
+        except ValueError:
+            payload = None
+        replies = {r.get("id"): r for r in payload if isinstance(r, dict)} if isinstance(payload, list) else {}
+        if any(b["id"] not in replies for b in bodies):
+            self._caps["batch"] = False
+            return None
+        return replies
+
+    def gather(self, fns: list) -> list:
+        rounds = getattr(_local, "rounds", None)
+        if rounds is not None:
+            return rounds.run(fns, nested=True)
+        return _Rounds(self._send_round).run(fns, nested=False)
+
+    def at_block(self, block: int) -> RpcChain:
+        pinned = copy.copy(self)
+        pinned._block_tag = hex(block)
+        return pinned
+
+    def _eth_call(self, to: str, data: bytes, sender: str | None = None, block: str | None = None) -> bytes:
         tx = {"to": to_checksum_address(to), "data": "0x" + data.hex()}
         if sender:
             tx["from"] = to_checksum_address(sender)
         try:
-            return bytes.fromhex(self._rpc("eth_call", [tx, block])[2:])
+            return bytes.fromhex(self._rpc("eth_call", [tx, block or self._block_tag])[2:])
         except RpcError as e:
             if e.data is not None or "revert" in e.message.lower():
                 raise CallReverted(e.data, e.message) from None
@@ -188,10 +327,13 @@ class RpcChain(ChainClient):
         return int(self._rpc("eth_blockNumber", []), 16)
 
     def block_timestamp(self) -> int:
+        return self.block_header()[1]
+
+    def block_header(self) -> tuple[int, int]:
         block = self._rpc("eth_getBlockByNumber", ["latest", False])
         chain_ts = int(block["timestamp"], 16)
         # Anvil without --block-time only mines on transactions; its next block uses wall time.
-        return max(chain_ts, int(time.time())) if self.chain_id == 31337 else chain_ts
+        return int(block["number"], 16), max(chain_ts, int(time.time())) if self.chain_id == 31337 else chain_ts
 
     def usdc_balance(self, who: str) -> int:
         return self._view(self.usdc, self.addr.usdc, "balanceOf", to_checksum_address(who))
@@ -242,21 +384,28 @@ class RpcChain(ChainClient):
         s = to_checksum_address(safe)
 
         def g(fn, *args):
-            return self._view(r, reg, fn, s, *args)
+            return lambda: self._view(r, reg, fn, s, *args)
 
+        fields = ("owner", "bank", "authorizer", "exitKey", "autoCap", "dailyCap", "bankLimit", "reserveFloor",
+                  "scheduleHash", "maxBandWidth", "maxOracleAge", "ownerFrozen", "bankFrozen", "policyVersion")
+        per_vault = ("allowedVault", "quarantined", "quarantinedAt")
+        out = self.gather([g(f) for f in fields] +
+                          [g(f, to_checksum_address(v)) for v in vaults for f in per_vault])
+        p = dict(zip(fields, out))
         state = PolicyState(
-            safe=s, owner=to_checksum_address(g("owner")), bank=to_checksum_address(g("bank")),
-            authorizer=to_checksum_address(g("authorizer")), exit_key=to_checksum_address(g("exitKey")),
-            auto_cap=g("autoCap"), daily_cap=g("dailyCap"), bank_limit=g("bankLimit"),
-            reserve_floor=g("reserveFloor"), schedule_hash=hex32(g("scheduleHash")),
-            max_band_width=g("maxBandWidth"), max_oracle_age=g("maxOracleAge"),
-            owner_frozen=g("ownerFrozen"), bank_frozen=g("bankFrozen"), policy_version=g("policyVersion"),
+            safe=s, owner=to_checksum_address(p["owner"]), bank=to_checksum_address(p["bank"]),
+            authorizer=to_checksum_address(p["authorizer"]), exit_key=to_checksum_address(p["exitKey"]),
+            auto_cap=p["autoCap"], daily_cap=p["dailyCap"], bank_limit=p["bankLimit"],
+            reserve_floor=p["reserveFloor"], schedule_hash=hex32(p["scheduleHash"]),
+            max_band_width=p["maxBandWidth"], max_oracle_age=p["maxOracleAge"],
+            owner_frozen=p["ownerFrozen"], bank_frozen=p["bankFrozen"], policy_version=p["policyVersion"],
         )
-        for v in vaults:
-            cv = to_checksum_address(v)
-            state.allowed[v.lower()] = g("allowedVault", cv)
-            state.quarantined[v.lower()] = g("quarantined", cv)
-            state.quarantined_at[v.lower()] = g("quarantinedAt", cv)
+        rest = out[len(fields):]
+        for i, v in enumerate(vaults):
+            allowed, quarantined, quarantined_at = rest[3 * i:3 * i + 3]
+            state.allowed[v.lower()] = allowed
+            state.quarantined[v.lower()] = quarantined
+            state.quarantined_at[v.lower()] = quarantined_at
         return state
 
     def ever_deposited(self, safe: str, vault: str) -> bool:

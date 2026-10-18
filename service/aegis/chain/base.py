@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TypeVar
 
 from aegis.eip712 import DAR, Approval
 from aegis.tradeflow.typed import MilestoneProof, MilestoneTerms, Order, ReleaseAuthorization
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -232,6 +236,18 @@ class ChainClient(ABC):
     @abstractmethod
     def escrow_events(self, from_block: int, to_block: int) -> list[dict]:
         """OrderCreated, MilestoneReleased and OrderRefunded in [from_block, to_block], in log order."""
+
+    def block_header(self) -> tuple[int, int]:
+        """(number, timestamp) of one block, for pinning a multi-read snapshot."""
+        return self.block_number(), self.block_timestamp()
+
+    def at_block(self, block: int) -> ChainClient:
+        """A client whose view reads are pinned to this block number."""
+        return self
+
+    def gather(self, fns: list[Callable[[], T]]) -> list[T]:
+        """Runs independent reads and returns their results in order; RPC clients batch them per round trip."""
+        return [fn() for fn in fns]
 
     def erc1271_valid(self, account: str, digest: bytes, signature: bytes) -> bool:
         """ERC-1271 isValidSignature(digest, signature) on a deployed contract account returns the magic value."""

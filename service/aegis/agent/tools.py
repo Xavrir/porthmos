@@ -6,9 +6,11 @@ No tool takes a Safe, address or calldata argument. Unknown arguments are droppe
 from __future__ import annotations
 
 import json
+from concurrent.futures import Future
 
 from aegis.agent.llm import quoted
 from aegis.core.pipeline import Snapshot
+from aegis.core.state import TreasuryState
 from aegis.core.validator import validate
 from aegis.eip712 import hex32
 from aegis.obligations import to_json as obligation_json
@@ -68,6 +70,7 @@ class AgentTools:
         self._request_lookup = request_lookup
         self._tradeflow = tradeflow
         self.snapshot: Snapshot | None = None
+        self.prefetched: Future[TreasuryState] | None = None
         self.flags: list[str] = []
         self.selection: dict | None = None
 
@@ -90,7 +93,8 @@ class AgentTools:
 
     def _snap(self, refresh: bool = False) -> Snapshot:
         if self.snapshot is None or refresh:
-            self.snapshot = self._services.snapshot(self._safe)
+            state, self.prefetched = (self.prefetched.result() if self.prefetched else None), None
+            self.snapshot = self._services.snapshot(self._safe, state)
         return self.snapshot
 
     def get_treasury_state(self, refresh: bool = False) -> dict:

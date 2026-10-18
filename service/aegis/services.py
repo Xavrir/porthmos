@@ -8,6 +8,7 @@ from aegis.chain.base import ChainClient
 from aegis.config import Settings
 from aegis.core.pipeline import Snapshot, snapshot
 from aegis.core.risk import RiskReport
+from aegis.core.state import TreasuryState
 from aegis.db import Database
 from aegis.events import EventBus
 from aegis.ledger import Ledger
@@ -61,9 +62,9 @@ class Services:
                     "ON CONFLICT(safe, vault, code) DO UPDATE SET last_at=excluded.last_at",
                     (safe.lower(), v.address.lower(), t.code, at, at))
 
-    def snapshot(self, safe: str) -> Snapshot:
+    def snapshot(self, safe: str, state: TreasuryState | None = None) -> Snapshot:
         return snapshot(self.chain, self.settings, safe, self.obligations.list(safe, include_settled=False),
-                        self.last_triggers(safe))
+                        self.last_triggers(safe), state)
 
     def alert(self, level: str, code: str, message: str, safe: str | None = None, vault: str | None = None) -> None:
         self.db.execute("INSERT INTO alerts(ts, safe, vault, level, code, message) VALUES (?, ?, ?, ?, ?, ?)",

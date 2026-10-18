@@ -7,6 +7,7 @@ import json
 import threading
 import time
 import uuid
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from decimal import ROUND_DOWN, Decimal
 
@@ -16,6 +17,7 @@ from aegis.agent.llm import quoted
 from aegis.agent.tools import AgentTools
 from aegis.core import simulator
 from aegis.core.pipeline import Prepared, Snapshot, approval_fits, prepare
+from aegis.core.state import TreasuryState, load_state
 from aegis.eip712 import (
     DAR,
     OP_DEPOSIT,
@@ -180,6 +182,7 @@ class Workflow:
         self.tradeflow = None
         self._locks: dict[str, threading.RLock] = {}
         self._locks_guard = threading.Lock()
+        self._prefetch = ThreadPoolExecutor(max_workers=4, thread_name_prefix="state-prefetch")
 
 
     def _lock(self, request_id: str) -> threading.RLock:
@@ -278,6 +281,7 @@ class Workflow:
         message = (message or "").strip()
         if not message:
             raise WorkflowError(400, "EmptyMessage")
+        self.agent.owner_said(message)
         now = self._now()
         pending = self._pending_clarification(session.safe, message, request_id, now)
         if pending is not None:
@@ -292,6 +296,9 @@ class Workflow:
                 return self._response(rec)
 
         rec = self.store.create(session.safe, session.role, message)
+        # Chain reads do not depend on the intent, so they overlap the model call instead of following it.
+        prefetch = (self._prefetch.submit(load_state, self.s.chain, self.s.settings, session.safe)
+                    if self.agent.llm is not None else None)
         with self._lock(rec["id"]):
             intent = self.agent.parse_intent(message, now, self.labels)
             foreign = [a for a in intent.addresses if a.lower() != session.safe.lower()]
@@ -318,7 +325,7 @@ class Workflow:
                                         else "There was nothing pending to cancel.")
                 self._move(rec, "CANCELLED", rec["data"]["reason"])
                 return self._response(rec)
-            self._continue_after_intent(rec, intent)
+            self._continue_after_intent(rec, intent, prefetch)
             return self._response(rec)
 
     def _pending_clarification(self, safe: str, message: str, request_id: str | None, now: int) -> dict | None:
@@ -380,8 +387,10 @@ class Workflow:
         intent.refused = "NothingToConfirm"
         return intent
 
-    def _continue_after_intent(self, rec: dict, intent: I.Intent) -> None:
+    def _continue_after_intent(self, rec: dict, intent: I.Intent,
+                               prefetch: Future[TreasuryState] | None = None) -> None:
         tools = self._tools(rec["safe"])
+        tools.prefetched = prefetch
         if intent.missing:
             plan = None
             if intent.kind in I.ACTION_KINDS:

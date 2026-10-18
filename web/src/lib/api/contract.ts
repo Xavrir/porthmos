@@ -49,8 +49,9 @@ export interface AegisApi {
   settleObligation(id: string): Promise<unknown>
   risk(): Promise<RiskReport>
   oracle(): Promise<OracleState>
-  chat(message: string): Promise<ChatResponse>
-  chatStream?(message: string, on: ChatStreamHandlers, signal?: AbortSignal): Promise<ChatResponse>
+  // requestId binds a clarification answer, or a "confirm"/"cancel", to that one request.
+  chat(message: string, requestId?: string): Promise<ChatResponse>
+  chatStream?(message: string, on: ChatStreamHandlers, signal?: AbortSignal, requestId?: string): Promise<ChatResponse>
   request(id: string): Promise<RequestRecord>
   submitApproval(id: string, body: ApprovalSubmission): Promise<unknown>
   deny(id: string, reason: string): Promise<unknown>

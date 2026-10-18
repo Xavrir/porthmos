@@ -128,7 +128,20 @@ export type ActionCard = {
   approvalTypedData?: TypedDataPayload
 }
 
-export type ChatResponse = { reply: string; requestId: string; state: WorkflowState; actionCard?: ActionCard }
+// A chat-derived T1/T2 action that runs only after the owner confirms it; expiresAt is in seconds.
+export type PendingConfirmation = { requestId: string; op: 'DEPOSIT' | 'REDEEM'; vault: { address: Address; name: string }; amount: Amount; tier: Tier; expiresAt?: number }
+
+export type ReplyMode = 'llm' | 'deterministic'
+
+export type ChatResponse = {
+  reply: string
+  requestId: string
+  state: WorkflowState
+  actionCard?: ActionCard
+  pendingConfirmation?: PendingConfirmation
+  replyMode?: ReplyMode
+  holdReason?: string
+}
 
 export type StateTransition = { state: WorkflowState; at: number; note?: string }
 

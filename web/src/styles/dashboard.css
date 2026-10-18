@@ -714,6 +714,18 @@ html.app-theme {
   & .msg-inspect { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; font-size: var(--step-small); font-weight: 600; color: var(--link); align-self: flex-start; }
   & .msg-inspect-label { text-decoration: underline; text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
   & .msg-inspect.is-on .msg-inspect-label { text-decoration-thickness: 2px; }
+  & .msg-mode { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; font-size: 0.6875rem; font-weight: 500; line-height: 16px; color: var(--muted); vertical-align: 1px; cursor: help; }
+  & .msg-reason { font-size: var(--step-small); color: var(--muted); }
+  & .confirm-card { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--held-bd); border-radius: var(--radius-sm); box-shadow: var(--button-shadow); transition: border-color var(--t-fast) var(--m-enter); }
+  & .confirm-card:not(.is-open) { border-color: var(--line); box-shadow: none; }
+  & .confirm-kicker { font-size: var(--step-cap); font-weight: 600; color: var(--held-t); }
+  & .confirm-card:not(.is-open) .confirm-kicker { color: var(--muted); }
+  & .confirm-what { font-weight: 600; font-variant-numeric: tabular-nums; }
+  & .confirm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--step-small); color: var(--muted); }
+  & .confirm-meta:empty { display: none; }
+  & .confirm-state { font-size: var(--step-small); color: var(--ink-2); }
+  & .confirm-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+  @media (prefers-reduced-motion: no-preference) { & .confirm-card { animation: p-pop var(--t-pop) var(--m-enter); } }
   @media (prefers-reduced-motion: no-preference) { & .msg { animation: p-rise 240ms var(--m-enter); } & .log li { animation: p-rise 240ms var(--m-enter); } }
   & .suggest { display: flex; flex-wrap: wrap; gap: 6px; }
   & .suggest-chip { min-height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: var(--step-small); font-weight: 500; }

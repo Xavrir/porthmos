@@ -12,7 +12,7 @@ const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/
 export const STATUS_URL = `${API_BASE}/api/health`
 
 // Counted from the committed suites: `forge test`, `pytest -m "not integration"` / `-m integration`, `vitest run`.
-export const TESTS = { contracts: 106, contractInvariants: 6, serviceUnit: 161, serviceIntegration: 15, web: 61 }
+export const TESTS = { contracts: 106, contractInvariants: 6, serviceUnit: 359, serviceIntegration: 18, web: 165 }
 export const TEST_TOTAL = TESTS.contracts + TESTS.serviceUnit + TESTS.serviceIntegration + TESTS.web
 
 export function shortHash(hash: string, head = 6, tail = 4): string {

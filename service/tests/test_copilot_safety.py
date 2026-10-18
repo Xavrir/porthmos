@@ -19,6 +19,7 @@ from aegis.config import USDC, anvil_mnemonic_keys
 from aegis.eip712 import ZERO32
 from aegis.tradeflow.typed import MilestoneProof, MilestoneTerms, sign_typed
 from aegis.units import display_usdc
+from aegis.workflow import WorkflowError
 
 DEAD = "0x000000000000000000000000000000000000dEaD"
 OTHER = "0x1111111111111111111111111111111111111111"
@@ -167,7 +168,7 @@ class TestQuestionNeverBecomesAction:
         r = env.chat("can you deposit 500 USDC into vault B?")
         no_action_but_proposal = env.wf.store.get(r["requestId"])
         assert no_action_but_proposal["data"]["reason"] == "AwaitingConfirmation"
-        assert r["pendingConfirmation"]["tier"] == 2
+        assert r["pendingConfirmation"]["tier"] == 2 and r["holdReason"] == "AwaitingConfirmation"
         assert r["pendingConfirmation"]["amount"]["raw"] == str(500 * USDC)
         assert len(submissions(env)) == before
         c = env.chat("confirm")
@@ -206,6 +207,36 @@ class TestQuestionNeverBecomesAction:
         assert env.chat("cancel")["state"] == "CANCELLED"
         assert env.chat("confirm")["state"] == "EXPLAINED"
         assert len(submissions(env)) == before
+
+    def test_confirm_bound_to_a_superseded_proposal_confirms_nothing(self, env):
+        fund_vault_b(env)
+        before = len(submissions(env))
+        old = env.chat("can you deposit 500 USDC into vault B?")
+        new = env.chat("can you deposit 400 USDC into vault B?")
+        assert new["pendingConfirmation"]["requestId"] == new["requestId"]
+        c = env.chat("confirm", old["requestId"])
+        assert c["state"] == "EXPLAINED" and c["holdReason"] == "NothingToConfirm" and "pendingConfirmation" not in c
+        assert len(submissions(env)) == before
+        ok = env.chat("confirm", new["requestId"])
+        assert ok["state"] == "SUBMITTED" and ok["actionCard"]["amount"]["raw"] == str(400 * USDC)
+
+    def test_bound_cancel_leaves_other_requests_alone(self, env):
+        fund_vault_b(env)
+        waiting = env.chat("deposit 800 USDC into vault A")
+        assert waiting["state"] == "AWAITING_APPROVAL"
+        p = env.chat("can you deposit 500 USDC into vault B?")
+        assert p["pendingConfirmation"]["requestId"] == p["requestId"]
+        c = env.chat("cancel", p["requestId"])
+        assert c["state"] == "CANCELLED" and p["requestId"] in c["reply"]
+        assert env.state(waiting["requestId"]) == "AWAITING_APPROVAL"
+        assert env.wf.store.get(p["requestId"])["data"]["proposal"]["open"] is False
+
+    def test_request_id_on_a_proposal_still_refuses_other_messages(self, env):
+        fund_vault_b(env)
+        p = env.chat("can you deposit 500 USDC into vault B?")
+        with pytest.raises(WorkflowError) as err:
+            env.chat("deposit 100 USDC into vault A", p["requestId"])
+        assert err.value.status == 409
 
 
 def default_terms(env) -> list[MilestoneTerms]:

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ActionCardView, ApprovalPanel } from '../components/ActionCard'
 import { Chip, Empty, ErrorNote, ErrorTag, Hash, Loading, PageHeader } from '../components/bits'
+import { ConfirmCard } from '../components/ConfirmCard'
 import { DecisionChain } from '../components/DecisionChain'
 import { expectedSigner, RecordSheet } from '../components/RecordSheet'
 import { SwitchSeat, usePageTitle } from '../components/chrome'
@@ -12,10 +13,16 @@ import { useIdentity } from '../lib/identity'
 import { usePendingApprovals, useRequest, useRequestHistory } from '../lib/queries'
 import { clock, stamp } from '../lib/format'
 import { sentenceCase } from '../lib/vocabulary'
+import { confirmRequest, holdText, REPLY_MODE, type ConfirmChoice } from '../lib/confirm'
 import type { ChatStage } from '../lib/api/contract'
-import type { RequestRecord, WorkflowState } from '../lib/types'
+import type { PendingConfirmation, ReplyMode, RequestRecord, WorkflowState } from '../lib/types'
 
-type Msg = { id: string; who: 'owner' | 'agent'; text: string; at: number; requestId?: string; state?: WorkflowState; streamed?: boolean }
+type Msg = {
+  id: string; who: 'owner' | 'agent'; text: string; at: number; requestId?: string; state?: WorkflowState; streamed?: boolean
+  pending?: PendingConfirmation; replyMode?: ReplyMode; holdReason?: string
+}
+
+type Ask = { message: string; requestId?: string }
 
 type Live = { text: string; stage: ChatStage | null }
 
@@ -65,6 +72,7 @@ export default function Copilot() {
   const listRef = useRef<HTMLOListElement>(null)
   const [jump, setJump] = useState<string | null>(null)
   const [live, setLive] = useState<Live>(IDLE)
+  const [used, setUsed] = useState<Record<string, ConfirmChoice>>({})
   const streamRef = useRef<AbortController | null>(null)
   const shownRef = useRef(false)
   const req = useRequest(selected)
@@ -88,8 +96,8 @@ export default function Copilot() {
   }, [messages, live.text])
 
   const chat = useMutation({
-    mutationFn: (m: string) => {
-      if (!api.chatStream) return api.chat(m)
+    mutationFn: ({ message: m, requestId }: Ask) => {
+      if (!api.chatStream) return api.chat(m, requestId)
       streamRef.current?.abort()
       const ctrl = new AbortController()
       streamRef.current = ctrl
@@ -103,21 +111,23 @@ export default function Copilot() {
           shownRef.current = true
           setLive((l) => ({ ...l, text: t }))
         },
-      }, ctrl.signal)
+      }, ctrl.signal, requestId)
     },
-    onMutate: (m) => {
+    onMutate: ({ message: m }) => {
       shownRef.current = false
       setLive(IDLE)
       setMessages((xs) => [...(xs ?? []), { id: `q-${Date.now()}`, who: 'owner', text: m, at: Date.now() / 1000 }])
     },
     onSuccess: (res) => {
-      setMessages((xs) => [...(xs ?? []), { id: `a-${res.requestId}`, who: 'agent', text: res.reply, at: Date.now() / 1000, requestId: res.requestId, state: res.state, streamed: shownRef.current }])
+      setMessages((xs) => [...(xs ?? []), { id: `a-${res.requestId}-${Date.now()}`, who: 'agent', text: res.reply, at: Date.now() / 1000, requestId: res.requestId, state: res.state, streamed: shownRef.current, pending: res.pendingConfirmation, replyMode: res.replyMode, holdReason: res.holdReason }])
       setSelected(res.requestId)
       qc.invalidateQueries({ queryKey: ['approvals'] })
       qc.invalidateQueries({ queryKey: ['requests'] })
     },
-    onError: (e: Error) => {
+    onError: (e: Error, ask) => {
       if (e.name === 'AbortError') return
+      const bound = ask.requestId
+      if (bound) setUsed((u) => Object.fromEntries(Object.entries(u).filter(([k]) => k !== bound)))
       setMessages((xs) => [...(xs ?? []), { id: `e-${Date.now()}`, who: 'agent', text: `Request refused: ${e.message}`, at: Date.now() / 1000 }])
     },
     onSettled: () => setLive(IDLE),
@@ -128,7 +138,13 @@ export default function Copilot() {
     const m = text.trim()
     if (!m || chat.isPending) return
     setText('')
-    chat.mutate(m)
+    chat.mutate({ message: m })
+  }
+
+  const choose = (choice: ConfirmChoice, p: PendingConfirmation) => {
+    if (chat.isPending || used[p.requestId]) return
+    setUsed((u) => ({ ...u, [p.requestId]: choice }))
+    chat.mutate(confirmRequest(choice, p))
   }
 
   const r = req.data
@@ -141,6 +157,7 @@ export default function Copilot() {
     target.focus({ preventScroll: true })
     setJump(null)
   }, [jump, r?.id])
+  const lastAgent = useMemo(() => [...(messages ?? [])].reverse().find((m) => m.who === 'agent' && m.requestId)?.id, [messages])
   const latest = useMemo(() => r?.state ?? [...(messages ?? [])].reverse().find((m) => m.state)?.state, [messages, r?.state])
   const isPending = r?.state === 'AWAITING_APPROVAL'
   const pendingRole = pending.data?.find((p) => p.requestId === r?.id)?.role ?? 'owner'
@@ -169,8 +186,16 @@ export default function Copilot() {
           <ol className="messages" ref={listRef} aria-live="polite" aria-relevant="additions">
             {messages === null ? <li><Loading what="the conversation" /></li> : messages.map((m) => (
               <li key={m.id} className={`msg msg-${m.who}${m.streamed ? ' is-streamed' : ''}`}>
-                <span className="msg-who">{m.who === 'owner' ? 'You' : 'Porthmos'} <span className="msg-time nums">{clock(m.at)}</span></span>
+                <span className="msg-who">
+                  {m.who === 'owner' ? 'You' : 'Porthmos'} <span className="msg-time nums">{clock(m.at)}</span>
+                  {m.replyMode ? <span className="msg-mode" title={REPLY_MODE[m.replyMode].title}>{REPLY_MODE[m.replyMode].label}<span className="sr-only">: {REPLY_MODE[m.replyMode].title}</span></span> : null}
+                </span>
                 <p>{m.text}</p>
+                {holdText(m.holdReason) && !(m.pending && m.holdReason === 'AwaitingConfirmation') ? <p className="msg-reason">{holdText(m.holdReason)}</p> : null}
+                {m.pending ? (
+                  <ConfirmCard pending={m.pending} latest={m.id === lastAgent} used={used[m.pending.requestId]} busy={chat.isPending}
+                    onChoose={(choice) => choose(choice, m.pending!)} />
+                ) : null}
                 {m.requestId ? (
                   <button type="button" className={`msg-inspect${selected === m.requestId ? ' is-on' : ''}`} onClick={() => setSelected(m.requestId!)} aria-pressed={selected === m.requestId}>
                     {m.state ? <Chip state={m.requestId === r?.id && r ? r.state : m.state} /> : null} <span className="msg-inspect-label">Inspect the decision</span>
@@ -187,7 +212,7 @@ export default function Copilot() {
           </ol>
           <div className="suggest" aria-label="Try one of these">
             {SUGGESTIONS.map((s) => (
-              <button key={s} type="button" className="suggest-chip" disabled={role !== 'owner' || chat.isPending} onClick={() => chat.mutate(s)}>
+              <button key={s} type="button" className="suggest-chip" disabled={role !== 'owner' || chat.isPending} onClick={() => chat.mutate({ message: s })}>
                 {s.length > 34 ? `${s.slice(0, 31)}…` : s}
               </button>
             ))}

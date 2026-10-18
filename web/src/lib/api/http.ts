@@ -131,13 +131,13 @@ export class HttpApi implements AegisApi {
     return { ...o, price: priceAmount }
   }
 
-  chat(message: string): Promise<ChatResponse> {
-    return this.call('/api/agent/chat', { method: 'POST', body: JSON.stringify({ message }) }, 60000)
+  chat(message: string, requestId?: string): Promise<ChatResponse> {
+    return this.call('/api/agent/chat', { method: 'POST', body: JSON.stringify(requestId ? { message, requestId } : { message }) }, 60000)
   }
 
   // Falls back to chat() only while no stream was accepted. Once the service answers with an event stream the
   // turn is running there, so a broken stream is an error rather than a second request.
-  async chatStream(message: string, on: ChatStreamHandlers = {}, signal?: AbortSignal): Promise<ChatResponse> {
+  async chatStream(message: string, on: ChatStreamHandlers = {}, signal?: AbortSignal, requestId?: string): Promise<ChatResponse> {
     const ctrl = new AbortController()
     const abort = () => ctrl.abort()
     signal?.addEventListener('abort', abort)
@@ -152,16 +152,16 @@ export class HttpApi implements AegisApi {
       let res: Response
       try {
         arm()
-        res = await fetch(`${this.base}/api/agent/chat/stream`, { method: 'POST', headers, body: JSON.stringify({ message }), signal: ctrl.signal })
+        res = await fetch(`${this.base}/api/agent/chat/stream`, { method: 'POST', headers, body: JSON.stringify(requestId ? { message, requestId } : { message }), signal: ctrl.signal })
       } catch (e) {
         if (signal?.aborted) throw e
         clearTimeout(idle)
-        return this.chat(message)
+        return this.chat(message, requestId)
       }
       if (!res.ok || !res.body || !(res.headers.get('content-type') ?? '').startsWith('text/event-stream')) {
         clearTimeout(idle)
         void res.body?.cancel().catch(() => {})
-        return this.chat(message)
+        return this.chat(message, requestId)
       }
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
       const parser = new SseParser()

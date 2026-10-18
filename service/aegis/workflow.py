@@ -269,6 +269,8 @@ class Workflow:
             out["obligationDraft"] = d["obligationDraft"]
         if d.get("question"):
             out["clarification"] = d["question"]
+        if d.get("outcome") == "HELD" and d.get("reason"):
+            out["holdReason"] = d["reason"]
         proposal = d.get("proposal")
         if proposal and proposal.get("open"):
             out["pendingConfirmation"] = {k: proposal[k] for k in ("requestId", "op", "vault", "amount", "tier",
@@ -315,7 +317,8 @@ class Workflow:
         self.agent.owner_said(message)
         self._status("thinking")
         now = self._now()
-        pending = self._pending_clarification(session.safe, message, request_id, now)
+        bound = self._bound_proposal(session.safe, message, request_id, now)
+        pending = None if bound else self._pending_clarification(session.safe, message, request_id, now)
         if pending is not None:
             self._stream.request_id = pending["id"]
             with self._lock(pending["id"]):
@@ -340,7 +343,7 @@ class Workflow:
                 intent.flags = sorted(set(intent.flags) | {"crossClient"})
             intent = I.guard(intent)
             if intent.kind == I.CONFIRM:
-                intent = self._confirmed_intent(session.safe, rec, intent)
+                intent = self._confirmed_intent(session.safe, rec, intent, bound)
             elif intent.kind in I.WRITE_KINDS:
                 self._close_proposals(session.safe, f"superseded by {rec['id']}")
             rec["data"]["intent"] = intent.to_json()
@@ -350,8 +353,11 @@ class Workflow:
                 note += f" confirms {rec['data']['confirms']}"
             self._move(rec, "INTENT_PARSED", note)
             if intent.kind == I.CANCEL:
-                cancelled = self._cancel_latest(session.safe, exclude=rec["id"])
-                closed = self._close_proposals(session.safe, f"cancelled by {rec['id']}")
+                if bound:
+                    cancelled, closed = None, self._close_proposal(bound, f"cancelled by {rec['id']}")
+                else:
+                    cancelled = self._cancel_latest(session.safe, exclude=rec["id"])
+                    closed = self._close_proposals(session.safe, f"cancelled by {rec['id']}")
                 what = [x for x in (cancelled, closed) if x]
                 rec["data"]["outcome"] = "CANCELLED"
                 rec["data"]["reason"] = f"cancel command; cancelled {', '.join(what)}" if what else "cancel command"
@@ -378,15 +384,41 @@ class Workflow:
         pending = I.Intent.from_json(rec["data"]["intent"])
         return rec if I.answers(pending, message, now, self.labels) else None
 
-    def _open_proposal(self, safe: str) -> dict | None:
-        rows = self.s.db.query("SELECT id FROM requests WHERE safe=? AND json_extract(data, '$.proposal.open')=1 "
-                               "ORDER BY created_at DESC LIMIT 1", (safe.lower(),))
-        if not rows:
+    def _bound_proposal(self, safe: str, message: str, request_id: str | None, now: int) -> str | None:
+        """A confirm or cancel sent with the requestId of a chat proposal acts on that proposal only, so a click on
+        one proposal's card can never confirm a newer proposal or cancel an unrelated approval."""
+        if not request_id:
             return None
-        rec = self.store.get(rows[0]["id"])
+        rec = self.store.get(request_id)
+        if not rec or rec["safe"] != safe.lower() or not rec["data"].get("proposal"):
+            return None
+        if I.parse(message, now, self.labels).kind not in (I.CONFIRM, I.CANCEL):
+            return None
+        return rec["id"]
+
+    def _open_proposal(self, safe: str, request_id: str | None = None) -> dict | None:
+        if request_id:
+            rec = self.store.get(request_id)
+            if not rec["data"]["proposal"].get("open"):
+                return None
+        else:
+            rows = self.s.db.query("SELECT id FROM requests WHERE safe=? AND json_extract(data, '$.proposal.open')=1 "
+                                   "ORDER BY created_at DESC LIMIT 1", (safe.lower(),))
+            if not rows:
+                return None
+            rec = self.store.get(rows[0]["id"])
         if time.time() - rec["data"]["proposal"]["at"] >= CLARIFICATION_WINDOW:
             return None
         return rec
+
+    def _close_proposal(self, request_id: str, why: str) -> str | None:
+        with self._lock(request_id):
+            rec = self.store.get(request_id)
+            if not rec["data"]["proposal"].get("open"):
+                return None
+            rec["data"]["proposal"].update({"open": False, "closed": why})
+            self.store.save(rec)
+            return rec["id"]
 
     def _close_proposals(self, safe: str, why: str) -> str | None:
         """Closes every open chat proposal of this Safe; returns the newest one closed."""
@@ -401,10 +433,10 @@ class Workflow:
                     newest = rec["id"]
         return newest
 
-    def _confirmed_intent(self, safe: str, rec: dict, intent: I.Intent) -> I.Intent:
+    def _confirmed_intent(self, safe: str, rec: dict, intent: I.Intent, bound: str | None = None) -> I.Intent:
         """A chat "confirm" re-runs the open proposal as an explicit instruction, pinned to the proposed operation,
         vault and amount, so revalidation can only keep or lower it."""
-        prop = self._open_proposal(safe)
+        prop = self._open_proposal(safe, bound)
         if prop is not None:
             with self._lock(prop["id"]):
                 prop = self.store.get(prop["id"])

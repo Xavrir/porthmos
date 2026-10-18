@@ -8,9 +8,9 @@
 | Team name | TBD |
 | Competition track | International AI Track, Topic F: Agent Wallet |
 | Submission date | TBD (deadline 20 Oct 2026, 23:59 UTC+8) |
-| Document status | Draft v0.6. v0.6 adds wallet sign-in with Sign-In with Ethereum (EIP-4361), smart contract wallet signatures (ERC-1271, ERC-6492) and the wallet picker (see "Changes from v0.5"); the previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.5.md`. TradeFlow is now built and recorded on Base Sepolia (E6a to E6g). v0.4 applied the eleven confirmed findings of the design tribunal on v0.3 (see "Changes from v0.3"); v0.5 records what was built (see "Changes from v0.4"). The previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.4.md`. Values marked TBD are filled in after testing. |
+| Document status | Draft v0.7. v0.7 records the Copilot changes of 18 Oct 2026: read-only questions never become actions, a confirm gate for chat-derived T1 and T2 actions, batched chain reads, replies in the owner's language, and streamed replies with the reply guard applied while they stream; it also marks the web Orders page as built (see "Changes from v0.6"); the previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.6.md`. v0.6 added wallet sign-in with Sign-In with Ethereum (EIP-4361), smart contract wallet signatures (ERC-1271, ERC-6492) and the wallet picker (see "Changes from v0.5"); the previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.5.md`. TradeFlow is now built and recorded on Base Sepolia (E6a to E6g). v0.4 applied the eleven confirmed findings of the design tribunal on v0.3 (see "Changes from v0.3"); v0.5 records what was built (see "Changes from v0.4"). The previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.4.md`. Values marked TBD are filled in after testing. |
 
-**Build status labels.** **[Built]** means the part runs on Base Sepolia and has tests in the repository. **[In progress]** means the part is being built now. In v0.5 all of TradeFlow is [Built] except the web Orders page, which is [In progress]; the label **[Built]** no longer marks any part, and v0.4 text that used it now reads [Built]. A change made in v0.4 is marked with the finding it answers, for example (v0.4, C1). Text without a label describes the built system. The TradeEscrow contract interface in 04 is unchanged from v0.3.
+**Build status labels.** **[Built]** means the part runs on Base Sepolia and has tests in the repository. **[In progress]** means the part is being built now. In v0.5 all of TradeFlow was [Built] except the web Orders page; since v0.7 the Orders page is [Built] too, so no part is [In progress]. A change made in v0.4 is marked with the finding it answers, for example (v0.4, C1). Text without a label describes the built system. The TradeEscrow contract interface in 04 is unchanged from v0.3.
 
 **Names that do not change.** The product is now Porthmos. On-chain and API identifiers keep the old name, because a change would alter deployed bytecode, signature digests, Safe addresses or live URLs. These stay as they are: the contract names `AegisModule` and `PolicyRegistry`; the EIP-712 domain name `"AegisModule"`; the event `AegisExecuted`; the mock vault token names ("Aegis Vault A", "Aegis Vault B"); the faucet message prefix that the backend verifies (`AEGIS onboarding`; the old `AEGIS session` message is retired in v0.6 and replaced by Sign-In with Ethereum); the Safe salt tag `aegis-v2`; the browser storage key `aegis.wallet.v1`; the headers `X-Aegis-Session` and `X-Aegis-Admin` and the cookie `aegis_session`; the Python package `aegis`; the repository `Xavrir/porthmos`; the site `porthmos.vercel.app`; and the API host `aegis-api.150-109-23-187.sslip.io`.
 
@@ -56,7 +56,7 @@ Singapore is the first market because it has a large wholesale trade sector (57,
 |---|---|---|
 | Treasury core (the engine) | Obligation-aware reserve, state-bound authorization, structural containment, Exit Agent, Bank Risk Desk, hash-chained Decision Ledger | [Built] |
 | Multi-tenant app | Any visitor creates a treasury on Base Sepolia: a Safe, an owner key and a bank key, configured by real transactions | [Built] |
-| TradeFlow (first module) | Milestone escrow per trade order. Pays the supplier only on a verified proof from a trusted issuer. Contract, service and API are deployed on Base Sepolia and recorded in E6. The web Orders page is in progress | [Built]; web Orders page [In progress] |
+| TradeFlow (first module) | Milestone escrow per trade order. Pays the supplier only on a verified proof from a trusted issuer. Contract, service, API and the web Orders page are deployed; E6 is recorded on Base Sepolia | [Built] |
 
 TradeFlow uses the engine. Escrowed milestone funds leave the Safe when the owner funds an order, so the treasury core manages only the remaining cash and can never invest committed funds. A held milestone uses the same oversight as a refused deposit: the ledger records it, the bank desk shows it, and a bank freeze stops it.
 
@@ -133,13 +133,13 @@ Our contribution is the combination of four mechanisms in one working system [Bu
 │       │ reads PolicyRegistry; pays only the supplier or refunds the buyer Safe  │
 │  Keeper process ───► MockPriceFeed (poke every 60 s)                            │
 └─────────────────────────────────────────────────────────────────────────────────┘
-  * TradeFlow, [Built]: contract, service and API deployed; the web Orders page is in progress
+  * TradeFlow, [Built]: contract, service, API and the web Orders page
 ```
 
 | Component | Responsibility | Trust level |
 |---|---|---|
 | Web App | Onboarding with browser-held keys, mandate and obligation input, chat, approval signing (EIP-712), audit views, Bank Risk Desk | Untrusted client; all inputs revalidated server-side |
-| Agent | Interprets requests, asks clarifying questions, chooses among deterministic plan options, explains decisions | Untrusted output; bounded by everything downstream |
+| Agent | Classifies requests (the rule parser decides whether a message is an action; the LLM may only fill missing parameters), chooses among deterministic plan options, explains decisions in the owner's language | Untrusted output; bounded by everything downstream |
 | State Analyzer | Reads balances, vault shares, `maxRedeem`, oracle data, registry state | Trusted code, reads only |
 | Reserve Engine | Computes required reserve and deployable capital from the approved obligation schedule | Trusted code |
 | Risk Engine | Scores each vault, evaluates exit triggers, maintains quarantine cooldowns | Trusted code |
@@ -271,11 +271,11 @@ Errors use codes such as `RateLimited`, `OnboardingClosed`, `FaucetEmpty`, `NotA
 | Item | Value |
 |---|---|
 | Host | Tencent CVM, Docker Compose project `aegis` |
-| TLS and routing | An existing Caddy on the host terminates TLS for `aegis-api.150-109-23-187.sslip.io` and proxies to `127.0.0.1:8787`, flushing Server-Sent Events at once |
+| TLS and routing | An existing Caddy on the host terminates TLS for `aegis-api.150-109-23-187.sslip.io` and proxies to `127.0.0.1:8787` with `flush_interval -1`, so every Server-Sent Event (`/api/stream` and the streamed chat reply) is sent at once |
 | Service container | One image (Python 3.13 slim, uv). `python -m aegis all` runs the five processes under a supervisor that gives each process only its own secrets and restarts a process that exits, with backoff from 1 s up to 30 s. The secrets list is fixed; v0.4 adds `INTERNAL_TOKEN` and the demo issuer keys to it (C3) |
 | Container hardening | Non-root user, read-only root filesystem, all capabilities dropped, `no-new-privileges`, 512 MB memory limit, port published on 127.0.0.1 only |
 | Data | SQLite on a volume: the shared service database, the Authorizer's own database of signed nonces, per-process logs |
-| LLM | CLIProxyAPI v8 container (128 MB), reachable only on the compose network at `http://cliproxy:8317/v1`, model `claude-haiku-5-5`. Any LLM error or a timeout (20 s) makes that request deterministic, with a one-line notice; after an error the service skips the LLM for 30 s |
+| LLM | CLIProxyAPI v8 container (128 MB), reachable only on the compose network at `http://cliproxy:8317/v1`, model `claude-haiku-5-5`. Any LLM error or a timeout (20 s; a streamed call has the same 20 s bound on the whole reply) makes that request deterministic, with a one-line notice; after an error the service skips the LLM for 30 s. Since v0.7 the service does not send JSON mode (`response_format: json_object`): the proxy buffered JSON-mode replies, so the first token came after about 7 s instead of about 1.2 s. The model is still asked for a JSON object, and the parser takes the first `{` to the last `}` of the plain text |
 | Web | Static build on Vercel; `VITE_API_URL` points at the API. If the API is unreachable, the site falls back to replay of the recorded evidence with a visible banner |
 | CORS | Allowed origins: the Vercel site and local dev ports. Headers `Content-Type`, `X-Aegis-Session`, `X-Aegis-Admin`; methods GET, POST, OPTIONS; no credentials |
 | Privacy | Client IPs are stored only as salted SHA-256 hashes. The HTTP access log is off on 84532, because the stream URL can carry the session token |
@@ -306,7 +306,7 @@ Availability was checked on 17 Oct 2026. On 84532, code exists at the canonical 
 
 **Off-chain flow**
 
-1. The owner opens the Trade page (the web Orders page is in progress; the API and the evidence run without it) and enters the supplier address, the total and the terms reference. The page fills the issuers, conditions and deadlines from the bundled build (v0.4, C1). The owner can link an existing obligation to the order.
+1. The owner opens Orders > New order (`/orders`) and enters the supplier address, the total and the terms reference. The page fills the issuers, conditions and deadlines from the bundled build (v0.4, C1). The supplier can be a demo supplier key generated in the browser or any other address. The API can link an existing obligation to the order (`POST /api/tradeflow/orders/{id}/link`); the web form does not offer this yet.
 2. The page shows what will be signed (the exact approve amount and every order field) and warns if the Safe cash after funding falls below the on-chain reserve floor. The web encodes the MultiSend batch and the Safe transaction itself, and the owner key sends it. The service never builds or sends it.
 3. The service reads `OrderCreated` and writes an `ORDER_CREATED` ledger row with the transaction hash. If an obligation was linked, the service settles it and returns the new floor value and schedule hash; the web encodes the floor update and the owner signs it, as for any obligation change (v0.4, C1). This stops the same payment from being counted twice.
 4. A proof arrives. It is sent by the issuer or supplier (`POST /api/tradeflow/orders/{id}/proofs`) or, in the demo, signed by a demo issuer on the owner's request.
@@ -350,6 +350,7 @@ The reserve engine counts upcoming non-escrow obligations as before. Committed f
 | `POST /api/tradeflow/orders/{id}/proofs` | Anyone, rate-limited | Submit `{index, proof, signature, document?}`; the issuer signature is the authority. Proofs that fail admission get 4xx and change nothing; documents above 1 MB get 413; the service keeps only the document hash (v0.4, C4) |
 | `POST /api/tradeflow/orders/{id}/proofs/demo` | Owner session | Ask a demo issuer to sign `{index, variant: "valid" or "outOfRange" or "corrected"}`; signs only for milestones whose issuer is that demo key |
 | `POST /api/tradeflow/orders/{id}/confirm` | Owner session | Carries the owner's signed `ReleaseConfirmation` for a corrected proof after a hold, or for a late release (v0.4, C8) |
+| `POST /api/tradeflow/orders/{id}/link` | Owner session | `{obligationId}`: settles the obligation this order pays, once per order, and returns the new floor value and schedule hash for the owner to sign |
 
 The v0.3 `resolution` endpoint, which returned waive and refund calldata, is removed: the web encodes `waive(orderId, index)` and `refund(orderId)` itself (v0.4, C1).
 
@@ -366,15 +367,15 @@ New abuse limits: demo proofs 12 per tenant per hour; admitted proof submissions
 | Item | Choice | Notes |
 |---|---|---|
 | LLM | `claude-haiku-5-5` through CLIProxyAPI, an OpenAI-compatible proxy on the same host. Configured by `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; the provider is swappable | No safety property depends on the model. Without an LLM, every feature runs in deterministic mode |
-| Agent tools | `get_treasury_state`, `get_obligations`, `get_risk_report`, `plan_allocation`, `propose_action`, `explain_decision` | All deterministic. Every tool takes the Safe from the authenticated session, never from LLM arguments. `propose_action` accepts only a plan option ID and optional reductions |
-| TradeFlow explanation | `tradeflow/explain.py` (Verification Agent): facts in, one proposal from a fixed set out; a rule-based proposal replaces any answer outside the set. The chat tools `get_orders`, `get_order`, `verify_proof`, `explain_hold` are not built | Deterministic checks decide; the explanation never signs and never takes an amount, payee or milestone index |
-| Chain data | Base Sepolia RPC | Read through the State Analyzer only |
+| Agent tools | `get_treasury_state`, `get_obligations`, `get_risk_report`, `plan_allocation`, `propose_action`, `explain_decision`, and for TradeFlow `get_orders`, `get_order`, `explain_hold` (read-only) | All deterministic. Every tool takes the Safe from the authenticated session, never from LLM arguments. `propose_action` accepts only a plan option ID and optional reductions |
+| TradeFlow explanation | `tradeflow/explain.py` (Verification Agent): facts in, one proposal from a fixed set out; a rule-based proposal replaces any answer outside the set. The Copilot answers order questions through the read-only tools `get_orders`, `get_order` and `explain_hold`; a `verify_proof` chat tool is not built | Deterministic checks decide; the explanation never signs and never takes an amount, payee or milestone index |
+| Chain data | Base Sepolia RPC (publicnode in `deploy/tencent/aegis.env.example`) | Read through the State Analyzer only. Independent reads go out as JSON-RPC batches, pinned to one block (see 03, "Copilot chat turn") |
 | Price feed | MockPriceFeed implementing `AggregatorV3Interface`, updated by the keeper process every heartbeat (60 s) | Stopping the keeper reproduces staleness; `setPrice` reproduces a depeg |
 | Vaults | Two MockVaults implementing ERC-4626 over MockUSDC (6 decimals) | Admin sets yield accrual and withdrawable liquidity for stress scenarios |
 | Obligations | Entered and approved by the owner in the app; the approval produces the on-chain floor update | Never inferred by the LLM |
 | Proof sources [Built] | EIP-712 `MilestoneProof` signed by the milestone's issuer key; demo issuers on the server | Real TradeTrust or eBL documents and IoT gateways are roadmap |
 | Contracts toolchain | Foundry (solc 0.8.28, Cancun), OpenZeppelin 5.4, Safe v1.4.1 deployments on Base Sepolia | |
-| Frontend | React 19, Vite 8, TypeScript 6, viem 2, wagmi 3 | Deployed on Vercel |
+| Frontend | React 19, Vite 8, TypeScript 6, viem 2, wagmi 3 | Deployed on Vercel. Pages: landing, `/signin` and `/signup` (a full-screen ASCII night-strait sea drawn on a canvas, with a moon column, a lighthouse beam and a container ship), then Treasury, Copilot, Risk, Audit, Bank and Orders behind a session route guard, with sign out and a "forget device" action that needs a typed confirmation. Motion in the style of Mercury (`web/src/lib/motion.ts`): count-up and rolling figures, chart draw and morph, page and drawer transitions, row highlights and skeleton shimmer; exit animations play on an inert copy of the closing element (`ghost.ts`, `components/Exit.tsx`), so focus never waits for them; `prefers-reduced-motion` applies the final state at once |
 | Storage | SQLite (WAL) with hash-chained ledger rows | PostgreSQL in later versions |
 | Hosting | Tencent CVM, Docker Compose, Caddy | See "Hosting" |
 
@@ -388,13 +389,14 @@ New abuse limits: demo proofs 12 per tenant per hour; admitted proof submissions
 
 | Activity | Performed by |
 |---|---|
-| Understand "keep three months of payroll safe, the rest in term deposits" | LLM |
-| Ask for missing information (for example the payroll date) | LLM |
+| Decide whether a message is a question, a polite request or an instruction | Rule parser (deterministic) |
+| Understand "keep three months of payroll safe, the rest in term deposits"; fill a parameter the owner left out | LLM, within the rule parse |
+| Ask for missing information (for example the payroll date) | Deterministic question templates |
 | Read balances, vault state and registry | State Analyzer |
 | Compute required reserve and deployable capital | Reserve Engine |
 | Score vaults, evaluate exit triggers, quarantine | Risk Engine |
 | Produce plan options and mark the default | Allocation Planner |
-| Choose the default, a more conservative option, or hold, and explain | LLM |
+| Choose the default, a more conservative option, or hold, and explain in the owner's language | LLM (rules without an LLM) |
 | Check the choice against the default | Proposal Validator |
 | Build the typed action | Action Builder |
 | Check policy, derive the tier | Policy Verifier |
@@ -412,10 +414,34 @@ New abuse limits: demo proofs 12 per tenant per hour; admitted proof submissions
 **The "only more conservative" rule.** The Allocation Planner returns a set of options and marks one as the default: the option its deterministic objective ranks best within policy. The LLM may choose the default, "hold", or any option whose amount in every vault is at or below the default's amount, and may further reduce amounts. If the LLM chooses an option above the default in any vault, the Proposal Validator does not reject it silently: it raises the action to tier T3, so the owner must approve it. A manipulated model can therefore cause less exposure on its own, never more.
 
 **Input handling.**
-- Owner chat messages are intent from an authenticated user, but they can only select within policy. A message cannot change policy; policy changes are separate signed owner or bank transactions.
+- Owner chat messages are intent from an authenticated user, but they can only select within policy. A message cannot change policy; policy changes are separate signed owner or bank transactions. A question never becomes an action, and an action that runs without a human signature needs the owner's own instruction (see "Copilot chat turn").
 - Externally sourced text (vault or token names, metadata, documents) is passed to the LLM as quoted data with a source label, never as instructions. It cannot reach a signer, because signers accept only validated plan options.
 - Every tool call is scoped to the Safe bound to the session. The bank desk uses a separate read-only role.
 - Proof contents and uploaded trade documents are external data. They reach the LLM only as quoted data. The release decision comes from the deterministic checks, never from the LLM [Built].
+
+**Copilot chat turn (v0.7).** `POST /api/agent/chat` (owner session) runs one turn through the state machine below; `POST /api/agent/chat/stream` runs the same turn and streams it. The parser in `service/aegis/agent/intent.py` works in English and Indonesian.
+
+| Message class | Detected by | Effect |
+|---|---|---|
+| Question | A hypothetical marker ("what if", "should I", "how much", "explain", "kalau saya", "apakah"), which wins over everything; else a question word at the start, a trailing "?", or a read lead ("show", "list", "lihat") | Read-only. A write verb inside a question is kept as `asked`, and the kind becomes STATUS, RISK, EXPLAIN, ORDERS or UNKNOWN. The turn holds with `ReadOnly` and answers with a summary |
+| Polite | "can you", "could you", "please can you", "I want to", "let's", "bisa", "boleh", "saya mau" at the start | An action request, not an instruction: a T1 or T2 action waits for confirmation |
+| Imperative | Any other action message, for example "deposit 1,000 USDC into Vault B" | An instruction |
+
+Rules:
+- The rules decide whether a message is an action. If the rule parse is not a write kind (allocate, redeem, rebalance, obligation draft), an LLM answer that names one is ignored and flagged `llmUpgradeRefused`; the LLM may only turn UNKNOWN into a read-only kind. Cancel, confirm and transfer-out messages are parsed by the rules alone, with no LLM call.
+- For an action, the LLM may only fill a parameter the owner left out (amount, vault, due date); each one is listed in `llm_filled`. If the LLM reads a stated parameter or the kind differently, the turn asks the owner to confirm the reading (`confirmIntent`, flag `llmDisagreed`). A model selection may hold or lower, never switch the operation or vault the owner named or exceed the amount the owner stated.
+- A write request that also carries an injection marker (override instructions, system prompt, secrets, policy change, another client, an encoded payload, an address in the message) is refused whole with `SuspiciousRequest`, not half executed. An address other than the session Safe adds `crossClient`.
+- T1 and T2 run without a human signature, so a chat-derived T1 or T2 action executes only when the message is imperative and no parameter came from the LLM. Otherwise the simulated action is stored as a proposal, the turn holds with `AwaitingConfirmation`, and the response carries `pendingConfirmation {requestId, op, vault, amount, tier, expiresAt}`. A reply of "confirm" (or "yes", "ok", "lanjut") within 30 minutes runs the proposal as an explicit instruction pinned to its operation, vault and amount, so revalidation can only keep or lower it. "confirm" with nothing open holds with `NothingToConfirm`. A new write request or "cancel" closes open proposals. T3 and T4 are unchanged: they always need the signed Approval.
+- A share of free cash ("deposit 50% of free cash") is sized from deployable capital; if that is zero, the turn holds with `NothingDeployable`. Other percentages, vague or ambiguous amounts and unknown vaults lead to a clarification question from a fixed template.
+- Order questions ("why is milestone 2 of order 1 held?") are read-only. The summary comes from `get_orders`, `get_order` and `explain_hold`, and the order data reaches the LLM only as quoted data.
+
+A turn makes at most three LLM calls: intent (skipped for rule-only kinds), option selection (action kinds only) and the explanation. The response carries `reply`, `requestId`, `state`, `mode`, `replyMode` (`llm` only when the reply shown is the model's accepted wording, else `deterministic`) and `llmBudget` (`{state, used, limit, remaining, windowSeconds}`; state `disabled`, `unlimited`, `available`, `tenantExhausted` or `globalExhausted`), plus `actionCard`, `obligationDraft`, `clarification`, `pendingConfirmation` and `llmFallback` when they apply.
+
+**Reply wording.** The explanation prompt names the product Porthmos, passes the facts, the deterministic draft and the owner's latest message (first 1,000 characters, as quoted untrusted data under `owner_message`), and asks for at most three sentences in the language of that message, with every number copied from the facts. A reply that contains a leak phrase (`LEAK_RE`: system prompt, private key, seed phrase, mnemonic, API key and similar) or an address or hash that is not in the facts is dropped for the deterministic template. Replies are capped at 1,200 characters. The templates are in English.
+
+**Chain reads.** `load_state` reads the latest block header once and pins every other read of the snapshot to that block (`ChainClient.at_block`), so one snapshot never mixes blocks. `ChainClient.gather` runs independent reads on threads and parks each RPC call; when every task is parked, the parked calls go out as one JSON-RPC batch of at most `RPC_BATCH_SIZE` calls (default 50). A snapshot therefore costs 2 or 3 round trips: the header; then policy, Safe balance, oracle, the daily deposit total and the reads of each vault together; then `convertToAssets` and `previewRedeem` for vaults with a position. If the endpoint does not take batches (a 4xx reply or a reply with missing ids), the client stops batching and sends the calls one by one; a 5xx is an error. With an LLM configured, the state load starts when the message arrives and overlaps the intent call. Measured on Base Sepolia by the team: the state load fell from 7.36 s to 0.42 s (median) and a full chat turn from about 12 s to about 5 to 6 s. The rest of a turn is mostly LLM time to first token.
+
+**Streamed replies.** `POST /api/agent/chat/stream` returns `text/event-stream` with the events `status` (`{stage}`: `thinking`, `reading`, `writing`), `delta` (`{text}`, append), `replace` (`{text}`, swap everything shown), then `done` with exactly the `/api/agent/chat` body, or `error` (`{status, code, detail}`; session and rate-limit refusals arrive this way too). A `: keepalive` comment goes out every 10 s. The turn is a persisted request, so it runs to the end even if the client leaves. Only the reply of the turn's own request streams. The reply guard runs while the reply streams: it decodes the `reply` field of the JSON as it arrives, sends whole words only, holds back a word that could still grow into an address (a `0x` token until a non-hex character follows) or into a leak phrase, and on a failed check replaces what is shown with the template at once. At the end it reconciles the text shown with the final reply, which is the same reply that the non-streamed path stores. In deterministic mode no `delta` is sent and `done` carries the reply. The web falls back to `/api/agent/chat` only when the stream request fails or the answer is not an event stream. Once a stream is accepted, a broken stream or 30 s without a byte is shown as an error that asks the owner to check the request list; the web never sends the message again, because the first turn may already have acted.
 
 **State machine.** Each request runs through persisted states. Every transition stores a timestamp and the versions of the input data it used.
 
@@ -438,6 +464,7 @@ Rules:
 - No path to `DAR_SIGNED` skips `POLICY_CHECKED`, `SIMULATED` or `FINAL_REVALIDATION`.
 - Every terminal state writes a ledger row, including holds, rejections and denials.
 - `FINAL_REVALIDATION` reloads state, recomputes the plan and simulates again. If the new action no longer fits inside the human Approval, the workflow replans instead of signing.
+- A chat-derived T1 or T2 action without an explicit instruction goes from `OPTION_SELECTED` to `HELD` with `AwaitingConfirmation` after simulation; the later "confirm" is a new request that runs the full path (v0.7).
 
 **Milestone state machine [Built].** Each milestone of an order has its own persisted off-chain state. On-chain, a milestone is only `PENDING`, `RELEASED`, `WAIVED` or `REFUNDED` (see 04).
 
@@ -561,7 +588,7 @@ The Verification Agent then writes a short explanation and proposes one action f
 | Proof verification [Built] | Fixed proof corpus: valid, out of range, wrong issuer, tampered field, wrong order, early or future issue time, missing document. Expected: 100% correct verdicts and the same verdict from the contract's `checkRelease` |
 | Settlement latency | Blocks from a valid proof to `MilestoneReleased`. Not measured yet |
 
-Results so far: on 17 Oct 2026, the local runs passed: contracts 106 Foundry tests (including 59 TradeEscrow tests, 4 TradeEscrow invariants and 2 older invariants), service 161 unit and 15 integration tests, web 61 tests. The on-chain evidence E1 to E6 is recorded (05). The financial replay against baselines and a full AgentDojo run are not done: TBD.
+Results so far: on 18 Oct 2026, the local runs passed: contracts 106 Foundry tests (including 59 TradeEscrow tests, 4 TradeEscrow invariants and 2 older invariants), service 356 unit tests, web 154 tests. The 18 service integration tests need Anvil and were not run in that pass; their last recorded run (15 tests, 17 Oct 2026) predates the 3 added since. The on-chain evidence E1 to E6 is recorded (05). The financial replay against baselines and a full AgentDojo run are not done: TBD.
 
 ---
 
@@ -617,6 +644,8 @@ The module derives the minimum tier from on-chain state. The declared `dar.tier`
 | T3 Material | `DEPOSIT` with amount > `autoCap`, or first deposit into a vault, or an LLM choice above the default option | Authorizer + owner Approval |
 | T4 Escalated | `DEPOSIT` with amount > `bankLimit` | Authorizer + owner Approval + bank Approval |
 | Blocked | Any transfer out of the Safe; any receiver other than the Safe; deposit into a vault not added by the owner | Not representable |
+
+In chat, a T1 or T2 action runs only on the owner's own imperative instruction with no parameter filled by the LLM, or on a "confirm" of an open proposal; otherwise it waits with `AwaitingConfirmation` (03, "Copilot chat turn"; v0.7). This is service policy; the contract tiers are unchanged.
 
 `dailyCap` (per UTC day, chosen over a rolling window to keep on-chain bookkeeping to one counter) applies to every deposit tier. An amount above `dailyCap` needs the owner to raise the cap first. A `bankLimit` of 0 means no bank approval is required.
 
@@ -893,6 +922,8 @@ No single compromised component short of the owner's own key can move funds out 
 | Unit or amount error | Simulation of exact deltas; reserve floor and caps on-chain; measured amounts in events | Simulator, AegisModule |
 | Malicious vault | Only the owner can add vaults; first deposit needs owner approval; exact approve reset to zero; inner call success required; redeem only from vaults the Safe deposited into | PolicyRegistry, AegisModule |
 | Privilege escalation through chat | Chat cannot change policy; tier derived on-chain | PolicyRegistry, AegisModule |
+| A question or a model guess becomes an unsigned action (v0.7) | The rule parser decides whether a message is an action; questions are read-only; the LLM may only fill missing parameters; a chat-derived T1 or T2 runs only on an imperative with no model-filled parameter, or on "confirm"; an action mixed with injection markers is refused whole (`SuspiciousRequest`) | Copilot intent parser and workflow |
+| A streamed reply shows a leaked phrase or an invented address (v0.7) | The reply guard runs on the stream: whole words only, possible addresses and leak phrases held back, the template replaces the text on a failed check; the stored reply is the checked final reply | Copilot reply guard |
 | Privilege escalation through a stolen bank key | Role matrix: bank can only tighten, freeze and revoke | PolicyRegistry |
 | Cross-client data extraction | Every tool, endpoint and stream event bound server-side to the session's Safe; bank desk is a separate read-only role | Porthmos Service |
 | Acting on another tenant's Safe | Owner sessions need a signed session message and `registry.owner(safe)` equal to the signer; the Authorizer signs only for served tenants | Sessions, Authorizer, PolicyRegistry |
@@ -979,14 +1010,14 @@ Operator role addresses are in `deployments/84532.json`.
 
 | Suite | Count | Status |
 |---|---|---|
-| Contracts (Foundry; fuzz 256 runs; invariants 64 runs, depth 40) | 106 | Passed in a local run on 17 Oct 2026. Includes TradeEscrow 59 new tests, 4 TradeEscrow invariants and 2 older invariants |
-| Service unit tests (`pytest -m "not integration"`) | 161 | Passed in a local run on 17 Oct 2026 |
-| Service integration tests (`pytest -m integration`, against Anvil) | 15 | Passed in a local run on 17 Oct 2026 |
-| Web (Vitest) | 61 | Passed in a local run on 17 Oct 2026 |
+| Contracts (Foundry; fuzz 256 runs; invariants 64 runs, depth 40) | 106 | Passed in a local run on 18 Oct 2026. Includes TradeEscrow 59 tests, 4 TradeEscrow invariants and 2 older invariants |
+| Service unit tests (`pytest -m "not integration"`) | 356 | Passed in a local run on 18 Oct 2026 (`uv run pytest -q`: 356 passed, 18 skipped) |
+| Service integration tests (`pytest -m integration`, against Anvil) | 18 | Skipped in that run (no Anvil). 15 passed on 17 Oct 2026; added since: 2 smart wallet tests (v0.6) and 1 Copilot test (`test_copilot_anvil.py`) |
+| Web (Vitest) | 154 | Passed in a local run on 18 Oct 2026 (18 files) |
 | v0.4 fixes to built code: W6, W7, A13, M12 extension, T52 | Built | Web owner-transaction guard (`web/src/lib/txguard.test.ts`), supervisor secrets, `AuthorizerNotCurrent` for DARs, deployment merge (`test_merge_deployment.py`) |
 | TradeFlow tests T1 to T54 | Built, in the counts above | TradeEscrow 59 Foundry tests (incl. 4 invariants); service tests in `test_tradeflow.py` and `integration/test_tradeflow_anvil.py` |
 
-Counts come from the local runs of 17 Oct 2026: 106 Foundry tests, 161 service unit tests, 15 service integration tests, 61 web tests. The v0.4 count of 47 contract tests did not include TradeEscrow.
+Counts come from the local runs of 18 Oct 2026 at commit `b8e0f15`: 106 Foundry tests, 356 service unit tests (18 integration tests collected, not run), 154 web tests. v0.5 and v0.6 listed 161 unit, 15 integration and 61 web tests from 17 Oct 2026. The v0.4 count of 47 contract tests did not include TradeEscrow.
 
 **Contract tests (Foundry)**
 
@@ -1057,6 +1088,9 @@ Counts come from the local runs of 17 Oct 2026: 106 Foundry tests, 161 service u
 | A11 | Authorizer receives a tampered payload (amount, minOut, tier, owner signature, expiry, schedule, simulation result, option, price band) | Refuses with the matching reason |
 | A12 | LLM returns an invalid choice, times out, or exceeds its budget | Rule-based result for that request; the LLM cannot override a transfer refusal |
 | A13 | The owner revokes or rotates the Authorizer, then a deposit is requested (v0.4, V1) | The Authorizer refuses with `AuthorizerNotCurrent` and signs nothing |
+| A14 | v0.7, Copilot safety (`test_copilot_safety.py`, 144 tests with parameters): read-only and hypothetical prompts in English and Indonesian; a model that tries to upgrade a question, change the kind or raise an amount; T2 without action wording, after a clarification, and with a model-filled vault; explicit commands; share of free cash; ambiguous amounts and vaults; injection probes, including in an obligation label and against another Safe; order questions and tenant scope; `replyMode` and `llmBudget`; the explanation prompt (Porthmos, owner's language) and the leak check; state loaded once while the model parses | No question or probe becomes an action; a chat-derived T2 waits for "confirm" unless the message is an explicit command with no model-filled parameter; the model cannot raise the stated amount or revive a refused request; a reply with an unknown address or a leak phrase is replaced by the template |
+| A15 | v0.7, RPC batching (`test_rpc_batching.py`, 6 tests) | One batch per round with results in order; nested reads cost one round trip per stage; pinned reads use one block tag; a rejected batch falls back to single calls; a revert reaches only its caller; `load_state` reads one block in two round trips (no vault position) |
+| A16 | v0.7, streamed chat (`test_chat_stream.py`, 20 tests) | Streamed LLM client: deltas across chunks, HTTP, mid-stream and truncation errors. Reply guard: whole words, addresses held back until complete, unknown address or leak phrase replaced by the template, the final reply equals the non-stream reply. Endpoint: event sequence with `done` equal to the non-stream body, session and rate-limit refusals as `error` events, only the turn's own request streams, keepalive while idle, the non-stream route unchanged |
 | M1 | Onboarding config shape | Matches the spec |
 | M2 | Faucet | Drips once per address; respects the daily budget and the per-IP limit |
 | M3 | Activation with each misconfiguration, a wrong or missing Safe, and repeated calls | Fails with the named code; mints exactly once |
@@ -1071,6 +1105,7 @@ Counts come from the local runs of 17 Oct 2026: 106 Foundry tests, 161 service u
 | M12 | Supervisor secrets; Exit Agent scope | Each process gets only its own secrets; tenants without deposits are skipped. v0.4 extension (C3): the issuer keys are in the base set; only the API child gets `ISSUER_*`; the API, Authorizer and Exit Agent get `INTERNAL_TOKEN`; the Executor and Keeper do not |
 | I1 to I7 | Integration on Anvil: reads match the deployment; T3 and T2 deposits execute; tampered and replayed DARs revert; partial exit and self-submit; depeg exit with deposits held; ledger reconciles with chain | As expected on a real chain |
 | I8 | Two tenants end to end on Anvil | Tenant B sees nothing of tenant A; a bank freeze blocks deposits while the exit still works |
+| I9 | v0.7, Copilot on Anvil (`test_copilot_anvil.py`): two questions (English and Indonesian) and two injection messages, then "deposit 1,000 USDC into vault B" | No submission and no balance change for the first four; the deposit reaches `AWAITING_APPROVAL` with the stated amount |
 
 **Web tests (Vitest)**
 
@@ -1083,6 +1118,9 @@ Counts come from the local runs of 17 Oct 2026: 106 Foundry tests, 161 service u
 | W5 | Safe address prediction and call encoding | 6 |
 | W6 | v0.4, C1: the mocked API returns a `floorUpdate` whose `to` is the Safe and whose data is an `execTransaction`; then a valid response | Nothing is sent and a refusal shows; the valid response encodes exactly `setReserveFloor` to the pinned registry. |
 | W7 | v0.4, C1: the send function is given an unpinned target, and a Safe `execTransaction` it did not build | Both refused; no send |
+| W8 | v0.7: SSE parser for the streamed chat (`sse.test.ts`) | 11 |
+| W9 | v0.7: motion helpers, tweens and reduced motion (`motion.test.ts`) | 15 |
+| W10 | Sign in: route guard, return path after sign in, sign in on this device, forget device only after the typed word (`auth.test.ts`) | 16 |
 
 **TradeFlow tests [Built]**
 
@@ -1184,12 +1222,12 @@ Remaining plan (dates in UTC+8):
 | Date | Work | Exit criterion |
 |---|---|---|
 | 17 Oct 2026 | Done: this document (v0.3 to v0.5); TradeEscrow, its tests and invariants; the web owner-transaction guard (C1) | `forge test` green; W6 and W7 green |
-| 18 Oct 2026 | Done before the freeze: tribunal fixes to built code (C1, C3, V1, deployment merge); Proof Verifier, `/sign-release`, API and Executor release path; TradeEscrow on 84532; E6a to E6g recorded in `evidence-84532.json` through the real pipeline. In progress: the web Orders page | E6 hashes in `evidence-84532.json`, passing T54 |
+| 18 Oct 2026 | Done before the freeze: tribunal fixes to built code (C1, C3, V1, deployment merge); Proof Verifier, `/sign-release`, API and Executor release path; TradeEscrow on 84532; E6a to E6g recorded in `evidence-84532.json` through the real pipeline; the web Orders page (built 17 Oct); wallet connect and Sign-In with Ethereum; Copilot safety, batched reads, reply language and streamed replies | E6 hashes in `evidence-84532.json`, passing T54; 106 Foundry, 356 service unit and 154 web tests green |
 | 18 Oct 2026, end of day | **Code freeze** | No feature code after this point |
 | 19 Oct 2026 | Evidence sync to the web and docs, demo video, final document; fixes to existing behaviour only | |
 | 20 Oct 2026, 23:59 | Submission deadline | |
 
-**Cut line (v0.4, C2).** TradeFlow steps 1 to 3 are done before the freeze: (1) TradeEscrow with tests; (2) the Proof Verifier with admission, the Authorizer `/sign-release` with the V1, C6 and C8 checks, the API and the Executor release path; (3) deployment on 84532 and E6 through phase 2 of the evidence script, with `requestId`, workflow and `ledgerRef` for E6b and E6e. Step 4, the web Orders page, is in progress. Step 5, the LLM explanation, exists as `tradeflow/explain.py` with a rule-based fallback; the recorded explanations came from the rules (`source: rules`). If the Orders page is not done at the freeze, it ships later and the API, the evidence and the contract stand without it. The treasury core and its evidence do not depend on TradeFlow: AegisModule, PolicyRegistry and the deployed addresses did not change. After the freeze, the hosted service changes only by rollback to the `aegis-treasury:pre-tradeflow` image (v0.4, C10).
+**Cut line (v0.4, C2).** TradeFlow steps 1 to 3 are done before the freeze: (1) TradeEscrow with tests; (2) the Proof Verifier with admission, the Authorizer `/sign-release` with the V1, C6 and C8 checks, the API and the Executor release path; (3) deployment on 84532 and E6 through phase 2 of the evidence script, with `requestId`, workflow and `ledgerRef` for E6b and E6e. Step 4, the web Orders page, is done (list, milestone timeline, create through the Safe and MultiSendCallOnly, waive and refund, a public supplier view at `/o/:id`). Step 5, the LLM explanation, exists as `tradeflow/explain.py` with a rule-based fallback; the recorded explanations came from the rules (`source: rules`). The treasury core and its evidence do not depend on TradeFlow: AegisModule, PolicyRegistry and the deployed addresses did not change. After the freeze, the hosted service changes only by rollback to the `aegis-treasury:pre-tradeflow` image (v0.4, C10).
 
 ### Known limitations
 
@@ -1202,7 +1240,10 @@ Remaining plan (dates in UTC+8):
 | Obligations are self-reported | Wrong input gives a wrong reserve | Import from invoicing or accounting systems |
 | Custom module instead of audited permission modules | More custom code to trust | Adopt Zodiac Roles when the action set grows |
 | Contracts not audited | Not suitable for real funds | External audit before any mainnet use |
+| Testnet only | Everything runs on Base Sepolia with test USDC and mock vaults; nothing is suitable for real funds | Audit, real vaults and feeds, institutional custody before any mainnet use |
 | LLM provider availability | Copilot unavailable during outages | Plans, reserve logic and exits run without the LLM |
+| Copilot latency (v0.7) | After batched, block-pinned reads (state load about 0.42 s median on Base Sepolia), a chat turn takes about 5 to 6 s, mostly LLM time to first token over up to three sequential calls; streaming shows the explanation as it is written | Fewer LLM calls per turn; a faster model or a direct provider endpoint |
+| Copilot message classes are rule-based (v0.7) | The parser covers English and Indonesian wording. A phrasing it does not know can be misread: an instruction as a question (no action) or an unusual question with an action verb as an instruction. A misread T1 or T2 still stays inside the on-chain caps, floor and used vaults; T3 and T4 always need a signed Approval | More languages and phrasings in the rule set |
 | LLM access through a proxy signed in with a team account | Acceptable for a demo, not for production data handling | Provider API key under a data processing agreement |
 | Tenant keys are browser burner keys | Script injection on the site, or a leaked key file, gives control of that test treasury | Testnet only; an injected wallet is already supported for the owner; institutional custody in production |
 | The module address in onboarding comes from the API config | Onboarding targets are pinned (v0.4, C1), but the module address inside `enableModule` is read from the config, so a compromised API host could still point new tenants at a malicious module | Compare the whole onboarding config with the bundled deployments file and refuse a mismatch |
@@ -1214,13 +1255,26 @@ Remaining plan (dates in UTC+8):
 | EOA issuers only [Built] | Contract-wallet issuers (EIP-1271) cannot sign proofs | Add EIP-1271 support |
 | No on-chain dispute process [Built] | A disagreement ends in a waiver or a refund | Arbitration module or a licensed escrow partner |
 | Token blocklists [Built] | With real USDC, a blocklisted supplier makes every release revert; funds return only by refund after the deadline | Check the payee before funding; owner-approved payee change |
-| Web Orders page not finished | TradeFlow orders are created and read through the API and the recorded script; the browser page is in progress | Finish and ship the Orders page |
 | Fixed three milestones [Built] | Other order structures need a new contract version | Variable milestone count |
 | Regulation | On-chain settlement is possible only where stablecoin payments are allowed; Indonesia is excluded | Trade Intelligence Mode with bank or licensed PSP settlement |
 
 ---
 
 ## Changes
+
+### Changes from v0.6
+
+| Change | Section |
+|---|---|
+| Copilot safety (commit `1179f23`): messages are classed as question, polite or imperative by the rule parser; questions are read-only; the LLM may only fill missing parameters and cannot upgrade a read-only message; a chat-derived T1 or T2 runs only on an imperative with no model-filled parameter, else it waits for "confirm" (`pendingConfirmation`); new hold reasons `AwaitingConfirmation`, `SuspiciousRequest`, `NothingToConfirm`, `NothingDeployable`; read-only TradeFlow order tools in chat; response fields `replyMode` and `llmBudget` | 02, 03 Copilot chat turn, 04 Tiers and Protection |
+| Copilot performance (commit `3188052`): JSON-RPC batching up to `RPC_BATCH_SIZE` (default 50) with a sequential fallback, snapshots pinned to one block (`block_header`, `at_block`, `gather`), `load_state` in 2 or 3 round trips, state prefetch that overlaps the intent call. Measured on Base Sepolia: state load 7.36 s to 0.42 s median, chat turn about 12 s to about 5 to 6 s | 02 Models, 03 Chain reads |
+| Reply wording: the Copilot calls itself Porthmos and replies in the language of the owner's message, passed as quoted untrusted data; the template fallback stays English | 03 Reply wording |
+| Streaming (commit `d576ce1`): `POST /api/agent/chat/stream` with events `status`, `delta`, `replace`, `done`, `error` and a 10 s keepalive; the reply guard runs while the reply streams; the web falls back to the plain endpoint only before a stream is accepted and never sends a message twice; Caddy `flush_interval -1` | 02 Hosting, 03 Streamed replies, 04 Protection |
+| JSON mode (`response_format: json_object`) is no longer sent to the LLM (commit `b8e0f15`), because the proxy buffered it; the parsers take the JSON object out of plain text | 02 Hosting |
+| Corrected: the web Orders page was built on 17 Oct 2026 (commit `a79ecfe`), but v0.5 and v0.6 still called it in progress. It is now [Built], and the known limitation for it is removed. Added the existing `POST /api/tradeflow/orders/{id}/link` endpoint to the API table, and stated that the web form does not link obligations | Header, 01, 02, 05 |
+| Frontend: sign in and sign up pages with the ASCII night-strait sea, a session route guard, and motion with reduced-motion support | 02 Models |
+| Tests: 106 Foundry, 356 service unit (was 161) and 154 web (was 61), run on 18 Oct 2026 at `b8e0f15`; 18 service integration tests (was 15) not run in that pass. New test rows A14 to A16, I9, W8 to W10 | 03, 05 |
+| Known limitations: testnet only, Copilot latency, rule-based message classes | 05 |
 
 ### Changes from v0.5
 

@@ -3,5 +3,6 @@
 !*.env.example
 node_modules/
 .secrets/
+prompts/
 design-samples/*/shots/
 web/screenshots/

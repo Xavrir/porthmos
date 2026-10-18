@@ -23,6 +23,8 @@ import { ForgetDevice } from './ForgetDevice'
 import { AccountMenu, NetworkBanner } from './wallet/AccountMenu'
 import { useWalletPicker } from './wallet/WalletPicker'
 import { useSiwePreview } from '../lib/useSiwePreview'
+import { reducedMotion } from '../lib/motion'
+import { installSpotlight } from '../lib/spotlight'
 
 export const PAGES = [
   { to: '/treasury', label: 'Treasury', icon: 'treasury', hint: 'Balances, reserve and positions', group: 'Treasury' },
@@ -434,9 +436,34 @@ function readThemePref(): ThemePref {
   }
 }
 
-function applyTheme(pref: ThemePref) {
-  const dark = pref === 'dark' || (pref === 'system' && window.matchMedia(DARK).matches)
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+// the theme a running switch animation will land on, so a second apply during it does not flip early
+let themeTarget: 'light' | 'dark' | null = null
+
+/** Sets data-theme. From a button (`from`), the new theme grows as a circle out of it; without View Transitions the colours cross-fade. */
+function applyTheme(pref: ThemePref, from?: Element | null) {
+  const root = document.documentElement
+  const next = pref === 'dark' || (pref === 'system' && window.matchMedia(DARK).matches) ? 'dark' : 'light'
+  if ((themeTarget ?? root.dataset.theme) === next) return
+  const flip = () => { root.dataset.theme = next; themeTarget = null }
+  if (!from || reducedMotion()) { flip(); return }
+  if (typeof document.startViewTransition !== 'function') {
+    root.classList.add('theme-fade')
+    flip()
+    setTimeout(() => root.classList.remove('theme-fade'), 420)
+    return
+  }
+  const r = from.getBoundingClientRect()
+  const x = r.left + r.width / 2
+  const y = r.top + r.height / 2
+  const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y))
+  themeTarget = next
+  const t = document.startViewTransition(flip)
+  t.ready.then(() => {
+    root.animate(
+      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+      { duration: 640, easing: 'cubic-bezier(0.65, 0, 0.35, 1)', pseudoElement: '::view-transition-new(root)' },
+    )
+  }, flip)
 }
 
 function ThemeMenu() {
@@ -450,14 +477,16 @@ function ThemeMenu() {
     return () => m.removeEventListener('change', on)
   }, [pref])
   const choose = (p: ThemePref) => {
+    // the menu has just closed and handed focus back to the theme button: the switch grows from there
+    applyTheme(p, document.activeElement?.closest('.theme-button'))
     setPref(p)
     try { localStorage.setItem(THEME_KEY, p) } catch { /* the choice still applies to this page */ }
   }
   const options: { p: ThemePref; label: string }[] = [{ p: 'light', label: 'Light' }, { p: 'dark', label: 'Dark' }, { p: 'system', label: 'Match system' }]
   return (
-    <MenuButton buttonClass="icon-button" buttonLabel={`Theme: ${options.find((o) => o.p === pref)!.label}`} radio
+    <MenuButton buttonClass="icon-button theme-button" buttonLabel={`Theme: ${options.find((o) => o.p === pref)!.label}`} radio
       items={options.map((o) => ({ key: o.p, label: o.label, checked: pref === o.p, onSelect: () => choose(o.p) }))}>
-      <Icon name={pref === 'dark' ? 'moon' : pref === 'system' ? 'system' : 'sun'} />
+      <Icon key={pref} name={pref === 'dark' ? 'moon' : pref === 'system' ? 'system' : 'sun'} />
     </MenuButton>
   )
 }
@@ -488,6 +517,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => { setOpen(false) }, [pathname, wide])
+  useEffect(() => installSpotlight(), [])
 
   useEffect(() => {
     const side = sideRef.current

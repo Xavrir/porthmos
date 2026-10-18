@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from aegis.chain.rpc import CallReverted, RpcChain
+from aegis.chain.rpc import CallReverted, RpcChain, RpcError
 from aegis.config import load_settings
 from aegis.core.state import load_state
 
@@ -147,3 +147,110 @@ def test_back_to_back_sends_do_not_reuse_a_stale_pending_nonce():
 
     nonces = [int.from_bytes(rlp.decode(bytes.fromhex(raw[4:]))[1] or b"\0", "big") for raw in sent]
     assert nonces == [5, 6]
+
+
+class LaggingNode:
+    """Answers eth_blockNumber from the newest node and every other call from one `lag` blocks behind it."""
+
+    def __init__(self, head: int, lag: int, catch_up_after: int | None = None):
+        self.head, self.lag, self.catch_up_after = head, lag, catch_up_after
+        self.ranges: list[tuple[int, int]] = []
+        self.refusals = 0
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        req = json.loads(request.content)
+        if req["method"] == "eth_blockNumber":
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": req["id"], "result": hex(self.head)})
+        behind = self.head - (0 if self.catch_up_after is not None and self.refusals >= self.catch_up_after
+                              else self.lag)
+        if req["method"] == "eth_getLogs":
+            lo, hi = (int(req["params"][0][k], 16) for k in ("fromBlock", "toBlock"))
+            if hi > behind:
+                self.refusals += 1
+                return httpx.Response(200, json={"jsonrpc": "2.0", "id": req["id"], "error": {
+                    "code": -32602,
+                    "message": f"block range extends beyond current head block: requested {hi}, head {behind}"}})
+            self.ranges.append((lo, hi))
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": req["id"], "result": []})
+        if int(req["params"][1], 16) > behind:
+            self.refusals += 1
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": req["id"], "error": {
+                "code": -32001, "message": f"block not found: {req['params'][1]}"}})
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": req["id"], "result": "0x" + "0" * 63 + "7"})
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    import aegis.chain.rpc as rpc
+
+    monkeypatch.setattr(rpc.time, "sleep", lambda s: None)
+
+
+def lagging_chain(node: LaggingNode) -> RpcChain:
+    chain = RpcChain(load_settings(chain_mode="rpc", chain_id=84532))
+    chain._http = httpx.Client(transport=httpx.MockTransport(node))
+    chain.addr.deploy_block = node.head - 100
+    return chain
+
+
+def test_event_snapshot_stops_at_the_head_the_log_node_reports(no_sleep):
+    node = LaggingNode(head=48266380, lag=1)
+    chain = lagging_chain(node)
+    assert chain.events(ADDR) == []
+    assert node.ranges == [(48266280, 48266379)]
+
+
+def test_escrow_scan_waits_for_the_lagging_node_instead_of_skipping_blocks(no_sleep):
+    node = LaggingNode(head=48266380, lag=1, catch_up_after=2)
+    chain = lagging_chain(node)
+    chain.addr.trade_escrow_block = node.head - 10
+    assert chain.escrow_events(node.head, node.head) == []
+    assert node.ranges == [(48266380, 48266380)]
+    stuck = LaggingNode(head=48266380, lag=1)
+    chain = lagging_chain(stuck)
+    chain.addr.trade_escrow_block = stuck.head - 10
+    with pytest.raises(RpcError):
+        chain.escrow_events(stuck.head, stuck.head)
+
+
+def test_pinned_read_retries_on_a_node_that_has_not_seen_the_block(no_sleep):
+    node = LaggingNode(head=HEAD, lag=1, catch_up_after=1)
+    chain = lagging_chain(node).at_block(HEAD)
+    assert int.from_bytes(chain._eth_call(ADDR, b"\x01"), "big") == 7
+    assert node.refusals == 1
+
+
+class NonceNode:
+    def __init__(self, pending: int):
+        self.pending = pending
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        req = json.loads(request.content)
+        result = {"eth_getTransactionCount": lambda: hex(self.pending),
+                  "eth_getBlockByNumber": lambda: {"number": hex(HEAD), "timestamp": "0x1", "baseFeePerGas": "0x1"},
+                  "eth_maxPriorityFeePerGas": lambda: "0x1",
+                  "evm_revert": lambda: True}.get(req["method"])
+        if req["method"] == "eth_sendRawTransaction":
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": req["id"], "result": "0x" + "ab" * 32})
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": req["id"], "result": result()})
+
+
+def test_remembered_nonce_covers_a_lagging_node_but_not_a_revert_or_a_dropped_tx(monkeypatch):
+    import aegis.chain.rpc as rpc
+    from eth_account import Account
+
+    node = NonceNode(pending=5)
+    chain = make_chain(node)
+    key = Account.create().key.hex()
+    nonces = []
+    original = rpc.Account.sign_transaction
+    monkeypatch.setattr(rpc.Account, "sign_transaction",
+                        staticmethod(lambda tx, k: nonces.append(tx["nonce"]) or original(tx, k)))
+    chain.send_value(key, ADDR, 1)
+    chain.send_value(key, ADDR, 1)
+    chain._rpc("evm_revert", ["0x1"])
+    chain.send_value(key, ADDR, 1)
+    now = rpc.time.monotonic()
+    monkeypatch.setattr(rpc.time, "monotonic", lambda: now + rpc.NONCE_MEMORY + 1)
+    chain.send_value(key, ADDR, 1)
+    assert nonces == [5, 6, 5, 5]

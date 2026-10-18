@@ -4,6 +4,7 @@ signed."""
 from __future__ import annotations
 
 import json
+import logging
 import time
 
 from eth_account import Account
@@ -12,6 +13,8 @@ from aegis.core import simulator
 from aegis.eip712 import DAR, OP_DEPOSIT, Approval
 from aegis.services import Services
 from aegis.tradeflow.typed import MilestoneProof, ReleaseAuthorization
+
+log = logging.getLogger("aegis")
 
 OP_RELEASE = 2
 
@@ -125,7 +128,10 @@ class Executor:
         n = 0
         for sub in self.s.db.query("SELECT * FROM submissions WHERE status='sent' AND tx_hash IS NOT NULL"):
             if sub["claimed_by"] in ("executor", self.address):
-                record_receipt(self.s, sub["id"], sub["tx_hash"], timeout=0)
+                try:
+                    record_receipt(self.s, sub["id"], sub["tx_hash"], timeout=0)
+                except Exception:
+                    log.exception("receipt for submission %s; retrying next tick", sub["id"])
         for sub in self.s.db.query("SELECT * FROM submissions WHERE status='pending' ORDER BY id"):
             if sub["source"] in self.withhold_sources:
                 continue

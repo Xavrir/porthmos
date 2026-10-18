@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import itertools
 import os
+import re
 import threading
 import time
 
@@ -21,6 +22,11 @@ from aegis.tradeflow.typed import MilestoneTerms, Order
 
 LOG_WINDOW = int(os.environ.get("LOG_WINDOW", "5000"))
 RPC_BATCH_SIZE = int(os.environ.get("RPC_BATCH_SIZE", "50"))
+BEHIND_RETRIES = 3
+# Long enough for a lagging node to see our last send, short enough that a dropped transaction does not leave a
+# nonce gap that blocks every later send.
+NONCE_MEMORY = 30.0
+_HEAD_RE = re.compile(r"\bhead\s+(\d+)")
 
 _local = threading.local()
 
@@ -53,6 +59,20 @@ def _hex_to_bytes(value) -> bytes | None:
 
 def _addr_topic(addr: str) -> str:
     return "0x" + "0" * 24 + addr.lower().removeprefix("0x")
+
+
+def node_behind(e: Exception) -> bool:
+    """A load-balanced RPC can route a read to a node one or two blocks behind the one that reported the head."""
+    if not isinstance(e, RpcError):
+        return False
+    msg = e.message.lower()
+    return ("beyond current head" in msg or "block not found" in msg or "header not found" in msg
+            or "unknown block" in msg)
+
+
+def reported_head(e: RpcError) -> int | None:
+    m = _HEAD_RE.search(e.message)
+    return int(m.group(1)) if m else None
 
 
 def _result(payload: dict):
@@ -167,7 +187,7 @@ class RpcChain(ChainClient):
         self._http = httpx.Client(timeout=15)
         self._ids = itertools.count(1)
         self._send_locks: dict[str, threading.Lock] = {}
-        self._next_nonce: dict[str, int] = {}
+        self._next_nonce: dict[str, tuple[int, float]] = {}
         self._send_guard = threading.Lock()
         self._proxy_code: bytes | None = None
         self._block_tag = "latest"
@@ -183,6 +203,8 @@ class RpcChain(ChainClient):
         return resp.json()
 
     def _rpc(self, method: str, params: list):
+        if method == "evm_revert":
+            self._next_nonce.clear()
         body = {"jsonrpc": "2.0", "id": next(self._ids), "method": method, "params": params}
         rounds = getattr(_local, "rounds", None)
         if rounds is not None:
@@ -230,12 +252,16 @@ class RpcChain(ChainClient):
         tx = {"to": to_checksum_address(to), "data": "0x" + data.hex()}
         if sender:
             tx["from"] = to_checksum_address(sender)
-        try:
-            return bytes.fromhex(self._rpc("eth_call", [tx, block or self._block_tag])[2:])
-        except RpcError as e:
-            if e.data is not None or "revert" in e.message.lower():
-                raise CallReverted(e.data, e.message) from None
-            raise
+        tag = block or self._block_tag
+        for attempt in range(BEHIND_RETRIES + 1):
+            try:
+                return bytes.fromhex(self._rpc("eth_call", [tx, tag])[2:])
+            except RpcError as e:
+                if e.data is not None or "revert" in e.message.lower():
+                    raise CallReverted(e.data, e.message) from None
+                if tag == "latest" or not node_behind(e) or attempt == BEHIND_RETRIES:
+                    raise
+                time.sleep(0.25 * 2**attempt)
 
     def _view(self, contract: Contract, address: str, fn: str, *args):
         return contract.decode(fn, self._eth_call(address, contract.encode(fn, *args)))
@@ -253,8 +279,10 @@ class RpcChain(ChainClient):
         with self._sender_lock(acct.address):
             # A load-balanced RPC can answer "pending" from a node that has not seen our last send yet.
             sender = acct.address.lower()
-            nonce = max(int(self._rpc("eth_getTransactionCount", [acct.address, "pending"]), 16),
-                        self._next_nonce.get(sender, 0))
+            remembered, at = self._next_nonce.get(sender, (0, 0.0))
+            nonce = int(self._rpc("eth_getTransactionCount", [acct.address, "pending"]), 16)
+            if time.monotonic() - at < NONCE_MEMORY:
+                nonce = max(nonce, remembered)
             block = self._rpc("eth_getBlockByNumber", ["latest", False])
             base = int(block.get("baseFeePerGas", "0x0"), 16)
             try:
@@ -268,7 +296,7 @@ class RpcChain(ChainClient):
             }
             signed = Account.sign_transaction(tx, key)
             tx_hash = self._rpc("eth_sendRawTransaction", ["0x" + bytes(signed.raw_transaction).hex()])
-            self._next_nonce[sender] = nonce + 1
+            self._next_nonce[sender] = (nonce + 1, time.monotonic())
             return tx_hash
 
     def _sender_lock(self, address: str) -> threading.Lock:
@@ -530,18 +558,9 @@ class RpcChain(ChainClient):
         topics: list = [topics0]
         if safe:
             topics.append(_addr_topic(safe))
-        start = max(from_block, self.addr.deploy_block)
-        head = self.block_number()
-        logs = []
-        # Public RPCs cap eth_getLogs ranges, so query in windows.
-        while start <= head:
-            end = min(head, start + LOG_WINDOW - 1)
-            logs.extend(self._rpc("eth_getLogs", [{
-                "fromBlock": hex(start), "toBlock": hex(end),
-                "address": [to_checksum_address(self.addr.module), to_checksum_address(self.addr.registry)],
-                "topics": topics,
-            }]))
-            start = end + 1
+        flt = {"address": [to_checksum_address(self.addr.module), to_checksum_address(self.addr.registry)],
+               "topics": topics}
+        logs = self._logs(flt, max(from_block, self.addr.deploy_block), self.block_number(), exact=False)
         out = []
         for log in logs:
             t0 = log["topics"][0]
@@ -644,15 +663,37 @@ class RpcChain(ChainClient):
 
     def escrow_events(self, from_block: int, to_block: int) -> list[dict]:
         topics0 = ["0x" + self.escrow.topic(e).hex() for e in ("OrderCreated", "MilestoneReleased", "OrderRefunded")]
-        start = max(from_block, self.addr.trade_escrow_block)
-        logs = []
-        while start <= to_block:
-            end = min(to_block, start + LOG_WINDOW - 1)
-            logs.extend(self._rpc("eth_getLogs", [{"fromBlock": hex(start), "toBlock": hex(end),
-                                                   "address": to_checksum_address(self._escrow_address()),
-                                                   "topics": [topics0]}]))
-            start = end + 1
+        flt = {"address": to_checksum_address(self._escrow_address()), "topics": [topics0]}
+        logs = self._logs(flt, max(from_block, self.addr.trade_escrow_block), to_block, exact=True)
         return [self._decode_escrow(log) for log in logs]
+
+    def _logs(self, flt: dict, start: int, head: int, exact: bool) -> list[dict]:
+        """eth_getLogs over [start, head] in LOG_WINDOW chunks (public RPCs cap the range).
+
+        The head usually comes from another node behind the load balancer than the one answering the logs, which
+        then refuses a range past its own head. exact=False stops at the head that node reports (a snapshot read);
+        exact=True waits for it to catch up, because the caller stores `head` as its scan cursor and a shorter
+        range would skip blocks."""
+        logs: list[dict] = []
+        attempt = 0
+        while start <= head:
+            end = min(head, start + LOG_WINDOW - 1)
+            try:
+                logs.extend(self._rpc("eth_getLogs", [{**flt, "fromBlock": hex(start), "toBlock": hex(end)}]))
+            except RpcError as e:
+                if not node_behind(e):
+                    raise
+                behind = reported_head(e)
+                if not exact and behind is not None and behind < end:
+                    head = behind
+                    continue
+                if attempt == BEHIND_RETRIES:
+                    raise
+                time.sleep(0.5 * 2**attempt)
+                attempt += 1
+                continue
+            start = end + 1
+        return logs
 
     def wait_receipt(self, tx_hash: str, timeout: float = 30.0) -> Receipt | None:
         deadline = time.time() + timeout

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { bankAddress, clearWallet, supplierAddress, withSupplier, loadWallet, newWallet, ownerAddress, parseWallet, saveWallet, serializeWallet, WALLET_KEY, WalletFileError } from './keys'
+import { bankAddress, clearWallet, connectInjectedOwner, supplierAddress, withSupplier, loadWallet, newWallet, ownerAddress, parseWallet, saveWallet, serializeWallet, WALLET_KEY, WalletFileError } from './keys'
 
 const store = new Map<string, string>()
 Object.defineProperty(globalThis, 'localStorage', {
@@ -60,5 +60,33 @@ describe('key storage', () => {
     expect(supplierAddress(newWallet(84532))).toBeNull()
     expect(() => parseWallet({ ...w, supplier: { pk: w.owner.type === 'burner' ? w.owner.pk : '0x' } })).toThrow(WalletFileError)
     expect(() => parseWallet({ ...w, supplier: { pk: '0x12' } })).toThrow(/supplier/)
+  })
+})
+
+describe('connecting a wallet as the owner', () => {
+  const picked = '0x14dC79964da2C08b23698B3D3cc7Ca32193d9955' as const
+  const other = '0x976EA74026E726554dB657fA54763abd0C3a0aa9' as const
+  const safe = '0x2E1c2be3dD6BAa59344EdC6ee6A93D68e2295a0F' as const
+
+  it('resumes an interrupted setup with the stored, funded bank key', () => {
+    const stored = { ...newWallet(84532, { type: 'injected', address: picked }), safe }
+    const next = connectInjectedOwner(stored, picked.toLowerCase() as `0x${string}`, 84532, true)
+    expect(next).toEqual({ wallet: stored })
+    expect('wallet' in next && next.wallet.bank.pk).toBe(stored.bank.pk)
+  })
+
+  it('never replaces the keys of a setup another owner started', () => {
+    const stored = newWallet(84532, { type: 'injected', address: other })
+    expect(connectInjectedOwner(stored, picked, 84532, true)).toEqual({ keep: stored })
+    const burner = { ...newWallet(84532), safe }
+    expect(connectInjectedOwner(burner, picked, 84532, false)).toEqual({ keep: burner })
+  })
+
+  it('takes over unused keys, or makes new ones when none are stored', () => {
+    const stored = newWallet(84532)
+    const next = connectInjectedOwner(stored, picked, 84532, false)
+    expect(next).toEqual({ wallet: { ...stored, owner: { type: 'injected', address: picked }, safe: null } })
+    const fresh = connectInjectedOwner(null, picked, 84532, false)
+    expect('wallet' in fresh && ownerAddress(fresh.wallet)).toBe(picked)
   })
 })

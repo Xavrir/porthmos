@@ -153,7 +153,8 @@ def test_smart_wallet_owner_onboards_and_signs_in(live):
         *[("addVault", (s, to_checksum_address(v["address"]))) for v in c["vaults"]],
         ("setAuthorizer", (s, c["operator"]["authorizer"])), ("setExitKey", (s, c["operator"]["exitKey"])),
         ("setAutoCap", (s, int(p["autoCap"]))), ("setDailyCap", (s, int(p["dailyCap"]))),
-        ("setMaxBandWidth", (s, int(p["maxBandWidth"]))), ("setMaxOracleAge", (s, int(p["maxOracleAge"]))))])
+        ("setMaxBandWidth", (s, int(p["maxBandWidth"]))), ("setMaxOracleAge", (s, int(p["maxOracleAge"]))),
+        ("setReserveFloor", (s, int(p["reserveFloor"]), bytes.fromhex(p["scheduleHash"][2:]))))])
     send(live, bank, reg, REGISTRY.encode("setBankLimit", s, int(p["bankLimit"])))
 
     message = client_message(address=w.address, chain_id=31337, nonce=nonce(live), activate_safe=safe)

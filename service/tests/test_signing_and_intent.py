@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+import pytest
 from eth_account import Account
 from eth_account.messages import encode_typed_data
 
@@ -104,6 +105,43 @@ def test_kinds_and_clarification():
     assert parse("what's my balance?").kind == I.STATUS
     assert parse("is vault B safe? any depeg risk").kind == I.RISK
     assert parse("cancel").kind == I.CANCEL
+
+
+@pytest.mark.parametrize("text", [
+    "Put idle cash to work, keep payroll safe.",
+    "invest the surplus but keep payroll covered",
+    "Invest idle cash while keeping rent covered",
+    "Can you put idle cash to work and keep payroll safe?",
+    "Taruh kas menganggur ke vault, tapi sisihkan gaji",
+])
+def test_allocation_with_a_reserve_guard_is_not_an_obligation(text):
+    m = parse(text)
+    assert m.kind == I.ALLOCATE and not m.missing and m.amount is None
+
+
+def test_allocation_amount_before_the_guard_stays_with_the_allocation():
+    m = parse("deposit 2,000 into vault B and keep payroll safe")
+    assert (m.kind, m.amount, m.vault_hint) == (I.ALLOCATE, 2000 * USDC, "Vault B")
+
+
+@pytest.mark.parametrize("text, amount, label", [
+    ("add payroll of 20,000 on the 25th", 20_000, "Payroll"),
+    ("we owe a supplier 7,727 on Friday", 7_727, "Supplier"),
+    ("keep 4,000 for payroll on the 25th", 4_000, "Payroll"),
+    ("Reserve 3,000 for rent and deposit the rest", 3_000, "Rent"),
+    ("put idle cash to work but keep payroll of 20,000 on the 25th covered", 20_000, "Payroll"),
+])
+def test_genuine_obligations_stay_obligations(text, amount, label):
+    m = parse(text)
+    assert (m.kind, m.amount, m.label) == (I.MANDATE, amount * USDC, label)
+
+
+def test_weekday_due_date():
+    friday = datetime.fromtimestamp(NOW, UTC)
+    while friday.weekday() != 4 or friday.timestamp() <= NOW:
+        friday = datetime(friday.year, friday.month, friday.day, tzinfo=UTC) + timedelta(days=1)
+    m = parse("we owe a supplier 7,727 on Friday")
+    assert m.due == int(friday.timestamp()) and not m.missing
 
 
 def test_merge_answer_fills_missing():

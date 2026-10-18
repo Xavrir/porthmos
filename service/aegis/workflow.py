@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 import threading
 import time
 import uuid
@@ -75,6 +76,9 @@ LEDGER_STATES = {
     "APPROVED", "DAR_SIGNED", "SUBMITTED", "CONFIRMED", "REVERTED", "CANCELLED",
 }
 CLARIFICATION_WINDOW = 30 * 60
+RECONCILE_AFTER = 90.0
+
+log = logging.getLogger("aegis")
 
 
 class WorkflowError(Exception):
@@ -294,10 +298,10 @@ class Workflow:
         if emit is not None:
             emit("status", {"stage": stage})
 
-    def _explain(self, rec: dict, facts: dict) -> str:
+    def _explain(self, rec: dict, facts: dict, use_model: bool = True) -> str:
         emit = getattr(self._stream, "emit", None)
-        if emit is None or rec["id"] != self._stream.request_id:
-            return self.agent.explain(facts)
+        if emit is None or rec["id"] != self._stream.request_id or not use_model:
+            return self.agent.explain(facts, use_model=use_model)
         if self._stream.shown:
             emit("replace", {"text": ""})
         self._status("writing")
@@ -582,13 +586,17 @@ class Workflow:
                                              json.dumps(data, sort_keys=True, default=str))
         if reason == "AwaitingObligationConfirmation":
             rec["data"]["obligationDraft"] = _obligation_draft(intent)
+        refusal = (intent.kind == I.TRANSFER_OUT or bool(intent.refused)
+                   or bool(I.SUSPICIOUS_FLAGS & set(rec["data"].get("flags", []))))
         if intent.kind == I.TRANSFER_OUT or "crossClient" in rec["data"].get("flags", []):
             facts["securityNote"] = "transfer or cross-client request refused"
         rec["data"]["outcome"] = "HELD"
         rec["data"]["reason"] = reason
         self._move(rec, "HELD", reason, snap.versions(), {"reason": reason, "planHash": snap.plan.plan_hash,
                                                           "defaultOptionId": snap.plan.default_id})
-        rec["data"]["reply"] = self._explain(rec, facts)
+        # A refusal is answered by its template: the model would only see the attacker's text (and could echo its
+        # address), and a slow model call made the refusal itself take tens of seconds.
+        rec["data"]["reply"] = self._explain(rec, facts, use_model=not refusal)
         self._move(rec, "EXPLAINED", "explained")
 
     def _finish(self, rec: dict, state: str, reason: str | None, facts: dict, versions: dict | None = None,
@@ -963,32 +971,98 @@ class Workflow:
         return n
 
     def apply_submission_results(self) -> int:
-        rows = self.s.db.query("SELECT * FROM submissions WHERE source='workflow' AND applied=0 AND status IN "
-                               "('confirmed','reverted','failed')")
+        """Moves each SUBMITTED request to the outcome of its submission. A submission counts as applied only after
+        its request took the result: the Executor can confirm before _finalize (still holding the request lock while
+        it explains) has moved the request to SUBMITTED, and a failed tick must not lose a result."""
+        rows = self.s.db.query(
+            "SELECT * FROM submissions WHERE source='workflow' AND status IN ('confirmed','reverted','failed') AND "
+            "(applied=0 OR request_id IN (SELECT id FROM requests WHERE state='SUBMITTED')) ORDER BY id")
         n = 0
         for sub in rows:
+            try:
+                n += self._apply_submission(sub)
+            except Exception:
+                log.exception("applying submission %s failed; retrying next tick", sub["id"])
+        return n
+
+    def _apply_submission(self, sub: dict) -> int:
+        lock = self._lock(sub["request_id"] or "")
+        if not lock.acquire(blocking=False):
+            return 0
+        try:
             rec = self.store.get(sub["request_id"]) if sub["request_id"] else None
-            self.s.db.execute("UPDATE submissions SET applied=1 WHERE id=?", (sub["id"],))
-            if rec is None or rec["state"] != "SUBMITTED":
-                continue
-            with self._lock(rec["id"]):
-                rec = self.store.get(rec["id"])
-                card = rec["data"].get("actionCard") or {}
-                result = json.loads(sub["result"] or "{}")
-                rec["data"]["txHash"] = sub["tx_hash"]
-                if sub["status"] == "confirmed":
-                    ev = result.get("executed") or {}
-                    payload = {"action": _action(card), "op": OP_NAMES.get(sub["op"]), "vault": sub["vault"],
-                               "assets": str(ev.get("assets", "")), "shares": str(ev.get("shares", "")),
-                               "tier": ev.get("tier"), "block": result.get("blockNumber")}
-                    self._finish(rec, "CONFIRMED", None, {**payload, "txHash": sub["tx_hash"]}, None,
-                                 tx_hash=sub["tx_hash"], dar_hash=sub["dar_hash"])
-                else:
-                    reason = sub["error"] or "Reverted"
-                    rec["data"]["revertReason"] = reason
-                    self._finish(rec, "REVERTED", reason, {"action": _action(card), "txHash": sub["tx_hash"]}, None,
-                                 tx_hash=sub["tx_hash"], revert_reason=reason, dar_hash=sub["dar_hash"])
-            n += 1
+            ours = rec is not None and rec["data"].get("submissionId") == sub["id"]
+            if not ours or rec["state"] not in ("SUBMITTED", "CONFIRMED", "REVERTED"):
+                self._mark_applied(sub["id"])
+                return 0
+            if sub["status"] == "failed" and not sub["tx_hash"] and self._nonce_used(sub):
+                # The send raised (an RPC timeout, say) after the node took the transaction; reconcile_onchain
+                # confirms it from its AegisExecuted event instead of reporting a revert that did not happen.
+                return 0
+            card = rec["data"].get("actionCard") or {}
+            result = json.loads(sub["result"] or "{}")
+            rec["data"]["txHash"] = sub["tx_hash"]
+            if sub["status"] == "confirmed":
+                ev = result.get("executed") or {}
+                payload = {"action": _action(card), "op": OP_NAMES.get(sub["op"]), "vault": sub["vault"],
+                           "assets": str(ev.get("assets", "")), "shares": str(ev.get("shares", "")),
+                           "tier": ev.get("tier"), "block": result.get("blockNumber"), "txHash": sub["tx_hash"]}
+                state, reason = "CONFIRMED", None
+                ledger_kw = {}
+            else:
+                reason = sub["error"] or "Reverted"
+                rec["data"]["revertReason"] = reason
+                payload = {"action": _action(card), "txHash": sub["tx_hash"]}
+                state = "REVERTED"
+                ledger_kw = {"revert_reason": reason}
+            if rec["state"] == "SUBMITTED":
+                self._finish(rec, state, reason, payload, None, tx_hash=sub["tx_hash"], dar_hash=sub["dar_hash"],
+                             **ledger_kw)
+            else:
+                rec["data"]["reply"] = self._explain(rec, {"outcome": state, "reason": reason, **payload})
+                self._move(rec, "EXPLAINED", "explained")
+            self._mark_applied(sub["id"])
+            return 1
+        finally:
+            lock.release()
+
+    def _nonce_used(self, sub: dict) -> bool:
+        dar = DAR.from_json(json.loads(sub["dar"]))
+        return self.s.chain.used_nonce(dar.safe, dar.nonce)
+
+    def _mark_applied(self, sub_id: int) -> None:
+        self.s.db.execute("UPDATE submissions SET applied=1 WHERE id=?", (sub_id,))
+
+    def reconcile_onchain(self, older_than: float = RECONCILE_AFTER) -> int:
+        """Confirms SUBMITTED requests from AegisExecuted events when the submission row never learned the outcome,
+        for example when the Executor stopped between broadcasting and recording the tx hash or receipt, or its send
+        raised although the transaction went out. The event
+        carries the DAR hash, so it identifies the submission without the row's tx hash."""
+        rows = self.s.db.query(
+            "SELECT s.* FROM submissions s JOIN requests r ON r.id = s.request_id WHERE s.source='workflow' AND "
+            "r.state='SUBMITTED' AND s.status IN ('pending','claimed','sent','failed') AND s.created_at <= ? "
+            "ORDER BY s.id",
+            (time.time() - older_than,))
+        by_safe: dict[str, list[dict]] = {}
+        for sub in rows:
+            by_safe.setdefault(sub["safe"], []).append(sub)
+        n = 0
+        for safe, subs in by_safe.items():
+            start = min(sub["created_block"] for sub in subs)
+            executed = {e["darHash"].lower(): e for e in self.s.chain.events(safe, start)
+                        if e.get("event") == "AegisExecuted"}
+            for sub in subs:
+                ev = executed.get(sub["dar_hash"].lower())
+                if ev is None:
+                    continue
+                result = json.dumps({"blockNumber": ev["blockNumber"], "executed": ev})
+                cur = self.s.db.execute(
+                    "UPDATE submissions SET status='confirmed', tx_hash=?, result=?, error=NULL, updated_at=? "
+                    "WHERE id=? AND status IN ('pending','claimed','sent','failed')",
+                    (ev["txHash"], result, time.time(), sub["id"]))
+                if cur.rowcount:
+                    log.warning("submission %s confirmed from chain event in tx %s", sub["id"], ev["txHash"])
+                    n += 1
         return n
 
     def drop_pending_deposits(self, safe: str, vault: str, reason: str = "VaultQuarantined") -> list[str]:

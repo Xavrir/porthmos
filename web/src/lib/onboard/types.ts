@@ -13,7 +13,8 @@ export type OnboardConfig = {
   priceFeed: Address
   vaults: { address: Address; name: string }[]
   operator: { authorizer: Address; exitKey: Address; executor: Address; keeper: Address }
-  params: { autoCap: string; dailyCap: string; bankLimit: string; maxBandWidth: string; maxOracleAge: number | string }
+  // reserveFloor and scheduleHash: the reserve of an empty schedule, written at sign-up so the floor starts in sync.
+  params: { autoCap: string; dailyCap: string; bankLimit: string; maxBandWidth: string; maxOracleAge: number | string; reserveFloor: string; scheduleHash: Hex }
   paramBounds: Record<string, string | number>
   ethOwner: string
   ethBank: string
@@ -31,6 +32,7 @@ export type OnboardSteps = {
   authorizer: boolean
   exitKey: boolean
   caps: boolean
+  reserveFloor: boolean
   bankLimit: boolean
   activated: boolean
 }

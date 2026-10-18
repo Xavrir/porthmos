@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from aegis.api.app import create_app
 from aegis.chain.fake import addr_of
 from aegis.config import ANVIL_KEYS
+from aegis.core.reserve import required_reserve
 from aegis.onboarding import onboarding_message
 from aegis.sigverify import ERC6492_MAGIC, personal_hash, verify_personal
 from aegis.siwe import (
@@ -272,6 +273,8 @@ def test_activation_needs_its_own_message_and_opens_the_session(api):
     env.chain.register(safe, owner.address, bank.address, authorizer=addr_of("authorizer"), exit_key=addr_of("exitKey"),
                        auto_cap=1000 * 10**6, daily_cap=5000 * 10**6, bank_limit=3000 * 10**6, max_band_width=2_000_000,
                        max_oracle_age=180, allowed={env.vault_a.lower(), env.vault_b.lower()})
+    floor = required_reserve([], 0, env.settings.params)
+    env.chain.apply_reserve_floor(safe, floor.required, floor.schedule_hash)
     sign_in = signed(client, acct=owner)
     r = client.post("/api/onboard/activate", json={"safe": safe, "owner": owner.address, **sign_in})
     assert r.status_code == 401 and error(r) == "WrongStatement"

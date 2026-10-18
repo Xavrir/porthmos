@@ -132,7 +132,8 @@ class Agent:
         state = getattr(self._ctx, "state", None)
         return self.gate.status(state["tenant"] if state else None)
 
-    def _complete_json(self, messages: list[dict], on_chunk: Callable[[str], None] | None = None) -> dict | None:
+    def _complete_json(self, messages: list[dict], on_chunk: Callable[[str], None] | None = None,
+                       stop: Callable[[], bool] | None = None) -> dict | None:
         if self.llm is None:
             return None
         state = getattr(self._ctx, "state", None)
@@ -154,6 +155,8 @@ class Agent:
             for piece in self.llm.stream(messages):
                 parts.append(piece)
                 on_chunk(piece)
+                if stop is not None and stop():
+                    return None
             return parse_json_object("".join(parts))
         except LlmError as e:
             log.warning("LLM call failed, deterministic fallback for %.0f s: %s", LLM_COOLDOWN, e)
@@ -169,7 +172,9 @@ class Agent:
         data = self._complete_json([
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": json.dumps({
-                "task": "Classify the owner's request.",
+                "task": "Classify the owner's request. An investment or deposit that also asks to keep an obligation "
+                        "covered (for example 'put idle cash to work, keep payroll safe') is ALLOCATE; MANDATE is a "
+                        "new obligation to schedule.",
                 "kinds": sorted(I.KINDS),
                 "vaults": vault_labels,
                 "today": _date(now),
@@ -291,11 +296,13 @@ class Agent:
         return {"optionId": choice.id, "reductions": reductions, "rationale": note, "holdReason": None,
                 "source": "rules"}
 
-    def explain(self, facts: dict, on_delta: Callable[[str, str], None] | None = None) -> str:
+    def explain(self, facts: dict, on_delta: Callable[[str, str], None] | None = None,
+                use_model: bool = True) -> str:
         """on_delta(kind, text) receives the reply while it streams: kind "delta" appends, "replace" swaps out
-        everything shown so far. The returned reply is the same with or without on_delta."""
+        everything shown so far. The returned reply is the same with or without on_delta. use_model=False answers
+        with the template alone."""
         text = template(facts)
-        if self.llm is None:
+        if self.llm is None or not use_model:
             return text
         state = getattr(self._ctx, "state", None)
         message = state.get("message") if state else None
@@ -314,7 +321,7 @@ class Agent:
                         "in the facts. Reply as {\"reply\": \"...\"}.",
                 "DATA": data_block,
             }, default=str)},
-        ], guard.feed if guard else None)
+        ], guard.feed if guard else None, (lambda: guard.tripped) if guard else None)
         reply = str(data.get("reply", "")).strip()[:REPLY_LIMIT] if isinstance(data, dict) else ""
         if not reply or not safe_reply(reply, facts_json):
             reply = text

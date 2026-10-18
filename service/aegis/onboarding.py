@@ -14,6 +14,7 @@ from eth_utils import is_address, to_checksum_address
 
 from aegis.chain.base import ChainClient
 from aegis.config import has_key, load_key
+from aegis.core.reserve import ReserveResult, required_reserve
 from aegis.services import Services
 from aegis.sessions import SessionManager, verify_signed_message
 from aegis.tenants import present
@@ -61,9 +62,15 @@ class Onboarding:
         return (self.settings.onboarding_open and has_key("faucet", self.settings.chain_id)
                 and self.s.tenants.activated_count() < self.settings.limits.max_tenants)
 
+    def initial_reserve(self) -> ReserveResult:
+        """The reserve of an empty schedule (the buffer floor B_min). Onboarding writes it as the first floor, so a
+        new treasury starts in sync instead of holding every deposit with FloorOutOfSync."""
+        return required_reserve([], 0, self.settings.params)
+
     def config(self) -> dict:
         st, a, t = self.settings, self.settings.addresses, self.settings.tenant
         reference = [r["safe"] for r in self.s.tenants.served() if r["reference"]]
+        floor = self.initial_reserve()
         return {
             "chainId": st.chain_id, "rpcUrl": st.public_rpc_url, "explorer": st.explorer,
             "safeSingleton": a.safe_singleton, "safeProxyFactory": a.safe_proxy_factory,
@@ -72,7 +79,8 @@ class Onboarding:
             "vaults": [{"address": v.address, "name": v.label} for v in a.vaults],
             "operator": self.operator(),
             "params": {"autoCap": str(t.auto_cap), "dailyCap": str(t.daily_cap), "bankLimit": str(t.bank_limit),
-                       "maxBandWidth": str(t.max_band_width), "maxOracleAge": t.max_oracle_age},
+                       "maxBandWidth": str(t.max_band_width), "maxOracleAge": t.max_oracle_age,
+                       "reserveFloor": str(floor.required), "scheduleHash": floor.schedule_hash},
             "paramBounds": {"autoCapMax": str(t.auto_cap_max), "dailyCapMax": str(t.daily_cap_max),
                             "bankLimitMax": str(t.bank_limit_max), "maxBandWidthMax": str(t.max_band_width_max),
                             "maxOracleAgeMax": t.max_oracle_age_max},
@@ -90,19 +98,46 @@ class Onboarding:
         if not self.s.tenants.by_owner(owner) and not self.is_open():
             raise WorkflowError(403, "OnboardingClosed", "this demo is not accepting new treasuries right now")
         t = self.settings.tenant
-        needs = []
+        needs, waiting = [], []
         for address, target in ((owner, t.eth_owner), (bank, t.eth_bank)):
-            if self._dripped(address):
-                continue
             balance = self.chain.eth_balance(address)
-            if balance < target // 2:
+            if balance >= target // 2:
+                continue
+            drip = self._drip_row(address)
+            state = self._drip_state(drip) if drip else None
+            if state is None:
                 needs.append((address, target - balance))
-        if not needs:
+            elif state == "pending":
+                waiting.append({"address": address, "hash": drip["tx_hash"], "amountWei": drip["amount"]})
+        if not needs and not waiting:
             return {"txs": [], "pending": False}
-        return self._await(self._drip(needs, self.ip_hash(ip)))
+        return self._await(waiting + (self._drip(needs, self.ip_hash(ip)) if needs else []))
+
+    def _drip_row(self, address: str) -> dict | None:
+        return self.s.db.one("SELECT * FROM faucet_drips WHERE address=?", (address.lower(),))
 
     def _dripped(self, address: str) -> bool:
-        return self.s.db.one("SELECT 1 AS x FROM faucet_drips WHERE address=?", (address.lower(),)) is not None
+        return self._drip_row(address) is not None
+
+    def _drip_state(self, drip: dict) -> str | None:
+        """'confirmed', 'pending', or None once a drip that reverted is forgotten, so the address may get another."""
+        rec = self.chain.receipt(drip["tx_hash"]) if drip.get("tx_hash") else None
+        if rec is None:
+            return "pending" if drip.get("tx_hash") else None
+        if rec.status == 1:
+            return "confirmed"
+        self._forget_drip(drip["address"], drip["tx_hash"])
+        return None
+
+    def _forget_drip(self, address: str, tx_hash: str) -> None:
+        self.s.db.execute("DELETE FROM faucet_drips WHERE address=? AND tx_hash=?", (address.lower(), tx_hash))
+
+    def _funded(self, address: str, target: int) -> bool:
+        """Enough test ETH now, or a faucet drip that was mined (gas spent since then does not undo the step)."""
+        if self.chain.eth_balance(address) >= target // 2:
+            return True
+        drip = self._drip_row(address)
+        return drip is not None and self._drip_state(drip) == "confirmed"
 
     def _drip(self, needs: list[tuple[str, int]], ip_hash: str) -> list[dict]:
         key = self._faucet_key()
@@ -122,7 +157,9 @@ class Onboarding:
                 try:
                     tx = self.chain.send_value(key, address, amount_wei)
                 except Exception as e:
-                    raise WorkflowError(503, "FaucetEmpty", f"faucet transfer failed: {type(e).__name__}") from None
+                    raise WorkflowError(503, "FaucetTransferFailed",
+                                        f"the faucet could not send test ETH to {address} ({type(e).__name__}); "
+                                        "nothing was recorded, retry in a moment", {"sent": txs}) from None
                 self.s.db.execute("INSERT INTO faucet_drips(address, amount, tx_hash, at, day) VALUES (?, ?, ?, ?, ?)",
                                   (address.lower(), str(amount_wei), tx, time.time(), today))
                 txs.append({"address": address, "hash": tx, "amountWei": str(amount_wei)})
@@ -131,10 +168,18 @@ class Onboarding:
     def _await(self, txs: list[dict]) -> dict:
         deadline = time.time() + RECEIPT_TIMEOUT
         pending = False
+        reverted = []
         for tx in txs:
             rec = self.chain.wait_receipt(tx["hash"], timeout=max(0.0, deadline - time.time()))
             tx["pending"] = rec is None
             pending = pending or rec is None
+            if rec is not None and rec.status != 1:
+                self._forget_drip(tx["address"], tx["hash"])
+                reverted.append(tx["address"])
+        if reverted:
+            raise WorkflowError(503, "FaucetTransferFailed",
+                                f"the faucet transfer to {', '.join(reverted)} reverted; nothing was recorded, retry",
+                                {"sent": [t for t in txs if t["address"] not in reverted]})
         return {"txs": txs, "pending": pending}
 
     def _faucet_key(self) -> str:
@@ -155,7 +200,7 @@ class Onboarding:
         op = self.operator()
         row = self.s.tenants.get(safe)
         steps = {
-            "funded": self._dripped(owner) or chain.eth_balance(owner) >= t.eth_owner // 2,
+            "funded": self._funded(owner, t.eth_owner),
             "safeDeployed": deployed,
             "moduleEnabled": deployed and chain.safe_module_enabled(safe, a.module),
             "registered": registered,
@@ -163,6 +208,7 @@ class Onboarding:
             "authorizer": registered and _same(pol.authorizer, op["authorizer"]),
             "exitKey": registered and _same(pol.exit_key, op["exitKey"]),
             "caps": registered and not self._cap_failures(pol, include_bank=False),
+            "reserveFloor": registered and pol.reserve_floor >= self.initial_reserve().required,
             "bankLimit": registered and 0 < pol.bank_limit <= t.bank_limit_max,
             "activated": bool(row and row["activated_at"]),
         }
@@ -203,6 +249,8 @@ class Onboarding:
             failed.append("WrongExitKey")
         failed += [f"VaultMissing:{v.label}" for v in a.vaults if not pol.is_allowed(v.address)]
         failed += self._cap_failures(pol)
+        if pol.reserve_floor < self.initial_reserve().required:
+            failed.append("ReserveFloorNotSet")
         return failed
 
     def activate(self, safe: str, owner: str, message: str | None, signature: str | None, ip: str,

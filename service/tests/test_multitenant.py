@@ -55,8 +55,11 @@ def configure(env, owner, bank, module: bool = True, **overrides) -> str:
     params = dict(authorizer=addr_of("authorizer"), exit_key=addr_of("exitKey"), auto_cap=1000 * USDC,
                   daily_cap=5000 * USDC, bank_limit=3000 * USDC, max_band_width=2_000_000, max_oracle_age=180,
                   allowed={env.vault_a.lower(), env.vault_b.lower()})
+    floor = overrides.pop("floor", required_reserve([], 0, load_settings().params))
     params.update(overrides)
     env.chain.register(safe, owner.address, bank.address, **params)
+    if floor is not None:
+        env.chain.apply_reserve_floor(safe, floor.required, floor.schedule_hash)
     return safe
 
 
@@ -122,7 +125,8 @@ def test_onboard_config_shape(api):
                       "registry", "module", "usdc", "priceFeed", "vaults", "operator", "params", "paramBounds",
                       "ethOwner", "ethBank", "testUsdc", "referenceSafe", "onboardingOpen"}
     assert c["params"] == {"autoCap": "1000000000", "dailyCap": "5000000000", "bankLimit": "3000000000",
-                           "maxBandWidth": "2000000", "maxOracleAge": 180}
+                           "maxBandWidth": "2000000", "maxOracleAge": 180, "reserveFloor": "500000000",
+                           "scheduleHash": required_reserve([], 0, env.settings.params).schedule_hash}
     assert c["paramBounds"]["maxOracleAgeMax"] == 3600 and c["testUsdc"] == "100000000000"
     assert c["operator"]["authorizer"] == addr_of("authorizer") and c["referenceSafe"] == env.safe
     assert c["onboardingOpen"] is True and [v["name"] for v in c["vaults"]] == ["Vault A", "Vault B"]
@@ -144,6 +148,59 @@ def test_fund_drips_once_per_address(api):
     assert not r["pending"] and env.chain.eth_balance(owner.address) == t.eth_owner
     env.chain.eth[owner.address.lower()] = 0
     assert client.post("/api/onboard/fund", json=fund_body(owner, bank)).json()["txs"] == []
+
+
+def drip_rows(env) -> dict[str, str]:
+    return {r["address"]: r["tx_hash"] for r in env.services.db.query("SELECT address, tx_hash FROM faucet_drips")}
+
+
+def funded(client, owner) -> bool:
+    return client.get(f"/api/onboard/status?owner={owner.address}").json()["steps"]["funded"]
+
+
+def test_failed_faucet_transfer_has_its_own_code_and_records_nothing(api, monkeypatch):
+    client, env = api
+    owner, bank = Account.create(), Account.create()
+
+    def broken(key, to, value):
+        raise httpx.ConnectError("rpc down")
+
+    monkeypatch.setattr(env.chain, "send_value", broken)
+    r = client.post("/api/onboard/fund", json=fund_body(owner, bank))
+    assert r.status_code == 503 and r.json()["error"] == "FaucetTransferFailed" and r.json()["sent"] == []
+    assert drip_rows(env) == {} and not funded(client, owner)
+    monkeypatch.undo()
+    r = client.post("/api/onboard/fund", json=fund_body(owner, bank))
+    assert r.status_code == 200 and len(r.json()["txs"]) == 2 and funded(client, owner)
+
+
+def test_reverted_drip_is_forgotten_and_retried(api, monkeypatch):
+    client, env = api
+    owner, bank = Account.create(), Account.create()
+    monkeypatch.setattr(env.chain, "send_value", lambda key, to, value: env.chain._finish(env.chain._txhash(), 0, [],
+                                                                                          "OutOfGas"))
+    r = client.post("/api/onboard/fund", json=fund_body(owner, bank))
+    assert r.status_code == 503 and r.json()["error"] == "FaucetTransferFailed"
+    assert drip_rows(env) == {} and not funded(client, owner)
+    monkeypatch.undo()
+    assert client.post("/api/onboard/fund", json=fund_body(owner, bank)).status_code == 200
+    assert set(drip_rows(env)) == {owner.address.lower(), bank.address.lower()} and funded(client, owner)
+
+
+def test_unmined_drip_is_not_funded_and_is_awaited_again(api):
+    client, env = api
+    owner, bank = Account.create(), Account.create()
+    t = env.settings.tenant
+    env.chain.eth[bank.address.lower()] = t.eth_bank
+    r = client.post("/api/onboard/fund", json=fund_body(owner, bank)).json()
+    tx = r["txs"][0]["hash"]
+    mined = env.chain.receipts.pop(tx)
+    env.chain.eth[owner.address.lower()] = 0
+    assert not funded(client, owner)
+    again = client.post("/api/onboard/fund", json=fund_body(owner, bank)).json()
+    assert again["pending"] and [x["hash"] for x in again["txs"]] == [tx] and len(drip_rows(env)) == 1
+    env.chain.receipts[tx] = mined
+    assert funded(client, owner)
 
 
 def test_fund_daily_budget_and_ip_limit(api):
@@ -562,15 +619,29 @@ def test_cors_allows_only_configured_origins(api):
     assert "access-control-allow-origin" not in bad.headers
 
 
-def test_obligations_expose_floor_update_for_new_tenant(api):
+def test_new_tenant_starts_with_its_floor_in_sync(api):
     client, env = api
     owner, bank = Account.create(), Account.create()
-    safe = configure(env, owner, bank)
-    client.post("/api/onboard/activate", json=activation(client, owner, safe))
+    unset = configure(env, owner, bank, floor=None)
+    r = client.post("/api/onboard/activate", json=activation(client, owner, unset))
+    assert r.status_code == 409 and r.json()["failed"] == ["ReserveFloorNotSet"]
+    st = client.get(f"/api/onboard/status?owner={owner.address}").json()["steps"]
+    assert st["reserveFloor"] is False and st["caps"] is True
+    floor = client.get("/api/onboard/config").json()["params"]
+    env.chain.apply_reserve_floor(unset, int(floor["reserveFloor"]), floor["scheduleHash"])
+    assert client.get(f"/api/onboard/status?owner={owner.address}").json()["steps"]["reserveFloor"] is True
+    assert client.post("/api/onboard/activate", json=activation(client, owner, unset)).status_code == 200
     h = login(client, owner, "owner")
     ob = client.get("/api/obligations", headers=h).json()
-    assert ob["reserve"]["inSync"] is False and ob["floorUpdate"]["floor"]["raw"] == str(500 * USDC)
-    assert "floor" in client.post("/api/agent/chat", json={"message": "deposit 500 USDC"}, headers=h).json()["reply"]
+    assert ob["reserve"]["inSync"] is True
+    assert ob["reserve"]["onchainFloor"]["raw"] == ob["reserve"]["required"]["raw"] == str(500 * USDC)
+    assert ob["reserve"]["scheduleHash"] == floor["scheduleHash"]
+    reply = client.post("/api/agent/chat", json={"message": "deposit 500 USDC into vault B"}, headers=h).json()
+    assert reply.get("holdReason") != "FloorOutOfSync" and reply["state"] != "EXPLAINED"
+    due = datetime.fromtimestamp(env.chain.block_timestamp() + 7 * 86400, UTC).date().isoformat()
+    added = client.post("/api/obligations", json={"label": "Rent", "amount": str(1000 * USDC), "dueDate": due},
+                        headers=h).json()
+    assert int(added["floorUpdate"]["floor"]["raw"]) > 500 * USDC
 
 
 @pytest.fixture

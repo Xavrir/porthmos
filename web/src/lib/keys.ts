@@ -19,6 +19,18 @@ export function newWallet(chainId: number, owner?: OwnerKey): WalletFile {
   return { version: 1, chainId, owner: owner ?? { type: 'burner', pk: generatePrivateKey() }, bank: { pk: generatePrivateKey() }, safe: null }
 }
 
+export type OwnerConnect = { wallet: WalletFile } | { keep: WalletFile }
+
+// The stored bank key may already be funded and registered for the stored owner's Safe, so it is never replaced:
+// the same owner resumes with the stored file, and another owner may take it over only before its setup began.
+export function connectInjectedOwner(stored: WalletFile | null, picked: Address, chainId: number, started: boolean): OwnerConnect {
+  const owner: OwnerKey = { type: 'injected', address: getAddress(picked) }
+  if (!stored) return { wallet: newWallet(chainId, owner) }
+  if (ownerAddress(stored).toLowerCase() === picked.toLowerCase()) return { wallet: stored }
+  if (started || stored.safe) return { keep: stored }
+  return { wallet: { ...stored, owner, safe: null } }
+}
+
 export function ownerAddress(w: WalletFile): Address {
   return w.owner.type === 'burner' ? privateKeyToAccount(w.owner.pk).address : getAddress(w.owner.address)
 }

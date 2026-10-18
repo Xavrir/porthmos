@@ -12,6 +12,7 @@ from eth_account import Account
 from aegis.agent.agent import Agent
 from aegis.agent.llm import LlmClient, LlmGate
 from aegis.chain.base import ChainClient
+from aegis.chain.rpc import RpcError
 from aegis.config import ANVIL_KEYS, USDC, Settings, load_key, load_settings
 from aegis.core.reserve import required_reserve
 from aegis.db import Database
@@ -135,19 +136,31 @@ class Runtime:
         if self.settings.chain_mode == "fake" and self._every("mine", 2):
             self.chain.follow_wall_clock()
         if self.executor is not None:
-            self.executor.tick()
+            self._step("executor", self.executor.tick)
         if self.exit_agent is not None:
-            self.exit_agent.tick()
+            self._step("exit agent", self.exit_agent.tick)
         if self.keeper is not None and self._every("keeper", self.settings.params.keeper_interval):
-            self.keeper.tick()
-        self.workflow.apply_submission_results()
+            self._step("keeper", self.keeper.tick)
+        if self._every("reconcile", 30):
+            self._step("chain reconciliation", self.workflow.reconcile_onchain)
+        self._step("submission results", self.workflow.apply_submission_results)
         if self.tradeflow is not None:
-            self.tradeflow.tick()
-        self.tail_events()
+            self._step("tradeflow", self.tradeflow.tick)
+        self._step("event tail", self.tail_events)
         if self._every("expire", 10):
-            self.workflow.expire_approvals()
+            self._step("approval expiry", self.workflow.expire_approvals)
         if self._every("risk", 10):
-            self.refresh_risk()
+            self._step("risk refresh", self.refresh_risk)
+
+    @staticmethod
+    def _step(name: str, fn) -> None:
+        """Each step on its own, so one failing read (a lagging RPC node, say) does not skip the steps after it."""
+        try:
+            fn()
+        except (httpx.HTTPError, OSError, RpcError) as e:
+            log.warning("background %s: %s", name, e)
+        except Exception:
+            log.exception("background %s failed", name)
 
     def tail_events(self) -> None:
         """Ledger rows and submission updates may come from other processes; the SSE stream reads them here."""

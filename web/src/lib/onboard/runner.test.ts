@@ -15,7 +15,7 @@ const config: OnboardConfig = {
   module: '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6', usdc: '0x5FbDB2315678afecb367f032d93F642f64180aa3', priceFeed: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
   vaults: [{ address: '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9', name: 'Vault A' }, { address: '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9', name: 'Vault B' }],
   operator: { authorizer: '0x90F79bf6EB2c4f870365E785982E1f101E93b906', exitKey: '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65', executor: '0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc', keeper: '0x976EA74026E726554dB657fA54763abd0C3a0aa9' },
-  params: { autoCap: '1000000000', dailyCap: '5000000000', bankLimit: '3000000000', maxBandWidth: '2000000', maxOracleAge: 180 },
+  params: { autoCap: '1000000000', dailyCap: '5000000000', bankLimit: '3000000000', maxBandWidth: '2000000', maxOracleAge: 180, reserveFloor: '500000000', scheduleHash: `0x${'5c'.repeat(32)}` },
   paramBounds: {}, ethOwner: '50000000000000', ethBank: '20000000000000', testUsdc: '100000000000',
   referenceSafe: '0x2E1c2be3dD6BAa59344EdC6ee6A93D68e2295a0F', onboardingOpen: true,
 }
@@ -28,7 +28,7 @@ function world() {
   const s = {
     balance: new Map<string, bigint>(), code: false, module: false, owner: zeroAddress as Address, bank: zeroAddress as Address,
     allowed: new Set<string>(), authorizer: zeroAddress as Address, exitKey: zeroAddress as Address,
-    autoCap: 0n, dailyCap: 0n, maxBandWidth: 0n, maxOracleAge: 0n, bankLimit: 0n, activated: false, funded: false,
+    autoCap: 0n, dailyCap: 0n, maxBandWidth: 0n, maxOracleAge: 0n, bankLimit: 0n, reserveFloor: 0n, scheduleHash: '0x' as Hex, activated: false, funded: false,
   }
   const log: string[] = []
   let n = 0
@@ -50,6 +50,7 @@ function world() {
       if (functionName === 'setMaxBandWidth') s.maxBandWidth = a[1] as bigint
       if (functionName === 'setMaxOracleAge') s.maxOracleAge = a[1] as bigint
       if (functionName === 'setBankLimit') s.bankLimit = a[1] as bigint
+      if (functionName === 'setReserveFloor') { s.reserveFloor = a[1] as bigint; s.scheduleHash = a[2] as Hex }
     } else {
       const { functionName } = decodeFunctionData({ abi: SAFE_ABI, data: call.data })
       log.push(functionName)
@@ -66,6 +67,7 @@ function world() {
     exitKey: () => s.exitKey,
     autoCap: () => s.autoCap, dailyCap: () => s.dailyCap, maxBandWidth: () => s.maxBandWidth, maxOracleAge: () => s.maxOracleAge,
     bankLimit: () => s.bankLimit,
+    reserveFloor: () => s.reserveFloor,
   }
   const client = {
     readContract: async ({ functionName, args }: { functionName: string; args?: readonly unknown[] }) => reads[functionName](args ?? []),
@@ -77,7 +79,7 @@ function world() {
   const bank: Sender = { address: bankAcct.address, send: async (c) => apply(bankAcct.address, c) }
   const steps = (): OnboardSteps => ({
     funded: s.funded, safeDeployed: s.code, moduleEnabled: s.module, registered: s.owner !== zeroAddress, vaults: s.allowed.size === 2,
-    authorizer: s.authorizer !== zeroAddress, exitKey: s.exitKey !== zeroAddress, caps: s.maxOracleAge > 0n, bankLimit: s.bankLimit > 0n, activated: s.activated,
+    authorizer: s.authorizer !== zeroAddress, exitKey: s.exitKey !== zeroAddress, caps: s.maxOracleAge > 0n, reserveFloor: s.reserveFloor >= 500_000000n, bankLimit: s.bankLimit > 0n, activated: s.activated,
   })
   const calls = { fund: [] as string[], activate: [] as string[] }
   const api = {
@@ -118,8 +120,9 @@ describe('OnboardRunner', () => {
     await r.run()
     expect(w.log).toEqual([
       'createProxyWithNonce', 'execTransaction', 'register', 'addVault', 'addVault', 'setAuthorizer', 'setExitKey',
-      'setAutoCap', 'setDailyCap', 'setMaxBandWidth', 'setMaxOracleAge', 'bank:setBankLimit',
+      'setAutoCap', 'setDailyCap', 'setMaxBandWidth', 'setMaxOracleAge', 'setReserveFloor', 'bank:setBankLimit',
     ])
+    expect([w.s.reserveFloor, w.s.scheduleHash]).toEqual([500_000000n, config.params.scheduleHash])
     expect(w.calls.fund).toEqual([w.owner.address])
     expect(w.calls.activate).toEqual([w.owner.address])
     expect(w.saved()).toMatch(/^0x[0-9a-fA-F]{40}$/)
@@ -129,7 +132,7 @@ describe('OnboardRunner', () => {
     expect(w.prompts).toEqual([])
   })
 
-  it('explains every wallet request in plain words and batches the ten setup calls when the wallet can', async () => {
+  it('explains every wallet request in plain words and batches the eleven setup calls when the wallet can', async () => {
     const w = world()
     const batches: Call[][] = []
     const wallet: OwnerSigner = {
@@ -143,7 +146,7 @@ describe('OnboardRunner', () => {
     const fund = shown[0] as Extract<WalletPrompt, { kind: 'sign' }>
     expect(fund.text.startsWith('AEGIS onboarding\n')).toBe(true)
     const batch = shown[2] as Extract<WalletPrompt, { kind: 'batch' }>
-    expect(batch.calls.map((c) => c.step)).toEqual(['module', 'register', 'vaultA', 'vaultB', 'authorizer', 'exitKey', 'autoCap', 'dailyCap', 'maxBandWidth', 'maxOracleAge'])
+    expect(batch.calls.map((c) => c.step)).toEqual(['module', 'register', 'vaultA', 'vaultB', 'authorizer', 'exitKey', 'autoCap', 'dailyCap', 'maxBandWidth', 'maxOracleAge', 'reserveFloor'])
     expect(batches.length).toBe(1)
     const act = shown[3] as Extract<WalletPrompt, { kind: 'sign' }>
     expect(act.text).toContain('wants you to sign in with your Ethereum account')
@@ -153,7 +156,7 @@ describe('OnboardRunner', () => {
     const w = world()
     await w.runner(undefined, { ...w.owner, kind: 'injected' }).run()
     const txs = w.prompts.filter((p): p is Extract<WalletPrompt, { kind: 'tx' }> => p?.kind === 'tx')
-    expect(txs.map((p) => p.index)).toEqual([undefined, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(txs.map((p) => p.index)).toEqual([undefined, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     expect(txs.every((p) => p.why.length > 10)).toBe(true)
   })
 
@@ -165,7 +168,7 @@ describe('OnboardRunner', () => {
     w.s.owner = w.owner.address
     w.s.allowed.add(config.vaults[0].address)
     await w.runner().run()
-    expect(w.log).toEqual(['addVault', 'setAuthorizer', 'setExitKey', 'setAutoCap', 'setDailyCap', 'setMaxBandWidth', 'setMaxOracleAge', 'bank:setBankLimit'])
+    expect(w.log).toEqual(['addVault', 'setAuthorizer', 'setExitKey', 'setAutoCap', 'setDailyCap', 'setMaxBandWidth', 'setMaxOracleAge', 'setReserveFloor', 'bank:setBankLimit'])
     expect(w.calls.fund).toEqual([])
   })
 
@@ -182,7 +185,7 @@ describe('OnboardRunner', () => {
 
   it('stops with a plain message when onboarding is closed', async () => {
     const w = world()
-    const r = new OnboardRunner({ config: { ...config, onboardingOpen: false }, api: { onboardStatus: async () => ({ safe: null, steps: { funded: false, safeDeployed: false, moduleEnabled: false, registered: false, vaults: false, authorizer: false, exitKey: false, caps: false, bankLimit: false, activated: false } }), onboardFund: async () => ({ txs: [] }), onboardActivate: async () => ({ safe: zeroAddress, mintTx: null }), authNonce: async () => ({ nonce: 'abcdefgh1' }) }, client: { readContract: async () => CODE } as unknown as PublicClient, owner: w.owner, bank: { address: zeroAddress, send: async () => '0x' }, onSafe: () => undefined, onUpdate: () => undefined })
+    const r = new OnboardRunner({ config: { ...config, onboardingOpen: false }, api: { onboardStatus: async () => ({ safe: null, steps: { funded: false, safeDeployed: false, moduleEnabled: false, registered: false, vaults: false, authorizer: false, exitKey: false, caps: false, reserveFloor: false, bankLimit: false, activated: false } }), onboardFund: async () => ({ txs: [] }), onboardActivate: async () => ({ safe: zeroAddress, mintTx: null }), authNonce: async () => ({ nonce: 'abcdefgh1' }) }, client: { readContract: async () => CODE } as unknown as PublicClient, owner: w.owner, bank: { address: zeroAddress, send: async () => '0x' }, onSafe: () => undefined, onUpdate: () => undefined })
     await expect(r.run()).rejects.toThrow(/closed/)
     expect(w.log).toEqual([])
   })

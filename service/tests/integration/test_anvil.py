@@ -104,6 +104,24 @@ def test_t2_routine_deposit(live):
     assert outcome(live, r["requestId"]) == "CONFIRMED"
 
 
+def test_executed_dar_with_lost_tx_hash_is_reconciled_from_logs(live):
+    """The Executor broadcast the DAR, then died before recording the tx hash; the chain still tells the outcome."""
+    fresh_oracle(live)
+    r = live.rt.workflow.chat(live.owner, "deposit 300 USDC into vault B")
+    assert r["state"] == "SUBMITTED"
+    live.rt.executor.tick()
+    db = live.rt.services.db
+    sub = db.one("SELECT * FROM submissions WHERE request_id=?", (r["requestId"],))
+    assert sub["status"] == "confirmed"
+    db.execute("UPDATE submissions SET status='claimed', tx_hash=NULL, result=NULL, applied=0 WHERE id=?", (sub["id"],))
+    assert live.rt.workflow.apply_submission_results() == 0
+    assert live.rt.workflow.reconcile_onchain(older_than=0) == 1
+    assert live.rt.workflow.apply_submission_results() == 1
+    rec = live.rt.workflow.store.get(r["requestId"])
+    assert (rec["state"], rec["data"]["outcome"], rec["data"]["txHash"]) == ("EXPLAINED", "CONFIRMED", sub["tx_hash"])
+    assert reconcile(live.rt.services.ledger, live.chain.events(live.safe), live.safe)["mismatches"] == 0
+
+
 def test_tampered_and_replayed_dars_revert(live):
     import json
 

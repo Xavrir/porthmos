@@ -292,3 +292,11 @@ def test_hidden_execution_shows_mismatch(env):
     env.services.db.execute("DELETE FROM ledger WHERE kind='CONFIRMED'")
     rep = reconcile(env.services.ledger, env.chain.events(env.safe), env.safe)
     assert any(d["type"] == "event_without_ledger_row" for d in rep["details"])
+
+
+def test_allocation_with_payroll_guard_plans_a_deposit(env):
+    r = env.chat("Put idle cash to work, keep payroll safe.")
+    assert "obligationDraft" not in r and "clarification" not in r
+    assert r["state"] in ("AWAITING_APPROVAL", "SUBMITTED") and r["actionCard"]["op"] == "DEPOSIT"
+    draft = env.chat("add payroll of 20,000 on the 25th")
+    assert draft["obligationDraft"]["items"][0]["amount"]["raw"] == str(20_000 * USDC)

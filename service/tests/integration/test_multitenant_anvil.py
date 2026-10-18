@@ -125,6 +125,8 @@ def configure_registry(live, v: Visitor, authorizer: str | None = None, auto_cap
     send(live, v.owner, reg, REGISTRY.encode("setDailyCap", s, int(p["dailyCap"])))
     send(live, v.owner, reg, REGISTRY.encode("setMaxBandWidth", s, int(p["maxBandWidth"])))
     send(live, v.owner, reg, REGISTRY.encode("setMaxOracleAge", s, int(p["maxOracleAge"])))
+    send(live, v.owner, reg, REGISTRY.encode("setReserveFloor", s, int(p["reserveFloor"]),
+                                             bytes.fromhex(p["scheduleHash"][2:])))
 
 
 def set_bank_limit(live, v: Visitor) -> None:

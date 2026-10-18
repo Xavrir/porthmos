@@ -12,7 +12,7 @@ import { WalletAvatar } from '../components/wallet/WalletAvatar'
 import { useWalletPicker } from '../components/wallet/WalletPicker'
 import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
-import { bankAddress, newWallet, ownerAddress, parseWallet, WalletFileError, type WalletFile } from '../lib/keys'
+import { bankAddress, connectInjectedOwner, newWallet, ownerAddress, parseWallet, WalletFileError, type WalletFile } from '../lib/keys'
 import { downloadRecovery } from '../lib/recovery'
 import { publicClientFor } from '../lib/onboard/chain'
 import { plainError, type Plain } from '../lib/onboard/errors'
@@ -26,7 +26,7 @@ const GROUPS: { id: StepGroup; title: string; what: (c: OnboardConfig) => string
   { id: 'fund', title: 'Test ETH for gas', what: () => 'The faucet sends a little test ETH to the owner and the bank key so they can pay for gas. You sign a message; nothing is spent.' },
   { id: 'safe', title: 'Create your Safe', what: () => 'A Safe smart account at an address fixed by your owner address. You are its only owner.' },
   { id: 'module', title: 'Turn on the Porthmos module', what: () => 'The Safe lets the Porthmos module deposit into allowed vaults and redeem back. It can do nothing else.' },
-  { id: 'policy', title: 'Write your rules', what: (c) => `Nine calls to the PolicyRegistry: owner and bank, two vaults, the Porthmos keys, an auto cap of ${usd(c.params.autoCap)} and a daily cap of ${usd(c.params.dailyCap)}.` },
+  { id: 'policy', title: 'Write your rules', what: (c) => `Ten calls to the PolicyRegistry: owner and bank, two vaults, the Porthmos keys, an auto cap of ${usd(c.params.autoCap)}, a daily cap of ${usd(c.params.dailyCap)} and a reserve floor of ${usd(c.params.reserveFloor)}.` },
   { id: 'bank', title: 'Bank sets its limit', what: (c) => `The bank key in this browser says above which amount the bank must also sign: ${usd(c.params.bankLimit)}.` },
   { id: 'activate', title: 'Activate and sign in', what: (c) => `You sign in with Ethereum. The server checks every rule on-chain, then sends ${usd(c.testUsdc)} test USDC to your Safe.` },
 ]
@@ -58,7 +58,7 @@ function WalletPlan() {
       <ol>
         <li><strong>One signature</strong> to ask the faucet for test ETH. It costs nothing.</li>
         <li><strong>One transaction</strong> to create your Safe.</li>
-        <li><strong>Ten setup calls</strong>: in one confirmation if your wallet can batch them, otherwise one at a time, numbered 1 of 10 to 10 of 10.</li>
+        <li><strong>Eleven setup calls</strong>: in one confirmation if your wallet can batch them, otherwise one at a time, numbered 1 of 11 to 11 of 11.</li>
         <li><strong>One Sign-In with Ethereum signature</strong> to activate your treasury and sign you in.</li>
       </ol>
       <p className="auth-sub">Each request is explained here while your wallet is open. Porthmos never asks for a token approval here.</p>
@@ -174,11 +174,19 @@ export default function SignUp() {
     const picked = await picker.open({ reason: 'The wallet you connect becomes the only owner of your new Safe. Connecting shares only your address.' })
     if (!picked) return
     if (walletRoles?.owner && walletRoles.address.toLowerCase() === picked.address.toLowerCase()) return
-    const base = wallet && !started ? wallet : newWallet(config.chainId)
-    setWallet({ ...base, owner: { type: 'injected', address: picked.address as Address }, safe: null })
-    runner.current = null
+    const next = connectInjectedOwner(wallet, picked.address as Address, config.chainId, started)
+    if ('keep' in next) {
+      setNote(`This browser holds the keys of a setup already started for owner ${shortHex(ownerAddress(next.keep))}. Connect that wallet to resume, or download the recovery file and start over with new keys.`)
+      return
+    }
+    if (next.wallet !== wallet) {
+      setWallet(next.wallet)
+      runner.current = null
+    }
     chooseAccount('wallet')
-    setNote(`Your wallet ${shortHex(picked.address)} is the owner. The bank seat is a key kept in this browser for testnet.`)
+    setNote(next.wallet === wallet
+      ? `Your wallet ${shortHex(picked.address)} is the owner. Resuming with the bank key already in this browser.`
+      : `Your wallet ${shortHex(picked.address)} is the owner. The bank seat is a key kept in this browser for testnet.`)
   }
 
   const onImport = async (e: ChangeEvent<HTMLInputElement>) => {

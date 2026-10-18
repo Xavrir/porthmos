@@ -213,11 +213,11 @@ Browser key storage is `localStorage["aegis.wallet.v1"] = {version:1, chainId:84
 | 2 | Browser to API | `POST /api/onboard/fund {owner, bank, issuedAt, signature}`; the owner signs `AEGIS onboarding\nowner: …\nbank: …\nchainId: 84532\nissuedAt: …` with personal_sign (max age 5 min). The format is unchanged in v0.6; the signature may come from an EOA, a deployed smart wallet (ERC-1271) or a not yet deployed one (ERC-6492) | The server tops up each address to its target (owner 0.00005 ETH, bank 0.00002 ETH) only if it is below half, once per address ever, and waits up to 60 s for receipts |
 | 3 | Owner | `SafeProxyFactory.createProxyWithNonce(SafeL2 v1.4.1, setup([owner], 1, 0x0, 0x, fallbackHandler, 0x0, 0, 0x0), saltNonce)` with `saltNonce = uint256(keccak256(abi.encodePacked(owner, "aegis-v2")))` | The client predicts the Safe address first and skips this step if code exists there |
 | 4 | Owner | `Safe.execTransaction(safe, 0, enableModule(AegisModule), …)` with the pre-validated signature form (`r = owner`, `s = 0`, `v = 1`) | Valid because `msg.sender` is the owner |
-| 5 | Owner | `register(safe, owner, bank)`, `addVault(A)`, `addVault(B)`, `setAuthorizer`, `setExitKey`, `setAutoCap`, `setDailyCap`, `setMaxBandWidth`, `setMaxOracleAge` | Nine transactions with values from config. The reserve floor starts at 0. An injected wallet may batch steps 4 and 5 with EIP-5792 when it reports atomic batch support |
+| 5 | Owner | `register(safe, owner, bank)`, `addVault(A)`, `addVault(B)`, `setAuthorizer`, `setExitKey`, `setAutoCap`, `setDailyCap`, `setMaxBandWidth`, `setMaxOracleAge`, `setReserveFloor(safe, reserveFloor, scheduleHash)` | Ten transactions with values from config. The floor is the reserve of an empty schedule (the 500 USDC buffer) and its schedule hash, so a new treasury starts in sync. An injected wallet may batch steps 4 and 5 with EIP-5792 when it reports atomic batch support |
 | 6 | Bank | `setBankLimit(safe, bankLimit)` | Always the bank burner key |
 | 7 | Browser to API | `POST /api/onboard/activate {safe, owner, message, signature}`: a SIWE message (see 04, Signed structures) with the statement `Activate my Porthmos treasury and sign in as owner.` and the resources `urn:porthmos:role:owner` and `urn:porthmos:safe:<safe>` | The server verifies the chain, mints 100,000 test USDC to the Safe once, stores the tenant, starts serving it, and returns the owner session as `session`, so the visitor signs once to activate and sign in |
 
-In total: 11 owner transactions, 1 bank transaction, and up to 3 server transactions (2 gas drips, 1 mint). `GET /api/onboard/status?owner=` reads every step from the chain and the database, so the client resumes after a reload and skips steps that are already done.
+In total: 12 owner transactions, 1 bank transaction, and up to 3 server transactions (2 gas drips, 1 mint). `GET /api/onboard/status?owner=` reads every step from the chain and the database, so the client resumes after a reload and skips steps that are already done.
 
 **Activation checks.** Activation fails with 409 `BadOnboardingState` and a list of codes unless all of these hold:
 
@@ -230,6 +230,7 @@ In total: 11 owner transactions, 1 bank transaction, and up to 3 server transact
 | Authorizer and Exit key equal the server operator keys | `WrongAuthorizer`, `WrongExitKey` |
 | Both vaults are allowed | `VaultMissing:<name>` |
 | Every cap is above 0 and at most its bound (auto cap 10,000 USDC, daily cap 50,000 USDC, bank limit 50,000 USDC, band width 0.05, oracle age 3,600 s) | `AutoCapOutOfBounds`, `DailyCapOutOfBounds`, `BankLimitOutOfBounds`, `MaxBandWidthOutOfBounds`, `MaxOracleAgeOutOfBounds` |
+| The reserve floor is at least the reserve of an empty schedule (500 USDC) | `ReserveFloorNotSet` |
 | No other activation of this Safe is minting | `ActivationInProgress` |
 
 The mint is claimed with one atomic database update, so concurrent calls cannot mint twice. A mint still pending after 60 s is kept as recorded and never retried.
@@ -513,7 +514,7 @@ R_required = max over t in [0, H] of max(0, Σ_{i ≤ t} O_i − Σ_{i ≤ t} I_
 
 Taking the maximum over cumulative net outflow covers the worst point in the horizon, so an early large payment is covered even if later inflows offset it. Escrowed TradeFlow milestones are not obligations in this formula, because their funds have already left the Safe [Built].
 
-**Floor synchronisation.** Approving or settling an obligation in the app produces an owner-signed `setReserveFloor(ceil(R_required), scheduleHash)` transaction. The API returns the floor value and the schedule hash, and the web encodes the call to the pinned registry (v0.4, C1). The planner compares `registry.reserveFloor` with `R_required` before every plan. If the on-chain floor is lower, the planner returns HOLD with reason `FloorOutOfSync` and asks the owner to sign the update. `scheduleHash` is also included in every DAR's evidence hash, so each decision is linked to the schedule it was planned against. A new tenant starts with floor 0 while the required reserve is the 500 USDC buffer, so its agent holds until the owner sends the first floor update.
+**Floor synchronisation.** Approving or settling an obligation in the app produces an owner-signed `setReserveFloor(ceil(R_required), scheduleHash)` transaction. The API returns the floor value and the schedule hash, and the web encodes the call to the pinned registry (v0.4, C1). The planner compares `registry.reserveFloor` with `R_required` before every plan. If the on-chain floor is lower, the planner returns HOLD with reason `FloorOutOfSync` and asks the owner to sign the update. `scheduleHash` is also included in every DAR's evidence hash, so each decision is linked to the schedule it was planned against. Onboarding sets the first floor to the reserve of the empty schedule (the 500 USDC buffer), so a new tenant starts in sync; its first obligation produces the first floor update.
 
 **2. Deployable capital.**
 

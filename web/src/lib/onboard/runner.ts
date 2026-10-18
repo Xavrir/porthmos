@@ -26,7 +26,7 @@ export type OwnerSigner = Sender & {
 
 export type StepId =
   | 'fund' | 'safe' | 'module'
-  | 'register' | 'vaultA' | 'vaultB' | 'authorizer' | 'exitKey' | 'autoCap' | 'dailyCap' | 'maxBandWidth' | 'maxOracleAge'
+  | 'register' | 'vaultA' | 'vaultB' | 'authorizer' | 'exitKey' | 'autoCap' | 'dailyCap' | 'maxBandWidth' | 'maxOracleAge' | 'reserveFloor'
   | 'bankLimit' | 'activate'
 
 export type StepGroup = 'fund' | 'safe' | 'module' | 'policy' | 'bank' | 'activate'
@@ -76,11 +76,12 @@ export const STEP_WHY: Record<StepId, string> = {
   dailyCap: 'Sets the most the agent may deposit in one day.',
   maxBandWidth: 'Sets how far the price may move before deposits stop.',
   maxOracleAge: 'Sets how old the price may be before deposits stop.',
+  reserveFloor: 'Sets the cash your Safe always keeps. With no bills entered yet, that is the safety buffer.',
   bankLimit: 'The bank key in this browser sets the amount above which the bank must also sign.',
   activate: 'Signs you in with Ethereum (SIWE). The server checks every rule on-chain, then sends test USDC to your Safe. A signature only.',
 }
 
-export const TX_STEPS: StepId[] = ['module', 'register', 'vaultA', 'vaultB', 'authorizer', 'exitKey', 'autoCap', 'dailyCap', 'maxBandWidth', 'maxOracleAge']
+export const TX_STEPS: StepId[] = ['module', 'register', 'vaultA', 'vaultB', 'authorizer', 'exitKey', 'autoCap', 'dailyCap', 'maxBandWidth', 'maxOracleAge', 'reserveFloor']
 
 export const STEP_LABELS: Record<StepId, string> = {
   fund: 'Test ETH for gas',
@@ -95,6 +96,7 @@ export const STEP_LABELS: Record<StepId, string> = {
   dailyCap: 'Set the daily cap',
   maxBandWidth: 'Set the price band',
   maxOracleAge: 'Set the price age limit',
+  reserveFloor: 'Set the reserve floor',
   bankLimit: 'Bank sets its limit',
   activate: 'Activate and receive test USDC',
 }
@@ -102,13 +104,13 @@ export const STEP_LABELS: Record<StepId, string> = {
 const GROUP: Record<StepId, StepGroup> = {
   fund: 'fund', safe: 'safe', module: 'module',
   register: 'policy', vaultA: 'policy', vaultB: 'policy', authorizer: 'policy', exitKey: 'policy',
-  autoCap: 'policy', dailyCap: 'policy', maxBandWidth: 'policy', maxOracleAge: 'policy',
+  autoCap: 'policy', dailyCap: 'policy', maxBandWidth: 'policy', maxOracleAge: 'policy', reserveFloor: 'policy',
   bankLimit: 'bank', activate: 'activate',
 }
 
 export const STATUS_KEY: Record<StepId, keyof OnboardSteps> = {
   fund: 'funded', safe: 'safeDeployed', module: 'moduleEnabled', register: 'registered', vaultA: 'vaults', vaultB: 'vaults',
-  authorizer: 'authorizer', exitKey: 'exitKey', autoCap: 'caps', dailyCap: 'caps', maxBandWidth: 'caps', maxOracleAge: 'caps',
+  authorizer: 'authorizer', exitKey: 'exitKey', autoCap: 'caps', dailyCap: 'caps', maxBandWidth: 'caps', maxOracleAge: 'caps', reserveFloor: 'reserveFloor',
   bankLimit: 'bankLimit', activate: 'activated',
 }
 
@@ -249,6 +251,9 @@ export class OnboardRunner {
       capStep('dailyCap', 'setDailyCap', p.dailyCap),
       capStep('maxBandWidth', 'setMaxBandWidth', p.maxBandWidth),
       capStep('maxOracleAge', 'setMaxOracleAge', p.maxOracleAge),
+      // An API from before this step serves no floor; the obligation flow then sets it later, as it used to.
+      ownerTx('reserveFloor', () => reg('setReserveFloor', [safe, BigInt(p.reserveFloor), p.scheduleHash]),
+        async () => !p.reserveFloor || (await this.read<bigint>('reserveFloor', [safe])) >= BigInt(p.reserveFloor)),
       {
         id: 'bankLimit', who: bankWho,
         done: async () => (await this.read<bigint>('bankLimit', [safe])) === BigInt(p.bankLimit),

@@ -84,6 +84,7 @@ export const REGISTRY_ABI = parseAbi([
   'function bankLimit(address safe) view returns (uint256)',
   'function maxBandWidth(address safe) view returns (uint256)',
   'function maxOracleAge(address safe) view returns (uint256)',
+  'function reserveFloor(address safe) view returns (uint256)',
   'function ownerFrozen(address safe) view returns (bool)',
   'function bankFrozen(address safe) view returns (bool)',
   'function allowedVault(address safe, address vault) view returns (bool)',

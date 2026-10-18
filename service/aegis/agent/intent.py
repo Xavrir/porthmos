@@ -20,6 +20,7 @@ RULE_ONLY_KINDS = {TRANSFER_OUT, CANCEL, CONFIRM}
 
 MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 WORD_NUM = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "a": 1, "an": 1}
 
 ADDRESS_RE = re.compile(r"0x[0-9a-fA-F]{40}")
@@ -74,6 +75,11 @@ CONFIRM_RE = (r"(yes|y|yeah|yep|yup|ok|okay|confirm|confirmed|i confirm|go ahead
 NEGATIVE_RE = (r"(no|nope|nah|tidak|tidak jadi|gak jadi|nggak jadi|ga jadi|gak|nggak|enggak|jangan|forget it|lupakan)"
                r"( thanks| thank you| deh| saja| aja)?[.! ]*")
 CANCEL_RE = r"^(cancel|stop|abort|never ?mind|batal|batalkan|hentikan)\b"
+# A protective clause next to an allocation ("put idle cash to work, keep payroll safe") constrains the allocation;
+# the reserve already covers every scheduled obligation, so it is not a request to add one.
+RESERVE_GUARD_RE = (r"\b(keep(s|ing)?|cover(s|ed|ing)?|protect(s|ed|ing)?|safe(ty)?|reserve|set aside|hold back|"
+                    r"ring-?fence|sisihkan|cadangkan|amankan|jaga)\b")
+OWE_RE = r"\b(owe|owes|owed|owing|berutang|utang)\b"
 FREE_BASE_RE = (r"\b(free cash|free|deployable|surplus|idle|available|spare|kas bebas|dana bebas|bebas|tersedia|"
                 r"menganggur|nganggur|lebih)\b")
 AMOUNT_SUFFIX = {"k": 1000, "rb": 1000, "ribu": 1000, "thousand": 1000, "m": 10**6, "mn": 10**6, "jt": 10**6,
@@ -262,6 +268,11 @@ def parse_due(text: str, now: int) -> int | None:
             if d and d >= base:
                 return int(d.timestamp())
             y, mo = (y + 1, 1) if mo == 12 else (y, mo + 1)
+    m = re.search(r"\b(?:on |this |next )?(" + "|".join(WEEKDAYS) + r")\b", t)
+    if m:
+        ahead = (WEEKDAYS.index(m[1]) - base.weekday()) % 7 or 7
+        d = base + timedelta(days=ahead)
+        return int(datetime(d.year, d.month, d.day, tzinfo=UTC).timestamp())
     if re.search(r"\bend of (the )?month\b", t):
         first_next = datetime(base.year + (base.month == 12), base.month % 12 + 1, 1, tzinfo=UTC)
         return int((first_next - timedelta(days=1)).timestamp())
@@ -361,7 +372,9 @@ def parse(text: str, now: int, vault_labels: list[str]) -> Intent:
     mandate_object = re.search(r"\b(payroll|salary|salaries|wages|invoice|rent|bills?|obligation|supplier|tax|loan|"
                                r"gaji|sewa|tagihan|pajak|pinjaman)\b", t)
     mandate_verb = re.search(r"\b(keep|reserve|set aside|cover|hold back|ring-?fence|save for|add|schedule|due|"
-                             r"sisihkan|cadangkan|siapkan|jatuh tempo)\b", t)
+                             r"sisihkan|cadangkan|siapkan|jatuh tempo)\b", t) or re.search(OWE_RE, t)
+    if mandate_object and mandate_verb and _reserve_constraint(t, intent):
+        mandate_verb = None
     to_vault = re.search(r"\b(to|ke) (vault|the vault|treasury|the treasury|safe|the safe)\b", t)
 
     if re.match(CANCEL_RE, t) or re.fullmatch(NEGATIVE_RE, t):
@@ -386,6 +399,17 @@ def parse(text: str, now: int, vault_labels: list[str]) -> Intent:
             intent.imperative = intent.mood == "imperative"
     intent.missing = missing_fields(intent)
     return intent
+
+
+def _reserve_constraint(t: str, intent: Intent) -> bool:
+    """An allocation request whose obligation words only guard the reserve: no due date, nothing owed, and any
+    amount stated before the guard, so it belongs to the allocation ("deposit 2,000 and keep payroll safe"), not to
+    a new obligation ("reserve 3,000 for rent and invest the rest")."""
+    guard = re.search(RESERVE_GUARD_RE, t)
+    if not guard or not re.search(ALLOCATE_RE, t) or intent.due is not None or re.search(OWE_RE, t):
+        return False
+    digit = re.search(r"\d", t)
+    return digit is None or digit.start() < guard.start()
 
 
 def missing_fields(intent: Intent) -> list[str]:

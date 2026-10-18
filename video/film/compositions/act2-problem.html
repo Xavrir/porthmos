@@ -1,0 +1,199 @@
+<!doctype html>
+<html data-composition-variables='[{"id":"scale","type":"number","label":"Type scale","default":1,"min":0.4,"max":1.5,"step":0.01}]'>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="act2-template">
+      <style>
+        #act2-root {
+          position: absolute;
+          inset: 0;
+          width: 100% !important;
+          height: 100% !important;
+          overflow: hidden;
+        }
+        #act2-root .a2-card {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: calc(70px * var(--scale));
+          padding: 0 6%;
+          opacity: 0;
+        }
+        #act2-root .a2-h {
+          font-size: calc(104px * var(--scale));
+          text-align: center;
+          max-width: calc(1500px * var(--scale));
+        }
+        #act2-root .a2-steps {
+          position: relative;
+          display: flex;
+          gap: calc(150px * var(--scale));
+        }
+        #act2-root .a2-track {
+          position: absolute;
+          left: calc(40px * var(--scale));
+          right: calc(40px * var(--scale));
+          top: calc(18px * var(--scale));
+          height: 2px;
+          background: var(--green-dim);
+          transform-origin: 0 50%;
+        }
+        #act2-root .a2-step {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: calc(22px * var(--scale));
+        }
+        #act2-root .a2-step i {
+          display: block;
+          width: calc(38px * var(--scale));
+          height: calc(38px * var(--scale));
+          border-radius: 50%;
+          border: 2px solid var(--green);
+          background: var(--night);
+          box-shadow: 0 0 22px rgba(78, 195, 151, 0.45);
+        }
+        #act2-root .a2-step b {
+          font-family: var(--sans);
+          font-size: calc(52px * var(--scale));
+          font-weight: 760;
+          letter-spacing: -0.02em;
+          color: var(--ink);
+        }
+        #act2-root .a2-step span {
+          font-family: var(--mono);
+          font-size: calc(20px * var(--scale));
+          letter-spacing: 0.12em;
+          color: var(--green);
+        }
+        #act2-hand {
+          font-family: var(--sans);
+          font-size: calc(170px * var(--scale));
+          font-weight: 900;
+          letter-spacing: -0.05em;
+          line-height: 1;
+          color: transparent;
+          -webkit-text-stroke: 3px var(--ink);
+        }
+        #act2-root .a2-queue {
+          display: flex;
+          gap: calc(18px * var(--scale));
+          font-family: var(--mono);
+          font-size: calc(22px * var(--scale));
+          color: var(--muted);
+        }
+        #act2-root .a2-queue div {
+          padding: 10px 18px;
+          border: 1px dashed rgba(233, 240, 236, 0.28);
+          border-radius: 10px;
+        }
+        #act2-root .a2-idle {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: calc(26px * var(--scale));
+          width: calc(1100px * var(--scale));
+          max-width: 92%;
+        }
+        #act2-root .a2-idle-row {
+          width: 100%;
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          font-family: var(--mono);
+          color: var(--muted);
+          font-size: calc(26px * var(--scale));
+        }
+        #act2-root .a2-idle-row b {
+          font-size: calc(60px * var(--scale));
+          font-weight: 600;
+          color: var(--ink);
+        }
+        #act2-root .a2-flat {
+          position: relative;
+          width: 100%;
+          height: calc(90px * var(--scale));
+          border-bottom: 1px solid rgba(233, 240, 236, 0.12);
+        }
+        #act2-flatline {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: calc(14px * var(--scale));
+          height: 3px;
+          background: var(--faint);
+          transform-origin: 0 50%;
+        }
+        #act2-root .a2-flat em {
+          position: absolute;
+          right: 0;
+          top: 0;
+          font-style: normal;
+          font-family: var(--mono);
+          font-size: calc(22px * var(--scale));
+          color: var(--faint);
+        }
+      </style>
+      <div id="act2-root" data-composition-id="act2" data-width="1920" data-height="1080" data-duration="13">
+        <div class="a2-card" id="act2-c1">
+          <div class="hero a2-h">Importers pay suppliers in stages.</div>
+          <div class="a2-steps">
+            <div class="a2-track" id="act2-track"></div>
+            <div class="a2-step" id="act2-s1"><i></i><b>Shipped.</b><span>MILESTONE 1</span></div>
+            <div class="a2-step" id="act2-s2"><i></i><b>Arrived.</b><span>MILESTONE 2</span></div>
+            <div class="a2-step" id="act2-s3"><i></i><b>Inspected.</b><span>MILESTONE 3</span></div>
+          </div>
+        </div>
+        <div class="a2-card" id="act2-c2">
+          <div class="hero a2-h">Someone checks every milestone.</div>
+          <div id="act2-hand">By hand.</div>
+          <div class="a2-queue" id="act2-queue">
+            <div>bill_of_lading.pdf</div>
+            <div>cold_chain_log.csv</div>
+            <div>survey_report.pdf</div>
+          </div>
+        </div>
+        <div class="a2-card" id="act2-c3">
+          <div class="hero a2-h">Meanwhile the cash sits idle.</div>
+          <div class="a2-idle">
+            <div class="a2-idle-row"><span>Treasury balance</span><b id="act2-bal">100,000.00 USDC</b></div>
+            <div class="a2-flat"><div id="act2-flatline"></div><em>earning nothing</em></div>
+          </div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          const $ = (id) => document.getElementById(id);
+
+          tl.set($("act2-c1"), { opacity: 1 }, 0);
+          tl.set($("act2-c1"), { opacity: 0 }, 4);
+          tl.set($("act2-c2"), { opacity: 1 }, 4);
+          tl.set($("act2-c2"), { opacity: 0 }, 8);
+          tl.set($("act2-c3"), { opacity: 1 }, 8);
+
+          tl.fromTo("#act2-c1 .a2-h", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.05);
+          tl.fromTo($("act2-track"), { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: "power2.inOut" }, 0.5);
+          ["act2-s1", "act2-s2", "act2-s3"].forEach((id, i) => FX.slam(tl, $(id), 0.6 + i * 0.4, { from: 1.25 }));
+
+          tl.fromTo("#act2-c2 .a2-h", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 4.05);
+          FX.slam(tl, $("act2-hand"), 5.0, { from: 1.6, dur: 0.25 });
+          tl.fromTo("#act2-queue div", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35, stagger: 0.18, ease: "power2.out" }, 5.6);
+
+          tl.fromTo("#act2-c3 .a2-h", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 8.05);
+          tl.fromTo(".a2-idle", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 8.7);
+          FX.count(tl, $("act2-bal"), 100000, 8.7, 1.2, (x) => x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " USDC");
+          tl.fromTo($("act2-flatline"), { scaleX: 0 }, { scaleX: 1, duration: 3, ease: "none" }, 9.0);
+
+          window.__timelines["act2"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

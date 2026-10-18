@@ -1,0 +1,459 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="act6-template">
+      <style>
+        #act6-root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+        }
+        #act6-t3 span {
+          color: var(--orange);
+        }
+        #act6-split {
+          left: 236px;
+          bottom: 92px;
+        }
+        #act6-mg {
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+        }
+        #act6-mg .backdrop {
+          position: absolute;
+          left: 220px;
+          right: 220px;
+          top: 214px;
+          bottom: 120px;
+          border-radius: 28px;
+          background: radial-gradient(closest-side, rgba(3, 8, 6, 0.92), rgba(3, 8, 6, 0.8) 70%, rgba(3, 8, 6, 0));
+        }
+        #act6-mg .hdr {
+          position: absolute;
+          left: 272px;
+          right: 272px;
+          top: 236px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-family: var(--mono);
+          font-size: 21px;
+          color: var(--muted);
+        }
+        #act6-mg .hdr b {
+          color: var(--ink);
+          font-weight: 600;
+        }
+        #act6-done {
+          font-size: 24px;
+          padding: 10px 24px;
+          opacity: 0;
+        }
+        #act6-bar {
+          position: absolute;
+          left: 272px;
+          top: 300px;
+          width: 1376px;
+          height: 54px;
+          display: flex;
+          gap: 6px;
+        }
+        #act6-bar .seg {
+          position: relative;
+          height: 100%;
+          border-radius: 10px;
+          border: 1.5px solid rgba(78, 195, 151, 0.4);
+          background: rgba(78, 195, 151, 0.05);
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          padding-left: 18px;
+          font-family: var(--mono);
+          font-size: 21px;
+          color: var(--ink);
+        }
+        #act6-bar .seg i {
+          position: absolute;
+          inset: 0;
+          transform-origin: 0 50%;
+          transform: scaleX(0);
+        }
+        #act6-bar .seg span {
+          position: relative;
+        }
+        #act6-track {
+          position: absolute;
+          left: 490px;
+          width: 940px;
+          top: 452px;
+          height: 2px;
+          background: rgba(233, 240, 236, 0.18);
+          transform-origin: 0 50%;
+        }
+        #act6-mg .node {
+          position: absolute;
+          top: 425px;
+          width: 56px;
+          height: 56px;
+          margin-left: -28px;
+          border-radius: 50%;
+          border: 2px solid rgba(233, 240, 236, 0.4);
+          background: #0a1511;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: var(--mono);
+          font-size: 22px;
+          font-weight: 700;
+          color: var(--ink);
+        }
+        #act6-mg .card {
+          position: absolute;
+          top: 512px;
+          width: 436px;
+          height: 420px;
+          border-radius: 18px;
+          border: 1px solid rgba(233, 240, 236, 0.12);
+          background: rgba(6, 14, 11, 0.94);
+          padding: 26px 28px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        #act6-mg .card .k {
+          font-family: var(--mono);
+          font-size: 16px;
+          letter-spacing: 0.14em;
+          color: var(--green);
+        }
+        #act6-mg .card .n {
+          font-family: var(--sans);
+          font-size: 33px;
+          font-weight: 780;
+          letter-spacing: -0.02em;
+          color: var(--ink);
+        }
+        #act6-mg .card .a {
+          font-family: var(--mono);
+          font-size: 28px;
+          color: var(--ink);
+        }
+        #act6-mg .card .p {
+          font-family: var(--sans);
+          font-size: 20px;
+          color: var(--muted);
+        }
+        #act6-mg .card .st {
+          margin-top: auto;
+          display: inline-flex;
+          width: max-content;
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-family: var(--mono);
+          font-size: 19px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          border: 1px solid rgba(233, 240, 236, 0.25);
+          color: var(--muted);
+          position: relative;
+        }
+        #act6-mg .card .st span {
+          display: block;
+        }
+        #act6-mg .card .tx {
+          font-family: var(--mono);
+          font-size: 15px;
+          color: var(--faint);
+          min-height: 40px;
+          line-height: 1.35;
+        }
+        #act6-gauge {
+          position: relative;
+          height: 70px;
+          margin-top: 4px;
+        }
+        #act6-gauge .scale {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 30px;
+          height: 10px;
+          border-radius: 5px;
+          background: rgba(233, 240, 236, 0.1);
+        }
+        #act6-gauge .band {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          border-radius: 5px;
+          background: rgba(78, 195, 151, 0.55);
+        }
+        #act6-gauge .tick {
+          position: absolute;
+          top: 48px;
+          font-family: var(--mono);
+          font-size: 14px;
+          color: var(--muted);
+          transform: translateX(-50%);
+        }
+        #act6-needle {
+          position: absolute;
+          left: 0;
+          top: 18px;
+          width: 4px;
+          height: 34px;
+          margin-left: -2px;
+          border-radius: 2px;
+          background: var(--ink);
+          box-shadow: 0 0 10px rgba(233, 240, 236, 0.6);
+        }
+        #act6-reading {
+          position: absolute;
+          top: -10px;
+          right: 0;
+          font-family: var(--mono);
+          font-size: 22px;
+          font-weight: 700;
+          color: var(--ink);
+        }
+        #act6-heldstamp {
+          right: 20px;
+          top: 16px;
+          font-size: 38px;
+          opacity: 0;
+        }
+        #act6-proof {
+          position: absolute;
+          left: 0;
+          top: 360px;
+          font-size: 19px;
+          padding: 9px 18px;
+          opacity: 0;
+        }
+        #act6-lines {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 18px;
+          padding-top: 60px;
+        }
+        #act6-lines div {
+          font-size: 96px;
+          opacity: 0;
+        }
+        #act6-lines div:last-child {
+          color: var(--green);
+        }
+      </style>
+      <div id="act6-root" data-composition-id="act6" data-width="1920" data-height="1080" data-duration="26">
+        <div class="ps-head" id="act6-head">
+          <div class="label"><span class="num">05</span><span class="slash">/</span><span>TradeFlow</span></div>
+          <div class="ps-title hero" id="act6-t1">Pay on proof.</div>
+          <div class="ps-title hero" id="act6-t2">The carrier signs. The money moves.</div>
+          <div class="ps-title hero" id="act6-t3">The cold chain broke. <span>The money stays.</span></div>
+          <div class="ps-title hero" id="act6-t4">Waived after a survey. Order completed.</div>
+        </div>
+
+        <div class="bframe ps-frame" id="act6-frame">
+          <div class="bar">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <div class="url"><i class="lock"></i><b>porthmos.vercel.app</b>/orders</div>
+            <div class="live"><i></i>LIVE<span>· Base Sepolia · real transactions</span></div>
+          </div>
+          <div class="screen" id="act6-screen">
+            <div class="cam" id="act6-cam">
+              <video
+                id="act6-r7"
+                src="assets/footage/R7.mp4"
+                data-start="0"
+                data-duration="5"
+                data-media-start="2.5"
+                data-automation='{"version":1,"lanes":[{"target":"rate","points":[{"t":0,"v":2.5},{"t":2.4,"v":2.5},{"t":2.7,"v":1},{"t":3.6,"v":1},{"t":3.9,"v":6},{"t":5,"v":6}]}]}'
+                muted
+                playsinline
+              ></video>
+            </div>
+          </div>
+        </div>
+        <div class="chip callout" id="act6-split"><i class="dot"></i>1,000 USDC&nbsp;·&nbsp;<b>200 / 400 / 400</b></div>
+
+        <div id="act6-mg">
+          <div class="backdrop"></div>
+          <div class="hdr">
+            <span><b>Order 1</b> · TradeEscrow · Base Sepolia · supplier and amounts fixed at funding</span>
+            <span class="chip" id="act6-done"><i class="dot"></i>Completed</span>
+          </div>
+          <div id="act6-bar">
+            <div class="seg" style="width: 20%"><i id="act6-f1"></i><span>200</span></div>
+            <div class="seg" style="width: 40%"><i id="act6-f2"></i><span>400</span></div>
+            <div class="seg" style="width: 40%"><i id="act6-f3"></i><span>400 USDC</span></div>
+          </div>
+          <div id="act6-track"></div>
+          <div class="node" id="act6-n1" style="left: 490px">1</div>
+          <div class="node" id="act6-n2" style="left: 960px">2</div>
+          <div class="node" id="act6-n3" style="left: 1430px">3</div>
+          <div class="chip" id="act6-proof"><i class="dot"></i><span id="act6-proof-text">Carrier proof verified</span></div>
+
+          <div class="card" id="act6-c1" style="left: 272px">
+            <div class="k">MILESTONE 1 · CARRIER</div>
+            <div class="n">Handed to carrier</div>
+            <div class="a">200 USDC</div>
+            <div class="p">Proof: carrier signature</div>
+            <div class="st" id="act6-s1"><span>LOCKED</span></div>
+            <div class="tx" id="act6-x1"></div>
+          </div>
+          <div class="card" id="act6-c2" style="left: 742px">
+            <div class="k">MILESTONE 2 · SENSOR</div>
+            <div class="n">Arrived cold</div>
+            <div class="p">Condition 2.00 to 8.00 °C</div>
+            <div id="act6-gauge">
+              <div class="scale"><div class="band" style="left: 16.6667%; width: 50%"></div></div>
+              <div id="act6-needle"></div>
+              <div id="act6-reading">2.00 °C</div>
+              <div class="tick" style="left: 16.6667%">2.00</div>
+              <div class="tick" style="left: 66.6667%">8.00</div>
+            </div>
+            <div class="st" id="act6-s2"><span>LOCKED</span></div>
+            <div class="tx" id="act6-x2"></div>
+            <div class="stamp" id="act6-heldstamp">HELD</div>
+          </div>
+          <div class="card" id="act6-c3" style="left: 1212px">
+            <div class="k">MILESTONE 3 · SURVEYOR</div>
+            <div class="n">Quality accepted</div>
+            <div class="a">400 USDC</div>
+            <div class="p">Proof: surveyor signature</div>
+            <div class="st" id="act6-s3"><span>LOCKED</span></div>
+            <div class="tx" id="act6-x3"></div>
+          </div>
+        </div>
+
+        <div id="act6-lines">
+          <div class="hero">The supplier is fixed.</div>
+          <div class="hero">The amounts are fixed.</div>
+          <div class="hero">Proof does the rest.</div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          const $ = (id) => document.getElementById(id);
+          const tf = Object.fromEntries(window.PORTHMOS_CHAIN.tradeflow.map((t) => [t.scenario, t]));
+          const fmt = (n) => n.toLocaleString("en-US");
+          const txLine = (t) => `${t.scenario} · ${t.hashShort} · block ${fmt(t.block)}${t.status === "Fail" ? " · Fail" : ""}`;
+          const GREEN = "#4EC397";
+          const ORANGE = "#F99510";
+
+          const titles = ["act6-t1", "act6-t2", "act6-t3", "act6-t4"].map($);
+          const cuts = [0, 5, 11.8, 16.5, 20.0];
+          tl.fromTo("#act6-root .label", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 0);
+          titles.forEach((el, i) => {
+            tl.fromTo(el, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, cuts[i] + (i ? 0.2 : 0.1));
+            tl.to(el, { opacity: 0, y: -18, duration: 0.25, ease: "power2.in" }, cuts[i + 1]);
+          });
+          tl.to($("act6-head"), { opacity: 0, duration: 0.3 }, 20.0);
+
+          tl.fromTo($("act6-frame"), { opacity: 0, y: 90, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.9, ease: "power3.out" }, 0);
+          FX.zoom(tl, $("act6-cam"), [{ at: 1.6, dur: 1.0, scale: 1.6, fx: 0.72, fy: 0.5 }], 1376, 774);
+          tl.fromTo($("act6-split"), { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.4, ease: "back.out(1.6)" }, 1.8);
+          tl.to([$("act6-frame"), $("act6-split")], { opacity: 0, y: 30, duration: 0.25, ease: "power2.in" }, 4.75);
+
+          tl.set($("act6-mg"), { opacity: 1 }, 5.0);
+          tl.fromTo("#act6-mg .hdr", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 5.0);
+          tl.fromTo("#act6-bar .seg", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35, stagger: 0.1, ease: "power2.out" }, 5.05);
+          tl.fromTo($("act6-track"), { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "power2.inOut" }, 5.2);
+          tl.fromTo("#act6-mg .node", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(2)", stagger: 0.12 }, 5.3);
+          tl.fromTo("#act6-mg .card", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.12 }, 5.4);
+
+          const steps = (el, list) => {
+            const d = FX.driver((x) => {
+              el.textContent = list[Math.round(x)][1];
+            });
+            tl.set(d, { v: 0 }, 0);
+            list.forEach(([at], i) => i && tl.set(d, { v: i }, at));
+          };
+          const state = (n, at, text, color) => {
+            const st = $("act6-s" + n);
+            tl.to(st, { color, borderColor: color, backgroundColor: color === ORANGE ? "rgba(249,149,16,0.12)" : "rgba(78,195,151,0.12)", duration: 0.2 }, at);
+            FX.slam(tl, st, at, { from: 1.3 });
+          };
+          const node = (n, at, color) => {
+            const el = $("act6-n" + n);
+            tl.to(el, { borderColor: color, backgroundColor: color, color: "#07110D", boxShadow: `0 0 34px ${color}`, duration: 0.25 }, at);
+            tl.fromTo(el, { scale: 1.45 }, { scale: 1, duration: 0.4, ease: "back.out(2)", immediateRender: false }, at);
+          };
+          const fill = (n, at, color) => {
+            const f = $("act6-f" + n);
+            tl.set(f, { backgroundColor: color }, 0);
+            tl.fromTo(f, { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "power2.out", immediateRender: false }, at);
+          };
+          const tx = (n, at, t) => {
+            $("act6-x" + n).textContent = txLine(t);
+            tl.fromTo($("act6-x" + n), { opacity: 0 }, { opacity: 1, duration: 0.4 }, at);
+          };
+          const proof = (left, at, text, dur) => {
+            const el = $("act6-proof");
+            tl.set(el, { x: left }, at);
+            tl.fromTo(el, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.3, ease: "back.out(1.8)", immediateRender: false }, at);
+            tl.to(el, { opacity: 0, duration: 0.25 }, at + dur);
+          };
+
+          proof(330, 5.7, "Carrier proof verified", 4.4);
+          node(1, 6.0, GREEN);
+          fill(1, 6.0, "rgba(78,195,151,0.45)");
+          state(1, 6.05, "RELEASED · 200 USDC", GREEN);
+          tx(1, 6.4, tf.E6b);
+
+          const needle = $("act6-needle");
+          const reading = $("act6-reading");
+          const gw = $("act6-gauge").offsetWidth || 380;
+          const toX = (c) => (c / 12) * gw;
+          tl.set(needle, { x: toX(2) }, 0);
+          tl.to(needle, { x: toX(9.4), duration: 1.2, ease: "power2.inOut" }, 10.6);
+          tl.to(needle, { backgroundColor: ORANGE, boxShadow: `0 0 14px ${ORANGE}`, duration: 0.2 }, 11.5);
+          FX.count(tl, reading, 9.4, 10.6, 1.2, (x) => (2 + (x / 9.4) * 7.4).toFixed(2) + " °C", "power2.inOut");
+          tl.to(reading, { color: ORANGE, duration: 0.2 }, 11.5);
+          node(2, 12.0, ORANGE);
+          fill(2, 12.0, "rgba(249,149,16,0.4)");
+          state(2, 12.0, "HELD · condition not met", ORANGE);
+          FX.stamp(tl, $("act6-heldstamp"), 12.0);
+          tx(2, 12.4, tf.E6c);
+
+          tl.to($("act6-heldstamp"), { opacity: 0, duration: 0.25 }, 16.4);
+          node(2, 16.6, GREEN);
+          tl.to($("act6-f2"), { backgroundColor: "rgba(78,195,151,0.45)", duration: 0.4 }, 16.6);
+          state(2, 16.7, "WAIVED · 400 USDC PAID", GREEN);
+          const x2 = $("act6-x2");
+          steps(x2, [[0, txLine(tf.E6c)], [16.7, txLine(tf.E6c) + "\n" + txLine(tf.E6d)]]);
+          tl.set(x2, { whiteSpace: "pre-line" }, 0);
+
+          proof(1250, 17.0, "Surveyor proof verified", 2.6);
+          node(3, 17.4, GREEN);
+          fill(3, 17.4, "rgba(78,195,151,0.45)");
+          state(3, 17.45, "RELEASED · 400 USDC", GREEN);
+          tx(3, 17.8, tf.E6e);
+          FX.slam(tl, $("act6-done"), 18.0, { from: 1.5, dur: 0.3 });
+
+          steps($("act6-n1"), [[0, "1"], [6.0, "✓"]]);
+          steps($("act6-n2"), [[0, "2"], [12.0, "!"], [16.6, "✓"]]);
+          steps($("act6-n3"), [[0, "3"], [17.4, "✓"]]);
+          steps($("act6-s1").firstElementChild, [[0, "LOCKED"], [6.05, "RELEASED · 200 USDC"]]);
+          steps($("act6-s2").firstElementChild, [[0, "LOCKED"], [12.0, "HELD · condition not met"], [16.7, "WAIVED · 400 USDC PAID"]]);
+          steps($("act6-s3").firstElementChild, [[0, "LOCKED"], [17.45, "RELEASED · 400 USDC"]]);
+          steps($("act6-proof-text"), [[0, "Carrier proof verified"], [17.0, "Surveyor proof verified"]]);
+
+          tl.to($("act6-mg"), { opacity: 0.05, duration: 0.4, ease: "power2.inOut" }, 20.0);
+          FX.slam(tl, "#act6-lines div", 20.1, { from: 1.3, dur: 0.25, stagger: 0.6 });
+
+          window.__timelines["act6"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1080" />
+    <base href="../" />
+    <title>Porthmos launch film, square cut</title>
+    <link rel="stylesheet" href="lib/film.css" />
+    <script src="vendor/gsap.min.js"></script>
+    <script src="data/chain.js"></script>
+    <script src="data/facts.js"></script>
+    <script src="data/media.js"></script>
+    <script src="lib/fx.js"></script>
+    <script src="lib/sea.js"></script>
+    <script src="lib/timing.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+      #sq-root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        color: var(--ink);
+        font-family: var(--sans);
+      }
+      #sq-sea-layer,
+      #sq-night-layer {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+      }
+      #sq-night-layer {
+        background: var(--night);
+      }
+      #sq-sea-layer canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #sq-vignette {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.55) 100%);
+      }
+      [data-composition-id="square"] > div[data-composition-src] {
+        position: absolute;
+        inset: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sq-root" data-composition-id="square" data-start="0" data-width="1080" data-height="1080" data-duration="50" data-fps="30">
+      <div id="sq-night-layer"></div>
+      <div id="sq-sea-layer"><canvas id="sq-sea" width="1080" height="1080"></canvas></div>
+      <div id="sq-vignette"></div>
+
+      <div id="sq-act0" data-composition-id="act0" data-composition-src="compositions/act0-cold-open.html" data-width="1080" data-height="1080" data-variable-values='{"scale":0.8}' data-start="0" data-duration="12" data-track-index="1"></div>
+      <div id="sq-act1" data-composition-id="act1" data-composition-src="compositions/act1-reveal.html" data-width="1080" data-height="1080" data-variable-values='{"scale":0.8}' data-start="12" data-duration="13" data-track-index="1"></div>
+      <div id="sq-act2" data-composition-id="act2" data-composition-src="compositions/act2-problem.html" data-width="1080" data-height="1080" data-variable-values='{"scale":0.78}' data-start="25" data-duration="13" data-track-index="1"></div>
+      <div id="sq-act3" data-composition-id="act3" data-composition-src="compositions/act3-treasury.html" data-width="1080" data-height="1080" data-variable-values='{"scale":0.8,"fscale":0.7,"ftop":300}' data-start="38" data-duration="7" data-track-index="1"></div>
+
+      <div id="sq-end" data-composition-id="sqend" data-composition-src="compositions/sq-end.html" data-width="1080" data-height="1080" data-start="45" data-duration="5" data-track-index="1"></div>
+
+      <audio id="sq-soundtrack" src="assets/audio/soundtrack.wav" data-start="0" data-duration="50" data-track-index="11" data-volume="1"></audio>
+    </div>
+    <script>
+      (function () {
+        const tl = gsap.timeline({ paused: true });
+        FILM.seaTrack(tl, document.getElementById("sq-sea"), document.getElementById("sq-sea-layer"), document.getElementById("sq-night-layer"), 0, 50);
+        window.__timelines["square"] = tl;
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,172 @@
+<!doctype html>
+<html data-composition-variables='[{"id":"scale","type":"number","label":"Type scale","default":1,"min":0.4,"max":1.5,"step":0.01}]'>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="act1-template">
+      <style>
+        #act1-root {
+          position: absolute;
+          inset: 0;
+          width: 100% !important;
+          height: 100% !important;
+          overflow: hidden;
+        }
+        #act1-root .a1-glow {
+          position: absolute;
+          left: 50%;
+          top: 34%;
+          width: calc(900px * var(--scale));
+          height: calc(700px * var(--scale));
+          margin-left: calc(-450px * var(--scale));
+          margin-top: calc(-350px * var(--scale));
+          background: radial-gradient(closest-side, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.5) 55%, rgba(0, 0, 0, 0));
+        }
+        #act1-root .a1-sky {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          height: 50%;
+          overflow: hidden;
+        }
+        #act1-mark-wrap {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: calc(118px * var(--scale));
+          display: flex;
+          justify-content: center;
+        }
+        #act1-mark {
+          display: block;
+          height: calc(236px * var(--scale));
+          width: auto;
+          filter: drop-shadow(0 0 40px rgba(78, 195, 151, 0.35));
+        }
+        #act1-word {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 50%;
+          margin-top: calc(-104px * var(--scale));
+          display: flex;
+          justify-content: center;
+          font-size: calc(92px * var(--scale));
+          font-weight: 880;
+          letter-spacing: 0.06em;
+          line-height: 1;
+        }
+        #act1-word span {
+          display: block;
+        }
+        #act1-root .a1-low {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 50%;
+          margin-top: calc(40px * var(--scale));
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: calc(14px * var(--scale));
+        }
+        #act1-root .a1-scrim {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: calc(1500px * var(--scale));
+          height: calc(560px * var(--scale));
+          margin-left: calc(-750px * var(--scale));
+          margin-top: calc(-40px * var(--scale));
+          background: radial-gradient(closest-side, rgba(1, 6, 4, 0.9), rgba(1, 6, 4, 0.72) 60%, rgba(1, 6, 4, 0));
+          opacity: 0;
+        }
+        #act1-root .a1-tag {
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: calc(42px * var(--scale));
+          font-weight: 740;
+          letter-spacing: -0.025em;
+          line-height: 1.15;
+          min-height: 1.15em;
+          text-align: center;
+          max-width: 94%;
+        }
+        #act1-root .a1-pos {
+          margin-bottom: calc(10px * var(--scale));
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: calc(48px * var(--scale));
+          font-weight: 800;
+          letter-spacing: -0.025em;
+          line-height: 1.12;
+          color: var(--green);
+          text-align: center;
+          max-width: 92%;
+          text-wrap: balance;
+          opacity: 0;
+        }
+        #act1-root .a1-chips .chip {
+          font-size: calc(25px * var(--scale));
+        }
+        #act1-tag2 {
+          color: var(--muted);
+          font-weight: 600 !important;
+        }
+        #act1-root .a1-chips {
+          margin-top: calc(26px * var(--scale));
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 16px;
+          max-width: 96%;
+        }
+      </style>
+      <div id="act1-root" data-composition-id="act1" data-width="1920" data-height="1080" data-duration="13">
+        <div class="a1-glow" id="act1-glow"></div>
+        <div class="a1-scrim" id="act1-scrim"></div>
+        <div class="a1-sky">
+          <div id="act1-mark-wrap"><img id="act1-mark" src="assets/brand/porthmos-mark@2x.png" alt="Porthmos mark" /></div>
+        </div>
+        <div id="act1-word" class="hero">
+          <span>P</span><span>O</span><span>R</span><span>T</span><span>H</span><span>M</span><span>O</span><span>S</span>
+        </div>
+        <div class="a1-low">
+          <div class="a1-pos" id="act1-pos">The agent wallet for cross-border trade treasuries.</div>
+          <div class="a1-tag" id="act1-tag1">Pay suppliers on proof.</div>
+          <div class="a1-tag" id="act1-tag2">Keep the rest of the cash safe and earning.</div>
+          <div class="a1-chips">
+            <div class="chip" id="act1-chip1">Shenzhen FinTechathon 2026 · Topic F: Agent Wallet</div>
+            <div class="chip" id="act1-chip2"><i class="dot"></i>Live on Base Sepolia</div>
+          </div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          const $ = (id) => document.getElementById(id);
+
+          tl.fromTo($("act1-glow"), { opacity: 0 }, { opacity: 1, duration: 1.4, ease: "power1.out" }, 3.6);
+          tl.fromTo($("act1-mark"), { y: 420, opacity: 1 }, { y: 0, duration: 2.1, ease: "power3.out" }, 3.8);
+          tl.fromTo(
+            "#act1-word span",
+            { opacity: 0, y: 46 },
+            { opacity: 1, y: 0, duration: 0.7, ease: "power3.out", stagger: 0.055 },
+            5.2,
+          );
+
+          tl.fromTo($("act1-scrim"), { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power1.out" }, 5.6);
+          tl.fromTo($("act1-pos"), { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 5.8);
+          FX.type(tl, $("act1-tag1"), "Pay suppliers on proof.", 7.2, 0.6);
+          FX.type(tl, $("act1-tag2"), "Keep the rest of the cash safe and earning.", 7.8, 0.8);
+          tl.fromTo($("act1-chip1"), { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 9.0);
+          tl.fromTo($("act1-chip2"), { opacity: 0, y: 16, scale: 1.15 }, { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: "back.out(2)" }, 9.5);
+
+          window.__timelines["act1"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

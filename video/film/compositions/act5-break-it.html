@@ -1,0 +1,410 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="act5-template">
+      <style>
+        #act5-root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+        }
+        #act5-root .label .num {
+          color: var(--orange);
+        }
+        #act5-t2 span {
+          color: var(--orange);
+        }
+        #act5-freeze {
+          position: absolute;
+          inset: 0;
+          background: rgba(20, 10, 0, 0.55);
+          opacity: 0;
+        }
+        #act5-held {
+          left: 50%;
+          top: 50%;
+          width: 560px;
+          margin-left: -280px;
+          margin-top: -90px;
+          height: 180px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 128px;
+          opacity: 0;
+        }
+        #act5-cards {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 230px;
+          height: 760px;
+        }
+        #act5-root .xcard {
+          position: absolute;
+          left: 340px;
+          top: 0;
+          width: 1240px;
+          height: 700px;
+          border-radius: 22px;
+          border: 1px solid rgba(249, 149, 16, 0.35);
+          background: linear-gradient(180deg, #0d1813, #08110d);
+          box-shadow: 0 50px 140px rgba(0, 0, 0, 0.7), 0 0 80px rgba(249, 149, 16, 0.08);
+          padding: 40px 56px;
+          opacity: 0;
+        }
+        #act5-root .xcard header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-bottom: 26px;
+          border-bottom: 1px solid rgba(233, 240, 236, 0.1);
+          font-family: var(--mono);
+          font-size: 21px;
+          color: var(--muted);
+        }
+        #act5-root .xcard header b {
+          color: var(--ink);
+          font-weight: 600;
+        }
+        #act5-root .xcard header em {
+          font-style: normal;
+          color: var(--green);
+        }
+        #act5-root .xrow {
+          display: grid;
+          grid-template-columns: 290px 1fr;
+          align-items: center;
+          height: 76px;
+          border-bottom: 1px solid rgba(233, 240, 236, 0.06);
+          font-size: 25px;
+        }
+        #act5-root .xrow span {
+          font-family: var(--sans);
+          color: var(--muted);
+        }
+        #act5-root .xrow b {
+          font-family: var(--mono);
+          font-weight: 500;
+          color: var(--ink);
+        }
+        #act5-root .fail {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 16px;
+          border-radius: 8px;
+          border: 1px solid rgba(249, 149, 16, 0.5);
+          background: rgba(249, 149, 16, 0.12);
+          color: var(--orange) !important;
+          font-weight: 700 !important;
+          width: max-content;
+        }
+        #act5-root .xrow .err {
+          font-size: 54px;
+          font-weight: 700;
+          color: var(--orange);
+          letter-spacing: -0.01em;
+        }
+        #act5-root .xrow.big {
+          height: 120px;
+        }
+        #act5-root .xcard .human {
+          margin-top: 34px;
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: 58px;
+          font-weight: 820;
+          letter-spacing: -0.03em;
+          color: var(--ink);
+        }
+        #act5-root .xcard .stamp {
+          right: 56px;
+          bottom: 52px;
+          font-size: 60px;
+          opacity: 0;
+        }
+        #act5-count {
+          position: absolute;
+          right: 272px;
+          top: 108px;
+          font-family: var(--mono);
+          font-size: 24px;
+          color: var(--orange);
+          opacity: 0;
+        }
+        #act5-exit {
+          left: 236px;
+          bottom: 92px;
+          font-size: 22px;
+        }
+        #act5-exit b {
+          color: var(--green);
+        }
+        #act5-held {
+          left: auto !important;
+          top: auto !important;
+          right: 46px;
+          top: 34px !important;
+          bottom: auto;
+          margin: 0 !important;
+          width: auto !important;
+          height: auto !important;
+          font-size: 92px !important;
+          padding: 10px 30px 8px !important;
+        }
+        #act5-root .xcard.ok {
+          border-color: rgba(78, 195, 151, 0.5);
+          box-shadow: 0 50px 140px rgba(0, 0, 0, 0.7), 0 0 80px rgba(78, 195, 151, 0.12);
+        }
+        #act5-root .pass {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 16px;
+          border-radius: 8px;
+          border: 1px solid rgba(78, 195, 151, 0.5);
+          background: rgba(78, 195, 151, 0.12);
+          color: var(--green) !important;
+          font-weight: 700 !important;
+          width: max-content;
+        }
+        #act5-root .xrow .okv {
+          font-size: 44px;
+          font-weight: 700;
+          color: var(--green);
+        }
+        #act5-root .co {
+          position: absolute;
+          left: 236px;
+          bottom: 84px;
+          max-width: 1300px;
+          padding: 22px 30px 24px;
+          border-radius: 18px;
+          border: 1px solid rgba(249, 149, 16, 0.5);
+          background: rgba(5, 13, 10, 0.95);
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
+          opacity: 0;
+        }
+        #act5-root .co.g {
+          border-color: rgba(78, 195, 151, 0.5);
+        }
+        #act5-root .co small {
+          display: block;
+          margin-bottom: 8px;
+          font-family: var(--mono);
+          font-size: 22px;
+          font-weight: 600;
+          letter-spacing: 0.12em;
+          color: var(--orange);
+        }
+        #act5-root .co.g small {
+          color: var(--green);
+        }
+        #act5-root .co b {
+          display: block;
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: 44px;
+          font-weight: 760;
+          letter-spacing: -0.02em;
+          line-height: 1.15;
+          color: var(--ink);
+        }
+        #act5-root .co b.mono {
+          font-family: var(--mono);
+          font-size: 42px;
+          font-weight: 600;
+          letter-spacing: 0;
+        }
+        #act5-root .co span {
+          display: block;
+          margin-top: 8px;
+          font-family: var(--mono);
+          font-size: 24px;
+          color: var(--muted);
+        }
+      </style>
+      <div id="act5-root" data-composition-id="act5" data-width="1920" data-height="1080" data-duration="47">
+        <div class="ps-head">
+          <div class="label"><span class="num">04</span><span class="slash">/</span><span>Try to break it</span></div>
+          <div class="ps-title hero" id="act5-t1">Try to break it.</div>
+          <div class="ps-title hero" id="act5-t2"><span>HELD.</span> Transfers out cannot be encoded.</div>
+          <div class="ps-title hero" id="act5-t3">Every one refused. On-chain.</div>
+          <div class="ps-title hero" id="act5-t4">The bank can freeze the agent.</div>
+          <div class="ps-title hero" id="act5-t5">Exits always open.</div>
+        </div>
+        <div id="act5-count">0 / 4 refused</div>
+
+        <div class="bframe ps-frame" id="act5-frame">
+          <div class="bar">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <div class="url"><i class="lock"></i><b>porthmos.vercel.app</b><span id="act5-path">/copilot</span></div>
+            <div class="live"><i></i>LIVE<span>· Base Sepolia · real transactions</span></div>
+          </div>
+          <div class="screen" id="act5-screen">
+            <div class="cam" id="act5-cam">
+              <video
+                id="act5-r4"
+                src="assets/footage/R4.mp4"
+                data-start="0"
+                data-duration="10"
+                data-media-start="3"
+                data-automation='{"version":1,"lanes":[{"target":"rate","points":[{"t":0,"v":1.6},{"t":3.7,"v":1.6},{"t":3.9,"v":10},{"t":4.55,"v":10},{"t":4.75,"v":1},{"t":5.1,"v":0.15},{"t":10,"v":0.15}]}]}'
+                muted
+                playsinline
+              ></video>
+              <video
+                id="act5-r6"
+                src="assets/footage/R6-freeze.mp4"
+                data-start="30"
+                data-hf-media-start-basis="local"
+                data-duration="7.5"
+                data-media-start="3"
+                data-automation='{"version":1,"lanes":[{"target":"rate","points":[{"t":0,"v":1.6},{"t":1,"v":1.6},{"t":1.2,"v":10},{"t":2.25,"v":10},{"t":2.45,"v":1.8},{"t":6,"v":1.8},{"t":6.3,"v":0.6},{"t":7.5,"v":0.6}]}]}'
+                muted
+                playsinline
+              ></video>
+              <video
+                id="act5-r6exit"
+                src="assets/footage/R6-exit.mp4"
+                data-start="37.5"
+                data-hf-media-start-basis="local"
+                data-duration="9.5"
+                data-media-start="2.8"
+                data-automation='{"version":1,"lanes":[{"target":"rate","points":[{"t":0,"v":2},{"t":1.2,"v":2},{"t":1.4,"v":10},{"t":3.5,"v":10},{"t":3.7,"v":1},{"t":5.2,"v":1},{"t":5.4,"v":8},{"t":5.8,"v":8},{"t":6,"v":1},{"t":9.5,"v":0.8}]}]}'
+                muted
+                playsinline
+              ></video>
+            </div>
+            <div id="act5-freeze"></div>
+            <div class="stamp" id="act5-held">HELD</div>
+          </div>
+        </div>
+
+        <div id="act5-cards"></div>
+        <div class="co" id="act5-reply"><small>FIXED RULES, NO LLM</small><b>"Porthmos has no way to send funds outside the treasury."</b></div>
+        <div class="co g" id="act5-ex"><small>EXIT EXECUTED WHILE FROZEN</small><b class="mono" id="act5-ex-hash"></b><span id="act5-ex-block"></span></div>
+        <div class="co g" id="act5-fz"><small>BANK FREEZE · MINED ON BASE SEPOLIA</small><b class="mono" id="act5-fz-hash"></b><span id="act5-fz-block"></span></div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          const $ = (id) => document.getElementById(id);
+          const chain = window.PORTHMOS_CHAIN;
+          const exitClip = !!(window.PORTHMOS_MEDIA || {})["R6-exit"];
+          const fmt = (n) => n.toLocaleString("en-US");
+          const W = 1376;
+          const H = 774;
+
+          const titles = ["act5-t1", "act5-t2", "act5-t3", "act5-t4", "act5-t5"].map($);
+          const cuts = [0, 5, 10, 30, 37.5];
+          tl.fromTo("#act5-root .label", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 0);
+          titles.forEach((el, i) => {
+            const at = cuts[i] + (i ? 0.15 : 0.1);
+            if (i === 1) tl.fromTo(el, { opacity: 0, scale: 1.12 }, { opacity: 1, scale: 1, duration: 0.25, ease: "power4.out", transformOrigin: "0% 50%" }, at);
+            else tl.fromTo(el, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, at);
+            if (i < titles.length - 1) tl.to(el, { opacity: 0, y: -18, duration: 0.2, ease: "power2.in" }, cuts[i + 1]);
+          });
+
+          tl.fromTo($("act5-frame"), { opacity: 0, y: 90, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.9, ease: "power3.out" }, 0);
+          FX.zoom(tl, $("act5-cam"), [
+            { at: 0.6, dur: 0.9, scale: 1.8, fx: 0.36, fy: 0.62 },
+            { at: 4.5, dur: 0.5, scale: 2.0, fx: 0.36, fy: 0.47, ease: "power4.out" },
+            { at: 30.0, dur: 0.01, scale: 1.0, fx: 0.5, fy: 0.5 },
+            { at: 32.2, dur: 0.7, scale: 2.0, fx: 0.86, fy: 0.2 },
+            { at: 37.5, dur: 0.01, scale: 2.0, fx: 0.32, fy: 0.42 },
+            { at: 41.0, dur: 0.6, scale: 1.9, fx: 0.36, fy: 0.3 },
+            { at: 43.0, dur: 0.6, scale: 1.6, fx: 0.5, fy: 0.5 },
+          ], W, H);
+          tl.fromTo($("act5-cam"), { filter: "saturate(1) brightness(1)" }, { filter: "saturate(0.35) brightness(0.8)", duration: 0.15 }, 5.0);
+          tl.set($("act5-cam"), { filter: "saturate(1) brightness(1)" }, 30.0);
+          tl.fromTo($("act5-freeze"), { opacity: 0 }, { opacity: 0.5, duration: 0.15 }, 5.0);
+          tl.set($("act5-freeze"), { opacity: 0 }, 9.8);
+          FX.stamp(tl, $("act5-held"), 5.0);
+          tl.set($("act5-held"), { opacity: 0 }, 9.8);
+          tl.fromTo($("act5-reply"), { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" }, 5.1);
+          tl.to($("act5-reply"), { opacity: 0, duration: 0.2 }, 9.75);
+
+          tl.to($("act5-frame"), { opacity: 0, y: 40, scale: 0.97, duration: 0.2, ease: "power2.in" }, 9.75);
+          tl.fromTo($("act5-frame"), { opacity: 0, y: 60, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out", immediateRender: false }, 30.0);
+          if (!exitClip) tl.to($("act5-frame"), { opacity: 0, y: 40, scale: 0.97, duration: 0.2, ease: "power2.in" }, 37.3);
+
+          $("act5-fz-hash").textContent = chain.film.bankFreeze.hashShort;
+          $("act5-fz-block").textContent = `block ${fmt(chain.film.bankFreeze.block)} · ${chain.film.bankFreeze.status}`;
+          tl.fromTo($("act5-fz"), { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.35, ease: "back.out(1.5)" }, 33.2);
+          tl.to($("act5-fz"), { opacity: 0, duration: 0.2 }, 37.3);
+
+          const box = $("act5-cards");
+          const SLOT = [10, 15, 20, 25];
+          const cards = chain.cards.map((c, i) => {
+            const el = document.createElement("div");
+            el.className = "xcard";
+            el.innerHTML =
+              `<header><span><b>Transaction details</b> · Base Sepolia</span><em>${c.scenario} · ${i + 1} / 4</em></header>` +
+              `<div class="xrow"><span>Transaction hash</span><b>${c.hashShort}</b></div>` +
+              `<div class="xrow"><span>Status</span><b class="fail">⊗ ${c.status}</b></div>` +
+              `<div class="xrow"><span>Block</span><b>${fmt(c.block)}</b></div>` +
+              `<div class="xrow big"><span>Error</span><b class="err">${c.error}</b></div>` +
+              `<div class="human">${c.human}.</div>` +
+              `<div class="stamp">Refused</div>`;
+            box.appendChild(el);
+            return el;
+          });
+          cards.forEach((el, i) => {
+            const at = SLOT[i];
+            tl.fromTo(el, { opacity: 0, x: 260, rotation: 2, scale: 0.98 }, { opacity: 1, x: 0, rotation: 0, scale: 1, duration: 0.2, ease: "power4.out" }, at);
+            FX.stamp(tl, el.querySelector(".stamp"), at + 0.5);
+            const next = SLOT[i + 1];
+            if (next) tl.to(el, { opacity: 0.16, scale: 0.93, y: -34, duration: 0.3, ease: "power2.inOut" }, next);
+            tl.to(el, { opacity: 0, duration: 0.2 }, 29.8);
+          });
+          const counter = $("act5-count");
+          tl.fromTo(counter, { opacity: 0 }, { opacity: 1, duration: 0.3 }, 10.1);
+          const refused = FX.driver((x) => {
+            counter.textContent = `${Math.round(x)} / 4 refused`;
+          });
+          tl.set(refused, { v: 0 }, 0);
+          SLOT.forEach((at, i) => tl.set(refused, { v: i + 1 }, at + 0.5));
+          tl.to(counter, { opacity: 0, duration: 0.2 }, 29.8);
+
+          const path = FX.driver((x) => {
+            $("act5-path").textContent = ["/copilot", "/bank", "/audit"][Math.round(x)];
+          });
+          tl.set(path, { v: 0 }, 0);
+          tl.set(path, { v: 1 }, 30.0);
+          if (exitClip) {
+            tl.set(path, { v: 0 }, 37.5);
+            tl.set(path, { v: 2 }, 43.3);
+          }
+
+          const ex = chain.film.exitWhileFrozen;
+          $("act5-ex-hash").textContent = ex.hashShort;
+          $("act5-ex-block").textContent = `block ${fmt(ex.block)} · ${ex.status} · redeem 4,000.00 USDC`;
+          if (exitClip) {
+            tl.fromTo($("act5-ex"), { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.35, ease: "back.out(1.5)" }, 42.3);
+          }
+          if (!exitClip) {
+            const e = chain.exit;
+            const el = document.createElement("div");
+            el.className = "xcard ok";
+            el.innerHTML =
+              `<header><span><b>Transaction details</b> · Base Sepolia</span><em>E5 · exit while frozen</em></header>` +
+              `<div class="xrow"><span>Transaction hash</span><b>${e.hashShort}</b></div>` +
+              `<div class="xrow"><span>Status</span><b class="pass">✓ ${e.status}</b></div>` +
+              `<div class="xrow"><span>Block</span><b>${fmt(e.block)}</b></div>` +
+              `<div class="xrow big"><span>Action</span><b class="okv">Redeem back to the Safe</b></div>` +
+              `<div class="human">The agent is frozen. The exit still runs.</div>`;
+            box.appendChild(el);
+            tl.fromTo(el, { opacity: 0, x: 260, scale: 0.98 }, { opacity: 1, x: 0, scale: 1, duration: 0.32, ease: "power4.out" }, 37.5);
+          }
+
+          window.__timelines["act5"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

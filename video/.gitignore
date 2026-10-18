@@ -1,0 +1,15 @@
+*.mp4
+*.mov
+*.wav
+out/
+node_modules/
+film/.hyperframes/
+film/renders/
+film/data/media-status.json
+footage/record/state/
+footage/takes/
+sound/.earshot/
+sound/.venv/
+**/.hyperframes/
+**/*.npy
+**/__pycache__/

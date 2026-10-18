@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Porthmos launch film</title>
+    <link rel="stylesheet" href="lib/film.css" />
+    <script src="vendor/gsap.min.js"></script>
+    <script src="data/chain.js"></script>
+    <script src="data/facts.js"></script>
+    <script src="data/media.js"></script>
+    <script src="lib/fx.js"></script>
+    <script src="lib/sea.js"></script>
+    <script src="lib/timing.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        color: var(--ink);
+        font-family: var(--sans);
+      }
+      #sea-layer {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+      }
+      #sea-layer canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #night-layer {
+        position: absolute;
+        inset: 0;
+        background: var(--night);
+        opacity: 0;
+      }
+      #vignette {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.55) 100%);
+      }
+      [data-composition-id="main"] > div[data-composition-src] {
+        position: absolute;
+        inset: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-duration="230" data-fps="30">
+      <div id="night-layer"></div>
+      <div id="sea-layer"><canvas id="sea" width="1920" height="1080"></canvas></div>
+      <div id="vignette"></div>
+
+      <div id="el-act0" data-composition-id="act0" data-composition-src="compositions/act0-cold-open.html" data-start="0" data-duration="12" data-track-index="1"></div>
+      <div id="el-act1" data-composition-id="act1" data-composition-src="compositions/act1-reveal.html" data-start="12" data-duration="13" data-track-index="1"></div>
+      <div id="el-act2" data-composition-id="act2" data-composition-src="compositions/act2-problem.html" data-start="25" data-duration="13" data-track-index="1"></div>
+      <div id="el-act3" data-composition-id="act3" data-composition-src="compositions/act3-treasury.html" data-start="38" data-duration="20" data-track-index="1"></div>
+      <div id="el-act4" data-composition-id="act4" data-composition-src="compositions/act4-copilot.html" data-start="58" data-duration="35" data-track-index="1"></div>
+      <div id="el-act4b" data-composition-id="act4b" data-composition-src="compositions/act4b-how-it-works.html" data-start="93" data-duration="20" data-track-index="1"></div>
+      <div id="el-act5" data-composition-id="act5" data-composition-src="compositions/act5-break-it.html" data-start="113" data-duration="47" data-track-index="1"></div>
+      <div id="el-act6" data-composition-id="act6" data-composition-src="compositions/act6-tradeflow.html" data-start="160" data-duration="26" data-track-index="1"></div>
+      <div id="el-act7" data-composition-id="act7" data-composition-src="compositions/act7-proof.html" data-start="186" data-duration="16" data-track-index="1"></div>
+      <div id="el-ask" data-composition-id="ask" data-composition-src="compositions/act7b-ask.html" data-start="202" data-duration="14" data-track-index="1"></div>
+      <div id="el-act8" data-composition-id="act8" data-composition-src="compositions/act8-outro.html" data-start="216" data-duration="14" data-track-index="1"></div>
+
+      <audio id="soundtrack" src="assets/audio/soundtrack.wav" data-start="0" data-duration="230" data-track-index="10" data-volume="1"></audio>
+    </div>
+    <script>
+      (function () {
+        const tl = gsap.timeline({ paused: true });
+        FILM.seaTrack(tl, document.getElementById("sea"), document.getElementById("sea-layer"), document.getElementById("night-layer"), 0, 230);
+        window.__timelines["main"] = tl;
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,330 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="act4b-template">
+      <style>
+        #act4b-root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+        }
+        #act4b-root .ps-title {
+          font-size: 56px;
+        }
+        #act4b-diagram {
+          position: absolute;
+          inset: 0;
+        }
+        #act4b-root .zone {
+          position: absolute;
+          border-radius: 22px;
+        }
+        #act4b-chain {
+          left: 1290px;
+          top: 250px;
+          width: 490px;
+          height: 610px;
+          border: 1px solid rgba(78, 195, 151, 0.45);
+          background: linear-gradient(rgba(78, 195, 151, 0.07), rgba(78, 195, 151, 0.07)), rgba(4, 10, 8, 0.9);
+          box-shadow: 0 0 80px rgba(78, 195, 151, 0.12);
+        }
+        #act4b-svc {
+          left: 140px;
+          top: 450px;
+          width: 1100px;
+          height: 410px;
+          border: 1px dashed rgba(233, 240, 236, 0.22);
+          background: rgba(4, 10, 8, 0.78);
+        }
+        #act4b-root .zone em {
+          position: absolute;
+          left: 24px;
+          top: -13px;
+          padding: 0 10px;
+          background: #050c09;
+          font-style: normal;
+          font-family: var(--mono);
+          font-size: 16px;
+          letter-spacing: 0.14em;
+          color: var(--green);
+          white-space: nowrap;
+        }
+        #act4b-svc em {
+          color: var(--muted);
+        }
+        #act4b-root .node {
+          position: absolute;
+          height: 100px;
+          border-radius: 14px;
+          border: 1.5px solid rgba(233, 240, 236, 0.5);
+          background: #0a1712;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 0 20px;
+          gap: 6px;
+        }
+        #act4b-root .node b {
+          font-family: var(--sans);
+          font-size: 27px;
+          font-weight: 760;
+          letter-spacing: -0.02em;
+          color: var(--ink);
+          white-space: nowrap;
+        }
+        #act4b-root .node span {
+          font-family: var(--mono);
+          font-size: 15px;
+          color: var(--muted);
+          white-space: nowrap;
+        }
+        #act4b-root .node.chain {
+          border-color: var(--green);
+          background: #0c2119;
+        }
+        #act4b-root .node.chain span {
+          color: var(--green);
+        }
+        #act4b-root .node.llm {
+          border-style: dashed;
+          border-color: rgba(233, 240, 236, 0.4);
+          background: #0b1310;
+        }
+        #act4b-llmtag {
+          position: absolute;
+          left: 180px;
+          top: 636px;
+          width: 220px;
+          text-align: center;
+          font-family: var(--mono);
+          font-size: 15px;
+          color: var(--orange);
+          letter-spacing: 0.04em;
+        }
+        #act4b-root svg.wires {
+          position: absolute;
+          inset: 0;
+          width: 1920px;
+          height: 1080px;
+          overflow: visible;
+        }
+        #act4b-root svg.wires path {
+          fill: none;
+          stroke: var(--green);
+          stroke-width: 2.5;
+        }
+        #act4b-root svg.wires path.owner {
+          stroke: rgba(233, 240, 236, 0.7);
+          stroke-dasharray: 8 8;
+        }
+        #act4b-ownerlbl {
+          position: absolute;
+          left: 560px;
+          top: 300px;
+          font-family: var(--mono);
+          font-size: 16px;
+          color: var(--muted);
+        }
+        #act4b-root .procs {
+          position: absolute;
+          left: 170px;
+          top: 742px;
+          width: 1040px;
+          display: flex;
+          gap: 16px;
+        }
+        #act4b-root .proc {
+          flex: 1;
+          height: 82px;
+          border-radius: 12px;
+          border: 1px solid rgba(78, 195, 151, 0.35);
+          background: rgba(78, 195, 151, 0.06);
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 0 14px;
+        }
+        #act4b-root .proc svg {
+          flex: none;
+          width: 26px;
+          height: 26px;
+        }
+        #act4b-root .proc div {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+        #act4b-root .proc b {
+          font-family: var(--mono);
+          font-size: 19px;
+          font-weight: 600;
+          color: var(--ink);
+          white-space: nowrap;
+        }
+        #act4b-root .proc span {
+          font-family: var(--sans);
+          font-size: 14px;
+          color: var(--muted);
+          white-space: nowrap;
+        }
+        #act4b-ladder {
+          position: absolute;
+          left: 272px;
+          top: 250px;
+          width: 1376px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          opacity: 0;
+        }
+        #act4b-root .rung {
+          display: grid;
+          grid-template-columns: 110px 300px 1fr 420px;
+          align-items: center;
+          height: 104px;
+          padding: 0 30px;
+          border-radius: 16px;
+          border: 1px solid rgba(78, 195, 151, 0.3);
+          background: rgba(6, 15, 11, 0.92);
+        }
+        #act4b-root .rung .t {
+          font-family: var(--mono);
+          font-size: 34px;
+          font-weight: 700;
+          color: var(--green);
+        }
+        #act4b-root .rung .n {
+          font-family: var(--sans);
+          font-size: 34px;
+          font-weight: 780;
+          letter-spacing: -0.02em;
+          color: var(--ink);
+        }
+        #act4b-root .rung .w {
+          font-family: var(--sans);
+          font-size: 25px;
+          color: var(--muted);
+        }
+        #act4b-root .rung .s {
+          justify-self: end;
+          font-family: var(--mono);
+          font-size: 22px;
+          color: var(--ink);
+        }
+        #act4b-root .rung.blocked {
+          border-color: rgba(249, 149, 16, 0.6);
+        }
+        #act4b-root .rung.blocked .t,
+        #act4b-root .rung.blocked .s {
+          color: var(--orange);
+        }
+      </style>
+      <div id="act4b-root" data-composition-id="act4b" data-width="1920" data-height="1080" data-duration="20">
+        <div class="ps-head">
+          <div class="label"><span class="num">03</span><span class="slash">/</span><span>How it works</span></div>
+          <div class="ps-title hero" id="act4b-t0">How it works.</div>
+          <div class="ps-title hero" id="act4b-t1">Your Safe holds the money. The policy lives on-chain.</div>
+          <div class="ps-title hero" id="act4b-t2">The LLM never holds a key.</div>
+          <div class="ps-title hero" id="act4b-t3">Keys split across 5 processes.</div>
+          <div class="ps-title hero" id="act4b-t4">Bigger moves need a human signature.</div>
+        </div>
+
+        <div id="act4b-diagram">
+          <div class="zone" id="act4b-chain"><em>ON-CHAIN · BASE SEPOLIA</em></div>
+          <div class="zone" id="act4b-svc"><em>PORTHMOS SERVICE · OFF-CHAIN</em></div>
+          <svg class="wires" viewBox="0 0 1920 1080">
+            <path id="act4b-w-owner" class="owner" d="M470 340 L1340 340" />
+            <path id="act4b-w-mod-safe" d="M1535 500 L1535 390" />
+            <path id="act4b-w-mod-reg" d="M1535 600 L1535 710" />
+            <path id="act4b-w1" d="M400 570 L450 570" />
+            <path id="act4b-w2" d="M670 570 L720 570" />
+            <path id="act4b-w3" d="M940 570 L990 570" />
+            <path id="act4b-w4" d="M1190 570 L1340 550" />
+          </svg>
+          <div id="act4b-ownerlbl">owns the Safe · signs material moves</div>
+
+          <div class="node" id="act4b-owner" style="left: 190px; top: 290px; width: 280px"><b>Owner wallet</b><span>the importer</span></div>
+          <div class="node chain" id="act4b-safe" style="left: 1340px; top: 290px; width: 390px"><b>Safe</b><span>holds the treasury</span></div>
+          <div class="node chain" id="act4b-module" style="left: 1340px; top: 500px; width: 390px"><b>AegisModule</b><span>Porthmos policy guard · typed calls</span></div>
+          <div class="node chain" id="act4b-registry" style="left: 1340px; top: 710px; width: 390px"><b>PolicyRegistry</b><span>caps, tiers, floor, freezes</span></div>
+
+          <div class="node llm" id="act4b-llm" style="left: 180px; top: 520px; width: 220px"><b>Copilot</b><span>LLM · holds no key</span></div>
+          <div id="act4b-llmtag">fills parameters only</div>
+          <div class="node" id="act4b-policy" style="left: 450px; top: 520px; width: 220px"><b>Policy engine</b><span>deterministic</span></div>
+          <div class="node" id="act4b-auth" style="left: 720px; top: 520px; width: 220px"><b>Authorizer</b><span>signs each decision</span></div>
+          <div class="node" id="act4b-exec" style="left: 990px; top: 520px; width: 200px"><b>Executor</b><span>pays gas only</span></div>
+
+          <div class="procs" id="act4b-procs">
+            <div class="proc"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.5" fill="none" stroke="#4EC397" stroke-width="2" /><path d="M12.5 12 H22 M18 12 V16 M21 12 V15" stroke="#4EC397" stroke-width="2" fill="none" /></svg><div><b>api</b><span>sessions, workflow</span></div></div>
+            <div class="proc"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.5" fill="none" stroke="#4EC397" stroke-width="2" /><path d="M12.5 12 H22 M18 12 V16 M21 12 V15" stroke="#4EC397" stroke-width="2" fill="none" /></svg><div><b>authorizer</b><span>signs decisions</span></div></div>
+            <div class="proc"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.5" fill="none" stroke="#4EC397" stroke-width="2" /><path d="M12.5 12 H22 M18 12 V16 M21 12 V15" stroke="#4EC397" stroke-width="2" fill="none" /></svg><div><b>executor</b><span>no authority</span></div></div>
+            <div class="proc"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.5" fill="none" stroke="#4EC397" stroke-width="2" /><path d="M12.5 12 H22 M18 12 V16 M21 12 V15" stroke="#4EC397" stroke-width="2" fill="none" /></svg><div><b>exit agent</b><span>redeem only</span></div></div>
+            <div class="proc"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.5" fill="none" stroke="#4EC397" stroke-width="2" /><path d="M12.5 12 H22 M18 12 V16 M21 12 V15" stroke="#4EC397" stroke-width="2" fill="none" /></svg><div><b>keeper</b><span>refreshes oracle</span></div></div>
+          </div>
+        </div>
+
+        <div id="act4b-ladder">
+          <div class="rung"><span class="t">T1</span><span class="n">Protective</span><span class="w">Redeem back to the Safe</span><span class="s">Authorizer or exit key</span></div>
+          <div class="rung"><span class="t">T2</span><span class="n">Routine</span><span class="w">Deposit up to autoCap</span><span class="s">Authorizer</span></div>
+          <div class="rung"><span class="t">T3</span><span class="n">Material</span><span class="w">Above autoCap, or a new vault</span><span class="s">+ owner signature</span></div>
+          <div class="rung"><span class="t">T4</span><span class="n">Escalated</span><span class="w">Above bankLimit</span><span class="s">+ bank signature</span></div>
+          <div class="rung blocked"><span class="t">✕</span><span class="n">Blocked</span><span class="w">Any transfer out</span><span class="s">Cannot be encoded</span></div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          const $ = (id) => document.getElementById(id);
+          const titles = ["act4b-t0", "act4b-t1", "act4b-t2", "act4b-t3", "act4b-t4"].map($);
+          const cuts = [0, 2, 7, 12, 15];
+
+          tl.fromTo("#act4b-root .label", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 0);
+          titles.forEach((el, i) => {
+            tl.fromTo(el, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, cuts[i] + (i ? 0.2 : 0.1));
+            if (i < titles.length - 1) tl.to(el, { opacity: 0, y: -18, duration: 0.25, ease: "power2.in" }, cuts[i + 1]);
+          });
+
+          const draw = (id, at, dur) => {
+            const p = $(id);
+            const len = p.getTotalLength();
+            tl.fromTo(p, { strokeDasharray: len, strokeDashoffset: len }, { strokeDashoffset: 0, duration: dur || 0.45, ease: "power2.inOut" }, at);
+          };
+          const pop = (sel, at, stagger) =>
+            tl.fromTo(sel, { opacity: 0, scale: 0.9, y: 16 }, { opacity: 1, scale: 1, y: 0, duration: 0.45, ease: "back.out(1.5)", stagger: stagger || 0 }, at);
+
+          tl.fromTo($("act4b-chain"), { opacity: 0 }, { opacity: 1, duration: 0.5 }, 2.0);
+          pop(["#act4b-safe", "#act4b-module", "#act4b-registry"], 2.2, 0.22);
+          draw("act4b-w-mod-safe", 2.9);
+          draw("act4b-w-mod-reg", 3.0);
+          pop("#act4b-owner", 3.6);
+          tl.set($("act4b-w-owner"), { strokeDasharray: "8 8" }, 0);
+          tl.fromTo($("act4b-w-owner"), { opacity: 0 }, { opacity: 1, duration: 0.6 }, 4.0);
+          tl.fromTo($("act4b-ownerlbl"), { opacity: 0 }, { opacity: 1, duration: 0.5 }, 4.3);
+
+          tl.fromTo($("act4b-svc"), { opacity: 0 }, { opacity: 1, duration: 0.5 }, 7.0);
+          pop("#act4b-llm", 7.2);
+          tl.fromTo($("act4b-llmtag"), { opacity: 0, y: -8 }, { opacity: 1, y: 0, duration: 0.4 }, 7.6);
+          draw("act4b-w1", 8.0, 0.3);
+          pop("#act4b-policy", 8.2);
+          draw("act4b-w2", 8.6, 0.3);
+          pop("#act4b-auth", 8.8);
+          draw("act4b-w3", 9.2, 0.3);
+          pop("#act4b-exec", 9.4);
+          draw("act4b-w4", 9.8, 0.4);
+          tl.fromTo($("act4b-module"), { boxShadow: "0 0 0 rgba(78,195,151,0)" }, { boxShadow: "0 0 60px rgba(78,195,151,0.55)", duration: 0.35, yoyo: true, repeat: 1 }, 10.2);
+
+          pop("#act4b-procs .proc", 12.2, 0.16);
+
+          tl.to($("act4b-diagram"), { opacity: 0, duration: 0.45, ease: "power2.inOut" }, 15.0);
+          tl.fromTo($("act4b-ladder"), { opacity: 0 }, { opacity: 1, duration: 0.3 }, 15.1);
+          tl.fromTo("#act4b-ladder .rung", { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.4, ease: "power3.out", stagger: 0.25 }, 15.2);
+
+          window.__timelines["act4b"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

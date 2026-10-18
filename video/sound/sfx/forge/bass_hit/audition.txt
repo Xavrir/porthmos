@@ -1,0 +1,3 @@
+audition.wav: each made sound, then its nearest real reference (measured: tonal balance + envelope), every sound peak-normalised to -3 dBFS (peak-matched, not loudness-matched)
+    0.00 s  made  subdrop_01
+    2.57 s  made  subdrop_02

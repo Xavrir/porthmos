@@ -1,0 +1,124 @@
+<!doctype html>
+<html data-composition-variables='[{"id":"scale","type":"number","label":"Type scale","default":1,"min":0.4,"max":1.5,"step":0.01},{"id":"fscale","type":"number","label":"Frame scale","default":1,"min":0.4,"max":1.2,"step":0.01},{"id":"ftop","type":"number","label":"Frame top (px)","default":214,"min":0,"max":1000,"step":1}]'>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="act3-template">
+      <style>
+        #act3-root {
+          position: absolute;
+          inset: 0;
+          width: 100% !important;
+          height: 100% !important;
+          overflow: hidden;
+        }
+        #act3-root .ps-head {
+          position: absolute;
+          left: calc((100% - 1376px * var(--fscale)) / 2);
+          right: calc((100% - 1376px * var(--fscale)) / 2);
+          top: calc(var(--ftop) * 1px - 156px * var(--scale));
+          height: calc(140px * var(--scale));
+        }
+        #act3-root .ps-title {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: calc(44px * var(--scale));
+          font-size: calc(64px * var(--scale));
+          opacity: 0;
+        }
+        #act3-frame {
+          left: calc((100% - 1376px * var(--fscale)) / 2);
+          top: calc(var(--ftop) * 1px);
+          width: calc(1376px * var(--fscale));
+        }
+        #act3-frame .screen {
+          width: 100%;
+          height: calc(774px * var(--fscale));
+        }
+        #act3-txchip {
+          position: absolute;
+          left: calc((100% - 1376px * var(--fscale)) / 2 - 24px);
+          top: calc(var(--ftop) * 1px + 46px + 774px * var(--fscale) - 90px * var(--scale));
+          font-size: calc(26px * var(--scale));
+          padding: 16px 26px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+        }
+        #act3-txchip b {
+          color: var(--green);
+          font-weight: 700;
+        }
+      </style>
+      <div id="act3-root" data-composition-id="act3" data-width="1920" data-height="1080" data-duration="20">
+        <div class="ps-head">
+          <div class="label"><span class="num">01</span><span class="slash">/</span><span>Create a treasury</span></div>
+          <div class="ps-title hero" id="act3-t1">Your treasury in a minute.</div>
+          <div class="ps-title hero" id="act3-t2">Your Safe. Your rules. On-chain.</div>
+        </div>
+        <div class="bframe" id="act3-frame">
+          <div class="bar">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <div class="url"><i class="lock"></i><b>porthmos.vercel.app</b><span id="act3-path">/signup</span></div>
+            <div class="live"><i></i>LIVE<span>· Base Sepolia · real transactions</span></div>
+          </div>
+          <div class="screen" id="act3-screen">
+            <div class="cam" id="act3-cam">
+              <video id="act3-r1i" src="assets/footage/R1-intro.mp4" data-start="0" data-duration="7" data-media-start="0.2" data-playback-rate="1.6" muted playsinline></video>
+              <video
+                id="act3-r1"
+                src="assets/footage/R1.mp4"
+                data-start="7"
+                data-hf-media-start-basis="local"
+                data-duration="13"
+                data-media-start="10.5"
+                data-automation='{"version":1,"lanes":[{"target":"rate","points":[{"t":0,"v":1.5},{"t":1,"v":10},{"t":7.4,"v":10},{"t":8,"v":1},{"t":13,"v":1}]}]}'
+                muted
+                playsinline
+              ></video>
+            </div>
+          </div>
+        </div>
+        <div class="chip" id="act3-txchip"><i class="dot"></i><b id="act3-txn">0</b>&nbsp;<span id="act3-txw">real transactions</span></div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          const $ = (id) => document.getElementById(id);
+          const screen = $("act3-screen");
+          const W = screen.offsetWidth || 1376;
+          const H = screen.offsetHeight || 774;
+
+          tl.fromTo(".ps-head .label", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 0);
+          tl.fromTo($("act3-t1"), { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0.1);
+          tl.fromTo($("act3-frame"), { opacity: 0, y: 90, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.9, ease: "power3.out" }, 0);
+
+          tl.fromTo($("act3-txchip"), { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.45, ease: "back.out(1.6)" }, 7.0);
+          const txw = $("act3-txw");
+          FX.count(tl, $("act3-txn"), 13, 7.2, 6.8, (x) => {
+            txw.textContent = Math.round(x) === 1 ? "real transaction" : "real transactions";
+            return String(Math.round(x));
+          }, "none");
+          tl.to($("act3-txchip"), { opacity: 0, x: -30, duration: 0.35, ease: "power2.in" }, 14.6);
+
+          tl.to($("act3-t1"), { opacity: 0, y: -20, duration: 0.3, ease: "power2.in" }, 14.7);
+          tl.fromTo($("act3-t2"), { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 15.0);
+
+          const path = FX.driver((x) => {
+            $("act3-path").textContent = x > 0.5 ? "/treasury" : "/signup";
+          });
+          tl.set(path, { v: 0 }, 0);
+          tl.set(path, { v: 1 }, 14.5);
+
+          FX.zoom(tl, $("act3-cam"), [
+            { at: 2.6, dur: 0.8, scale: 1.45, fx: 0.62, fy: 0.45 },
+            { at: 6.6, dur: 0.6, scale: 1.0, fx: 0.5, fy: 0.5 },
+            { at: 14.3, dur: 0.6, scale: 2.4, fx: 0.38, fy: 0.42 },
+          ], W, H);
+
+          window.__timelines["act3"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

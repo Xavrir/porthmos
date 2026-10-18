@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="ask-template">
+      <style>
+        #ask-root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+        }
+        #ask-root .scrim {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 1900px;
+          height: 1080px;
+          margin-left: -950px;
+          margin-top: -540px;
+          background: radial-gradient(closest-side, rgba(1, 6, 4, 0.94), rgba(1, 6, 4, 0.82) 65%, rgba(1, 6, 4, 0.2));
+        }
+        #ask-root .head {
+          position: absolute;
+          left: 220px;
+          right: 220px;
+          top: 92px;
+        }
+        #ask-title {
+          margin-top: 18px;
+          font-size: 76px;
+        }
+        #ask-root .grid {
+          position: absolute;
+          left: 220px;
+          right: 220px;
+          top: 330px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 28px;
+        }
+        #ask-root .cell {
+          height: 300px;
+          padding: 34px 40px;
+          border-radius: 22px;
+          border: 1px solid rgba(78, 195, 151, 0.32);
+          background: rgba(6, 15, 11, 0.92);
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        #ask-root .cell small {
+          font-family: var(--mono);
+          font-size: 24px;
+          font-weight: 600;
+          letter-spacing: 0.14em;
+          color: var(--green);
+        }
+        #ask-root .cell b {
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: 46px;
+          font-weight: 760;
+          letter-spacing: -0.025em;
+          line-height: 1.14;
+          color: var(--ink);
+          text-wrap: balance;
+        }
+        #ask-root .cell .mono {
+          font-family: var(--mono);
+          font-size: 38px;
+          font-weight: 600;
+          color: var(--green);
+          letter-spacing: 0;
+        }
+        #ask-root .cell.ask {
+          border-color: rgba(249, 149, 16, 0.55);
+          box-shadow: 0 0 60px rgba(249, 149, 16, 0.12);
+        }
+        #ask-root .cell.ask small {
+          color: var(--orange);
+        }
+        #ask-root .team {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px 22px;
+          font-family: var(--mono);
+          font-size: 34px;
+          font-weight: 600;
+          color: var(--ink);
+        }
+      </style>
+      <div id="ask-root" data-composition-id="ask" data-width="1920" data-height="1080" data-duration="14">
+        <div class="scrim"></div>
+        <div class="head">
+          <div class="label"><span class="num">06</span><span class="slash">/</span><span>Who it's for</span></div>
+          <div class="hero" id="ask-title">Built for trade treasuries. Live today.</div>
+        </div>
+        <div class="grid">
+          <div class="cell" id="ask-c1"><small>FOR</small><b>Importers and SME trade-finance teams, and the banks behind them.</b></div>
+          <div class="cell" id="ask-c2"><small>LIVE NOW</small><b>On Base Sepolia. Try it yourself:</b><div class="mono">porthmos.vercel.app</div></div>
+          <div class="cell" id="ask-c3"><small>TEAM</small><div class="team"><span>Xavrir</span><span>StyNW7</span><span>aarieffawwaz</span><span>HanselMitchell</span></div></div>
+          <div class="cell ask" id="ask-c4"><small>LOOKING FOR</small><b>A bank pilot and an audit partner.</b></div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo("#ask-root .head", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.1);
+          ["#ask-c1", "#ask-c2", "#ask-c3", "#ask-c4"].forEach((sel, i) => {
+            tl.fromTo(sel, { opacity: 0, y: 30, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: "back.out(1.4)" }, 0.5 + i * 2);
+          });
+          window.__timelines["ask"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

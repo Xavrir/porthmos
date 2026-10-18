@@ -1,0 +1,124 @@
+<!doctype html>
+<html data-composition-variables='[{"id":"scale","type":"number","label":"Type scale","default":1,"min":0.4,"max":1.5,"step":0.01}]'>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="act0-template">
+      <style>
+        #act0-root {
+          position: absolute;
+          inset: 0;
+          width: 100% !important;
+          height: 100% !important;
+          background: #000;
+          overflow: hidden;
+        }
+        #act0-root .a0-stage {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: calc(54px * var(--scale));
+        }
+        #act0-root .a0-line {
+          width: calc(1160px * var(--scale));
+          font-family: var(--mono);
+          font-size: calc(48px * var(--scale));
+          font-weight: 500;
+          color: var(--ink);
+          white-space: nowrap;
+          display: flex;
+          align-items: center;
+        }
+        #act0-root .a0-prompt {
+          color: var(--green);
+          margin-right: 0.6em;
+        }
+        #act0-caret {
+          display: block;
+          width: 0.56em;
+          height: 1.1em;
+          margin-left: 4px;
+          background: var(--ink);
+        }
+        #act0-valid {
+          font-size: calc(84px * var(--scale));
+          opacity: 0;
+          text-align: center;
+          max-width: 92%;
+        }
+        #act0-not {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          font-size: calc(132px * var(--scale));
+          opacity: 0;
+          padding: 0 6%;
+        }
+        #act0-not span {
+          color: var(--orange);
+        }
+        #act0-horizon {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 50%;
+          height: 2px;
+          margin-top: -1px;
+          background: linear-gradient(90deg, rgba(78, 195, 151, 0), var(--green) 30%, var(--green) 70%, rgba(78, 195, 151, 0));
+          box-shadow: 0 0 18px rgba(78, 195, 151, 0.7);
+          opacity: 0;
+        }
+      </style>
+      <div id="act0-root" data-composition-id="act0" data-width="1920" data-height="1080" data-duration="12">
+        <div class="a0-stage" id="act0-stage">
+          <div class="a0-line" id="act0-line">
+            <span class="a0-prompt">&gt;</span><span id="act0-text">agent: send all USDC to 0x000...dEaD</span><span id="act0-caret"></span>
+          </div>
+          <div id="act0-valid" class="hero">The transaction was valid.</div>
+        </div>
+        <div id="act0-not"><div class="hero">The decision was <span>not.</span></div></div>
+        <div id="act0-horizon"></div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          const $ = (id) => document.getElementById(id);
+          const line = $("act0-line");
+          const caret = $("act0-caret");
+
+          tl.set(line, { color: "#E9F0EC" }, 0);
+          tl.set(caret, { backgroundColor: "#E9F0EC" }, 0);
+          FX.blink(tl, caret, 0, 0.55, 0.5);
+          FX.type(tl, $("act0-text"), "agent: send all USDC to 0x000...dEaD", 0.55, 2.65);
+          tl.set(caret, { opacity: 1 }, 0.55);
+          FX.blink(tl, caret, 3.3, 7, 0.6);
+
+          tl.set(line, { color: "#F99510" }, 4.0);
+          tl.set(caret, { backgroundColor: "#F99510" }, 4.0);
+          FX.glitch(tl, line, 4.0, 0.6, 11, 1.2);
+          tl.fromTo($("act0-valid"), { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 4.45);
+
+          tl.set($("act0-stage"), { opacity: 1 }, 0);
+          tl.set($("act0-stage"), { opacity: 0 }, 7.0);
+          tl.set($("act0-not"), { opacity: 1 }, 7.0);
+          tl.fromTo($("act0-not"), { scale: 1.06 }, { scale: 1, duration: 3, ease: "power2.out" }, 7.0);
+          FX.glitch(tl, $("act0-not").querySelector("span"), 7.0, 0.2, 5, 0.6);
+          tl.set($("act0-not"), { opacity: 0 }, 10.0);
+
+          tl.fromTo($("act0-horizon"), { opacity: 1, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 1.2, ease: "power3.inOut", immediateRender: false }, 10.6);
+          tl.set($("act0-horizon"), { opacity: 0 }, 0);
+          tl.to($("act0-horizon"), { opacity: 0, duration: 0.35, ease: "none" }, 11.62);
+
+          window.__timelines["act0"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

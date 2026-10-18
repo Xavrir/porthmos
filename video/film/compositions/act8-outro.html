@@ -1,0 +1,215 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="act8-template">
+      <style>
+        #act8-root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+        }
+        #act8-scrim {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 1800px;
+          height: 1000px;
+          margin-left: -900px;
+          margin-top: -470px;
+          background: radial-gradient(closest-side, rgba(1, 6, 4, 0.9), rgba(1, 6, 4, 0.7) 55%, rgba(1, 6, 4, 0));
+          opacity: 0;
+        }
+        #act8-lock {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 0;
+          height: 540px;
+        }
+        #act8-mark {
+          position: absolute;
+          left: 0;
+          right: 0;
+          margin: 0 auto;
+          bottom: 118px;
+          height: 236px;
+          width: auto;
+          filter: drop-shadow(0 0 40px rgba(78, 195, 151, 0.35));
+        }
+        #act8-word {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 12px;
+          text-align: center;
+          font-size: 92px;
+          font-weight: 880;
+          letter-spacing: 0.06em;
+          line-height: 1;
+        }
+        #act8-root .phase {
+          position: absolute;
+          left: 0;
+          right: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          opacity: 0;
+        }
+        #act8-tag {
+          top: 610px;
+          gap: 8px;
+        }
+        #act8-tag div {
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: 46px;
+          font-weight: 720;
+          letter-spacing: -0.025em;
+          color: var(--ink);
+        }
+        #act8-tag div:nth-child(2) {
+          color: var(--green);
+        }
+        #act8-tag div:nth-child(3) {
+          color: var(--muted);
+        }
+        #act8-cta {
+          top: 420px;
+          gap: 34px;
+        }
+        #act8-url {
+          font-family: var(--mono);
+          font-size: 92px;
+          font-weight: 600;
+          letter-spacing: -0.02em;
+          color: var(--ink);
+          padding-bottom: 14px;
+          border-bottom: 4px solid var(--green);
+          box-shadow: 0 18px 30px -24px rgba(78, 195, 151, 0.9);
+        }
+        #act8-cta .chip {
+          font-size: 26px;
+          padding: 14px 28px;
+        }
+        #act8-team {
+          top: 372px;
+          gap: 30px;
+        }
+        #act8-team .by {
+          font-family: var(--mono);
+          font-size: 22px;
+          font-weight: 600;
+          letter-spacing: 0.18em;
+          color: var(--green);
+        }
+        #act8-team .people {
+          display: flex;
+          gap: 64px;
+        }
+        #act8-team .person {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 18px;
+        }
+        #act8-team .av {
+          width: 132px;
+          height: 132px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: radial-gradient(circle at 30% 25%, #1d4a3a, #0b1a14 70%);
+          border: 2px solid rgba(78, 195, 151, 0.7);
+          box-shadow: 0 0 40px rgba(78, 195, 151, 0.25);
+          font-family: var(--sans);
+          font-size: 56px;
+          font-weight: 820;
+          color: var(--ink);
+        }
+        #act8-team .person b {
+          font-family: var(--mono);
+          font-size: 32px;
+          font-weight: 600;
+          color: var(--ink);
+        }
+        #act8-team .track {
+          margin-top: 14px;
+          font-family: var(--sans);
+          font-size: 38px;
+          font-weight: 680;
+          letter-spacing: -0.01em;
+          color: var(--ink);
+        }
+        #act8-team .links {
+          display: flex;
+          gap: 26px;
+          font-family: var(--mono);
+          font-size: 32px;
+          color: var(--muted);
+        }
+        #act8-team .links b {
+          color: var(--green);
+          font-weight: 500;
+        }
+      </style>
+      <div id="act8-root" data-composition-id="act8" data-width="1920" data-height="1080" data-duration="14">
+        <div id="act8-scrim"></div>
+        <div id="act8-lock">
+          <img id="act8-mark" src="assets/brand/porthmos-mark@2x.png" alt="Porthmos mark" />
+          <div id="act8-word" class="hero">PORTHMOS</div>
+        </div>
+        <div class="phase" id="act8-tag">
+          <div>The agent proposes.</div>
+          <div>Code decides.</div>
+          <div>The contract enforces.</div>
+        </div>
+        <div class="phase" id="act8-cta">
+          <div id="act8-url">porthmos.vercel.app</div>
+          <div class="chip"><i class="dot"></i>Live on Base Sepolia</div>
+        </div>
+        <div class="phase" id="act8-team">
+          <div class="by">BUILT BY</div>
+          <div class="people">
+            <div class="person"><div class="av">X</div><b>Xavrir</b></div>
+            <div class="person"><div class="av">S</div><b>StyNW7</b></div>
+            <div class="person"><div class="av">A</div><b>aarieffawwaz</b></div>
+            <div class="person"><div class="av">H</div><b>HanselMitchell</b></div>
+          </div>
+          <div class="track">Shenzhen FinTechathon 2026 · Topic F: Agent Wallet</div>
+          <div class="links"><b>porthmos.vercel.app</b><span>·</span><b>github.com/Xavrir/porthmos</b></div>
+        </div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          const $ = (id) => document.getElementById(id);
+
+          tl.fromTo($("act8-scrim"), { opacity: 0 }, { opacity: 1, duration: 1.2 }, 0);
+          tl.fromTo($("act8-mark"), { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 1.1, ease: "power3.out" }, 0.1);
+          tl.fromTo($("act8-word"), { opacity: 0, y: 30, scale: 1.08 }, { opacity: 1, y: 0, scale: 1, duration: 1.0, ease: "power3.out" }, 0.35);
+
+          tl.set($("act8-tag"), { opacity: 1 }, 0);
+          tl.fromTo("#act8-tag div", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.25, ease: "power3.out" }, 0.4);
+          tl.to($("act8-tag"), { opacity: 0, duration: 0.25 }, 5.0);
+
+          tl.to($("act8-lock"), { y: -228, scale: 0.6, transformOrigin: "50% 100%", duration: 0.7, ease: "power3.inOut" }, 4.95);
+
+          tl.fromTo($("act8-cta"), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 5.2);
+          tl.to($("act8-cta"), { opacity: 0, y: -20, duration: 0.2, ease: "power2.in" }, 8.3);
+
+          tl.set($("act8-team"), { opacity: 1 }, 8.45);
+          tl.fromTo("#act8-team .by", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 8.45);
+          tl.fromTo("#act8-team .person", { opacity: 0, y: 30, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: "back.out(1.6)", stagger: 0.1 }, 8.5);
+          tl.fromTo(["#act8-team .track", "#act8-team .links"], { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.15, ease: "power2.out" }, 8.7);
+
+          window.__timelines["act8"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

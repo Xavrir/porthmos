@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="act4-template">
+      <style>
+        #act4-root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+        }
+        #act4-root .co {
+          position: absolute;
+          left: 236px;
+          bottom: 84px;
+          max-width: 1180px;
+          padding: 22px 30px 24px;
+          border-radius: 18px;
+          border: 1px solid rgba(78, 195, 151, 0.5);
+          background: rgba(5, 13, 10, 0.94);
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65), 0 0 50px rgba(78, 195, 151, 0.16);
+          opacity: 0;
+        }
+        #act4-co1,
+        #act4-co3 {
+          bottom: 270px !important;
+        }
+        #act4-co1,
+        #act4-co2 {
+          left: auto !important;
+          right: 236px;
+        }
+        #act4-mask {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(90deg, rgba(7, 17, 13, 0) 66%, rgba(7, 17, 13, 0.96) 79%);
+          opacity: 0;
+        }
+        #act4-root .co small {
+          display: block;
+          margin-bottom: 8px;
+          font-family: var(--mono);
+          font-size: 22px;
+          font-weight: 600;
+          letter-spacing: 0.12em;
+          color: var(--green);
+        }
+        #act4-root .co b {
+          display: block;
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: 46px;
+          font-weight: 780;
+          letter-spacing: -0.02em;
+          line-height: 1.12;
+          color: var(--ink);
+        }
+        #act4-root .co b.mono {
+          font-family: var(--mono);
+          font-size: 42px;
+          font-weight: 600;
+          letter-spacing: 0;
+        }
+        #act4-root .co span {
+          display: block;
+          margin-top: 8px;
+          font-family: var(--mono);
+          font-size: 24px;
+          color: var(--muted);
+        }
+      </style>
+      <div id="act4-root" data-composition-id="act4" data-width="1920" data-height="1080" data-duration="35">
+        <div class="ps-head">
+          <div class="label"><span class="num">02</span><span class="slash">/</span><span>The Copilot</span></div>
+          <div class="ps-title hero" id="act4-t1">Ask in plain words.</div>
+          <div class="ps-title hero" id="act4-t2">The agent proposes.</div>
+          <div class="ps-title hero" id="act4-t3">Small moves run on their own.</div>
+          <div class="ps-title hero" id="act4-t4">Bigger moves wait for your signature.</div>
+          <div class="ps-title hero" id="act4-t5">Deterministic code decides.</div>
+          <div class="ps-title hero" id="act4-t6">You sign. The contract enforces.</div>
+          <div class="ps-title hero" id="act4-t7">Speaks your language.</div>
+        </div>
+        <div class="bframe ps-frame" id="act4-frame">
+          <div class="bar">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <div class="url"><i class="lock"></i><b>porthmos.vercel.app</b>/copilot</div>
+            <div class="live"><i></i>LIVE<span>· Base Sepolia · real transactions</span></div>
+          </div>
+          <div class="screen" id="act4-screen">
+            <div class="cam" id="act4-cam">
+              <video
+                id="act4-r2"
+                src="assets/footage/R2.mp4"
+                data-start="0"
+                data-duration="12.5"
+                data-media-start="3"
+                data-automation='{"version":1,"lanes":[{"target":"rate","points":[{"t":0,"v":1.25},{"t":2.7,"v":1.25},{"t":3,"v":10},{"t":5.8,"v":10},{"t":6.1,"v":1},{"t":8.2,"v":1},{"t":8.4,"v":0.9},{"t":12.5,"v":0.9}]}]}'
+                muted
+                playsinline
+              ></video>
+              <video
+                id="act4-t3clip"
+                src="assets/footage/R2-T3-approve.mp4"
+                data-start="12.5"
+                data-hf-media-start-basis="local"
+                data-duration="15.5"
+                data-media-start="0.3"
+                data-automation='{"version":1,"lanes":[{"target":"rate","points":[{"t":0,"v":1},{"t":5,"v":1},{"t":5.3,"v":10},{"t":7,"v":10},{"t":7.3,"v":1},{"t":7.6,"v":0.6},{"t":15.5,"v":0.6}]}]}'
+                muted
+                playsinline
+              ></video>
+              <video
+                id="act4-r3"
+                src="assets/footage/R3.mp4"
+                data-start="28"
+                data-hf-media-start-basis="local"
+                data-duration="7"
+                data-media-start="3"
+                data-automation='{"version":1,"lanes":[{"target":"rate","points":[{"t":0,"v":1.3},{"t":2.2,"v":1.3},{"t":2.4,"v":10},{"t":3.9,"v":10},{"t":4.1,"v":1},{"t":7,"v":1}]}]}'
+                muted
+                playsinline
+              ></video>
+            </div>
+            <div id="act4-mask"></div>
+          </div>
+        </div>
+        <div class="co" id="act4-co1"><small>THE AGENT'S REPLY</small><b>Deposit 1,000.00 USDC into Vault B · tier 2</b></div>
+        <div class="co" id="act4-co2"><small>EXECUTED ON BASE SEPOLIA</small><b class="mono" id="act4-h1"></b><span id="act4-b1"></span></div>
+        <div class="co" id="act4-co3"><small>TIER 3 · YOUR APPROVAL</small><b>1,000.00 USDC into Vault A · waiting for you</b></div>
+        <div class="co" id="act4-co4"><small>CHECKED BEFORE YOU SIGN</small><b>All 12 policy checks pass. Simulation passes.</b></div>
+        <div class="co" id="act4-co5"><small>OWNER SIGNED · EXECUTED</small><b class="mono" id="act4-h2"></b><span id="act4-b2"></span></div>
+        <div class="co" id="act4-co6"><small>ASKED IN INDONESIAN</small><b>"Berapa saldo treasury saya?"</b></div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          const $ = (id) => document.getElementById(id);
+          const film = window.PORTHMOS_CHAIN.film;
+          const fmt = (n) => n.toLocaleString("en-US");
+          const W = 1376;
+          const H = 774;
+
+          $("act4-h1").textContent = film.r2Executed.hashShort;
+          $("act4-b1").textContent = `block ${fmt(film.r2Executed.block)} · ${film.r2Executed.status}`;
+          $("act4-h2").textContent = film.t3Executed.hashShort;
+          $("act4-b2").textContent = `block ${fmt(film.t3Executed.block)} · ${film.t3Executed.status}`;
+
+          const titles = ["act4-t1", "act4-t2", "act4-t3", "act4-t4", "act4-t5", "act4-t6", "act4-t7"].map($);
+          const cuts = [0, 6.0, 8.3, 12.5, 15.7, 19.6, 28.0];
+          tl.fromTo("#act4-root .label", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.5, ease: "power3.out" }, 0);
+          tl.fromTo($("act4-frame"), { opacity: 0, y: 90, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.9, ease: "power3.out" }, 0);
+          titles.forEach((el, i) => {
+            tl.fromTo(el, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, cuts[i] + (i ? 0.15 : 0.1));
+            if (i < titles.length - 1) tl.to(el, { opacity: 0, y: -18, duration: 0.2, ease: "power2.in" }, cuts[i + 1]);
+          });
+
+          const show = (id, at, until) => {
+            tl.fromTo($(id), { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.35, ease: "back.out(1.5)" }, at);
+            tl.to($(id), { opacity: 0, y: 12, duration: 0.2, ease: "power2.in" }, until);
+          };
+          show("act4-co1", 6.2, 12.4);
+          show("act4-co2", 8.3, 12.4);
+          show("act4-co3", 12.8, 19.7);
+          show("act4-co4", 15.0, 19.7);
+          show("act4-co5", 20.2, 27.8);
+          show("act4-co6", 28.4, 34.8);
+
+          tl.set($("act4-mask"), { opacity: 0 }, 0);
+          tl.set($("act4-mask"), { opacity: 1 }, 28.0);
+
+          FX.zoom(tl, $("act4-cam"), [
+            { at: 0.6, dur: 0.9, scale: 1.8, fx: 0.36, fy: 0.42 },
+            { at: 5.6, dur: 0.6, scale: 2.0, fx: 0.36, fy: 0.5 },
+            { at: 8.1, dur: 0.7, scale: 1.9, fx: 0.62, fy: 0.84 },
+            { at: 12.5, dur: 0.01, scale: 2.0, fx: 0.7, fy: 0.3 },
+            { at: 19.6, dur: 0.8, scale: 1.9, fx: 0.62, fy: 0.84 },
+            { at: 28.0, dur: 0.01, scale: 2.4, fx: 0.38, fy: 0.45 },
+          ], W, H);
+
+          window.__timelines["act4"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

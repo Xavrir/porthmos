@@ -1,0 +1,1 @@
+window.PORTHMOS_FACTS = {"deployedContracts":9,"recordedScenarios":15,"tests":{"contract":106,"service":412,"integration":20,"web":176,"total":714}};

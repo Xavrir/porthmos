@@ -1,0 +1,1008 @@
+{
+ "length_s": 230.0,
+ "sample_rate": 48000,
+ "bpm": 120.0,
+ "beat_s": 0.5,
+ "note": "3:50 extended cut of the 3:00 arrangement: whole bars repeated at bar boundaries (extend.py INSERTS, in 3:00 time), so every beat stays on a 0.5 s multiple.",
+ "sections": [
+  {
+   "name": "cold_open",
+   "start": 0.0,
+   "end": 12.0
+  },
+  {
+   "name": "reveal",
+   "start": 12.0,
+   "end": 25.0
+  },
+  {
+   "name": "problem",
+   "start": 25.0,
+   "end": 38.0
+  },
+  {
+   "name": "treasury",
+   "start": 38.0,
+   "end": 58.0
+  },
+  {
+   "name": "copilot",
+   "start": 58.0,
+   "end": 93.0
+  },
+  {
+   "name": "how",
+   "start": 93.0,
+   "end": 113.0
+  },
+  {
+   "name": "break",
+   "start": 113.0,
+   "end": 160.0
+  },
+  {
+   "name": "tradeflow",
+   "start": 160.0,
+   "end": 186.0
+  },
+  {
+   "name": "proof",
+   "start": 186.0,
+   "end": 202.0
+  },
+  {
+   "name": "ask",
+   "start": 202.0,
+   "end": 216.0
+  },
+  {
+   "name": "outro",
+   "start": 216.0,
+   "end": 230.0
+  }
+ ],
+ "act_titles": {
+  "01": 38.0,
+  "02": 58.0,
+  "03": 93.0,
+  "04": 113.0,
+  "05": 160.0
+ },
+ "hard_cuts": [
+  7.0,
+  12.0,
+  25.0,
+  29.0,
+  33.0,
+  38.0,
+  58.0,
+  93.0,
+  113.0,
+  160.0,
+  186.0,
+  202.0,
+  216.0
+ ],
+ "silence": {
+  "start": 10.0,
+  "end": 10.5
+ },
+ "tense_hold": {
+  "start": 172.0,
+  "end": 178.0
+ },
+ "fade_to_silence_by": 229.6,
+ "downbeats": [
+  0.0,
+  2.0,
+  4.0,
+  6.0,
+  8.0,
+  10.0,
+  12.0,
+  14.0,
+  16.0,
+  18.0,
+  20.0,
+  22.0,
+  24.0,
+  25.0,
+  27.0,
+  29.0,
+  31.0,
+  33.0,
+  35.0,
+  37.0,
+  38.0,
+  40.0,
+  42.0,
+  44.0,
+  46.0,
+  48.0,
+  50.0,
+  52.0,
+  54.0,
+  56.0,
+  58.0,
+  60.0,
+  62.0,
+  64.0,
+  66.0,
+  68.0,
+  70.0,
+  72.0,
+  74.0,
+  76.0,
+  78.0,
+  80.0,
+  82.0,
+  84.0,
+  86.0,
+  88.0,
+  90.0,
+  92.0,
+  93.0,
+  95.0,
+  97.0,
+  99.0,
+  101.0,
+  103.0,
+  105.0,
+  107.0,
+  109.0,
+  111.0,
+  113.0,
+  115.0,
+  117.0,
+  119.0,
+  121.0,
+  123.0,
+  125.0,
+  127.0,
+  129.0,
+  131.0,
+  133.0,
+  135.0,
+  137.0,
+  139.0,
+  141.0,
+  143.0,
+  145.0,
+  147.0,
+  149.0,
+  151.0,
+  153.0,
+  155.0,
+  157.0,
+  159.0,
+  160.0,
+  162.0,
+  164.0,
+  166.0,
+  168.0,
+  170.0,
+  172.0,
+  174.0,
+  176.0,
+  178.0,
+  180.0,
+  182.0,
+  184.0,
+  186.0,
+  188.0,
+  190.0,
+  192.0,
+  194.0,
+  196.0,
+  198.0,
+  200.0,
+  202.0,
+  204.0,
+  206.0,
+  208.0,
+  210.0,
+  212.0,
+  214.0,
+  216.0,
+  218.0,
+  220.0,
+  222.0,
+  224.0,
+  226.0,
+  228.0
+ ],
+ "inserts_3m00_time": [
+  {
+   "at": 82.0,
+   "copy_from": 74.0,
+   "copy_to": 82.0
+  },
+  {
+   "at": 125.0,
+   "copy_from": 109.0,
+   "copy_to": 125.0
+  },
+  {
+   "at": 125.0,
+   "copy_from": 121.0,
+   "copy_to": 125.0
+  },
+  {
+   "at": 166.0,
+   "copy_from": 162.0,
+   "copy_to": 166.0
+  },
+  {
+   "at": 170.0,
+   "copy_from": 87.0,
+   "copy_to": 101.0
+  },
+  {
+   "at": 176.0,
+   "copy_from": 172.0,
+   "copy_to": 176.0
+  }
+ ],
+ "events": [
+  {
+   "time": 0.0,
+   "name": "bass_hit",
+   "source": "bass_hit",
+   "file": "sfx/bass_hit.wav",
+   "sync": "onset",
+   "starts_at": 0.0,
+   "gain_db": -2.0,
+   "note": "cold open low hit"
+  },
+  {
+   "time": 0.55,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_1.wav",
+   "sync": "onset",
+   "starts_at": 0.549,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 0.685,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_2.wav",
+   "sync": "onset",
+   "starts_at": 0.6837,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 0.76,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_3.wav",
+   "sync": "onset",
+   "starts_at": 0.7588,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 0.865,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_4.wav",
+   "sync": "onset",
+   "starts_at": 0.8641,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.0,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_5.wav",
+   "sync": "onset",
+   "starts_at": 0.9991,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.075,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_6.wav",
+   "sync": "onset",
+   "starts_at": 1.0737,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.18,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_1.wav",
+   "sync": "onset",
+   "starts_at": 1.179,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.315,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_2.wav",
+   "sync": "onset",
+   "starts_at": 1.3137,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.39,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_3.wav",
+   "sync": "onset",
+   "starts_at": 1.3888,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.495,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_4.wav",
+   "sync": "onset",
+   "starts_at": 1.4941,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.63,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_5.wav",
+   "sync": "onset",
+   "starts_at": 1.6291,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.705,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_6.wav",
+   "sync": "onset",
+   "starts_at": 1.7037,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.81,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_1.wav",
+   "sync": "onset",
+   "starts_at": 1.809,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 1.945,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_2.wav",
+   "sync": "onset",
+   "starts_at": 1.9437,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.02,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_3.wav",
+   "sync": "onset",
+   "starts_at": 2.0188,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.125,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_4.wav",
+   "sync": "onset",
+   "starts_at": 2.1241,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.26,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_5.wav",
+   "sync": "onset",
+   "starts_at": 2.2591,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.335,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_6.wav",
+   "sync": "onset",
+   "starts_at": 2.3337,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.44,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_1.wav",
+   "sync": "onset",
+   "starts_at": 2.439,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.575,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_2.wav",
+   "sync": "onset",
+   "starts_at": 2.5737,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.65,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_3.wav",
+   "sync": "onset",
+   "starts_at": 2.6488,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.755,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_4.wav",
+   "sync": "onset",
+   "starts_at": 2.7541,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.89,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_5.wav",
+   "sync": "onset",
+   "starts_at": 2.8891,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 2.965,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_6.wav",
+   "sync": "onset",
+   "starts_at": 2.9637,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 3.07,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_1.wav",
+   "sync": "onset",
+   "starts_at": 3.069,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 3.205,
+   "name": "type_key",
+   "source": "type_key",
+   "file": "sfx/type_key_2.wav",
+   "sync": "onset",
+   "starts_at": 3.2037,
+   "gain_db": -20.0,
+   "note": "cursor types the line"
+  },
+  {
+   "time": 4.0,
+   "name": "glitch",
+   "source": "glitch",
+   "file": "sfx/glitch.wav",
+   "sync": "onset",
+   "starts_at": 3.9125,
+   "gain_db": -5.0,
+   "note": "line turns orange"
+  },
+  {
+   "time": 7.0,
+   "name": "cut_thud",
+   "source": "cut_thud",
+   "file": "sfx/cut_thud.wav",
+   "sync": "onset",
+   "starts_at": 6.9979,
+   "gain_db": -9.0,
+   "note": "hard cut to black"
+  },
+  {
+   "time": 12.0,
+   "name": "drop_impact",
+   "source": "drop_impact",
+   "file": "sfx/drop_impact.wav",
+   "sync": "onset",
+   "starts_at": 11.0914,
+   "gain_db": -1.0,
+   "note": "logo reveal drop"
+  },
+  {
+   "time": 12.0,
+   "name": "drop_sub",
+   "source": "drop_sub",
+   "file": "sfx/drop_sub.wav",
+   "sync": "onset",
+   "starts_at": 11.9473,
+   "gain_db": -4.0,
+   "note": "logo reveal drop, sub layer"
+  },
+  {
+   "time": 16.0,
+   "name": "logo_shimmer",
+   "source": "logo_shimmer",
+   "file": "sfx/logo_shimmer.wav",
+   "sync": "peak",
+   "starts_at": 15.365,
+   "gain_db": -11.0,
+   "note": "Porthmos mark rises"
+  },
+  {
+   "time": 19.0,
+   "name": "tag_tick",
+   "source": "ui_tick",
+   "file": "sfx/ui_tick.wav",
+   "sync": "onset",
+   "starts_at": 18.998,
+   "gain_db": -17.0,
+   "note": "tagline types"
+  },
+  {
+   "time": 21.5,
+   "name": "chip_click",
+   "source": "ui_click",
+   "file": "sfx/ui_click.wav",
+   "sync": "onset",
+   "starts_at": 21.4979,
+   "gain_db": -14.0,
+   "note": "Live on Base Sepolia chip"
+  },
+  {
+   "time": 25.0,
+   "name": "card_cut",
+   "source": "card_cut",
+   "file": "sfx/card_cut.wav",
+   "sync": "peak",
+   "starts_at": 24.6792,
+   "gain_db": -10.0,
+   "note": "problem card 1"
+  },
+  {
+   "time": 29.0,
+   "name": "card_cut",
+   "source": "card_cut",
+   "file": "sfx/card_cut.wav",
+   "sync": "peak",
+   "starts_at": 28.6792,
+   "gain_db": -10.0,
+   "note": "problem card 2"
+  },
+  {
+   "time": 33.0,
+   "name": "card_cut",
+   "source": "card_cut",
+   "file": "sfx/card_cut.wav",
+   "sync": "peak",
+   "starts_at": 32.6792,
+   "gain_db": -10.0,
+   "note": "problem card 3"
+  },
+  {
+   "time": 38.0,
+   "name": "act_title",
+   "source": "act_title",
+   "file": "sfx/act_title.wav",
+   "sync": "peak",
+   "starts_at": 37.4231,
+   "gain_db": -8.0,
+   "note": "01 / Your treasury in a minute"
+  },
+  {
+   "time": 53.0,
+   "name": "balance_ding",
+   "source": "ding",
+   "file": "sfx/ding.wav",
+   "sync": "onset",
+   "starts_at": 52.9998,
+   "gain_db": -14.0,
+   "note": "dashboard lands, balance counts up"
+  },
+  {
+   "time": 58.0,
+   "name": "act_title",
+   "source": "act_title",
+   "file": "sfx/act_title.wav",
+   "sync": "peak",
+   "starts_at": 57.4231,
+   "gain_db": -8.0,
+   "note": "02 / Ask in plain words"
+  },
+  {
+   "time": 64.0,
+   "name": "card_slide",
+   "source": "slide",
+   "file": "sfx/slide.wav",
+   "sync": "peak",
+   "starts_at": 63.889,
+   "gain_db": -14.0,
+   "note": "agent reply: 1,000 USDC into Vault B, tier 2"
+  },
+  {
+   "time": 66.5,
+   "name": "executed_ding",
+   "source": "ding",
+   "file": "sfx/ding.wav",
+   "sync": "onset",
+   "starts_at": 66.4998,
+   "gain_db": -14.0,
+   "note": "tier 2 deposit executed"
+  },
+  {
+   "time": 70.5,
+   "name": "card_slide",
+   "source": "slide",
+   "file": "sfx/slide.wav",
+   "sync": "peak",
+   "starts_at": 70.389,
+   "gain_db": -14.0,
+   "note": "tier 3 approval card"
+  },
+  {
+   "time": 75.5,
+   "name": "confirm_click",
+   "source": "ui_click",
+   "file": "sfx/ui_click.wav",
+   "sync": "onset",
+   "starts_at": 75.4979,
+   "gain_db": -12.0,
+   "note": "owner signs the approval"
+  },
+  {
+   "time": 78.0,
+   "name": "executed_ding",
+   "source": "ding",
+   "file": "sfx/ding.wav",
+   "sync": "onset",
+   "starts_at": 77.9998,
+   "gain_db": -13.0,
+   "note": "tier 3 deposit executed"
+  },
+  {
+   "time": 86.0,
+   "name": "lang_tick",
+   "source": "ui_tick",
+   "file": "sfx/ui_tick.wav",
+   "sync": "onset",
+   "starts_at": 85.998,
+   "gain_db": -16.0,
+   "note": "asked in Indonesian"
+  },
+  {
+   "time": 93.0,
+   "name": "act_title",
+   "source": "act_title",
+   "file": "sfx/act_title.wav",
+   "sync": "peak",
+   "starts_at": 92.4231,
+   "gain_db": -8.0,
+   "note": "03 / How it works"
+  },
+  {
+   "time": 95.0,
+   "name": "diagram_tick",
+   "source": "diagram_tick",
+   "file": "sfx/diagram_tick_1.wav",
+   "sync": "onset",
+   "starts_at": 94.998,
+   "gain_db": -12.0,
+   "note": "Safe, AegisModule, PolicyRegistry"
+  },
+  {
+   "time": 100.0,
+   "name": "diagram_tick",
+   "source": "diagram_tick",
+   "file": "sfx/diagram_tick_2.wav",
+   "sync": "onset",
+   "starts_at": 99.998,
+   "gain_db": -12.0,
+   "note": "Copilot, policy engine, authorizer, executor"
+  },
+  {
+   "time": 105.0,
+   "name": "diagram_tick",
+   "source": "diagram_tick",
+   "file": "sfx/diagram_tick_3.wav",
+   "sync": "onset",
+   "starts_at": 104.998,
+   "gain_db": -12.0,
+   "note": "five service processes"
+  },
+  {
+   "time": 108.0,
+   "name": "diagram_tick",
+   "source": "diagram_tick",
+   "file": "sfx/diagram_tick_4.wav",
+   "sync": "onset",
+   "starts_at": 107.998,
+   "gain_db": -12.0,
+   "note": "tier ladder"
+  },
+  {
+   "time": 113.0,
+   "name": "act_title",
+   "source": "act_title",
+   "file": "sfx/act_title.wav",
+   "sync": "peak",
+   "starts_at": 112.4231,
+   "gain_db": -8.0,
+   "note": "04 / Try to break it"
+  },
+  {
+   "time": 118.0,
+   "name": "held_stamp",
+   "source": "stamp",
+   "file": "sfx/stamp.wav",
+   "sync": "onset",
+   "starts_at": 117.9979,
+   "gain_db": -5.0,
+   "note": "HELD"
+  },
+  {
+   "time": 123.5,
+   "name": "refusal_stamp",
+   "source": "stamp",
+   "file": "sfx/stamp.wav",
+   "sync": "onset",
+   "starts_at": 123.4979,
+   "gain_db": -4.0,
+   "note": "BadSignature"
+  },
+  {
+   "time": 128.5,
+   "name": "refusal_stamp",
+   "source": "stamp",
+   "file": "sfx/stamp.wav",
+   "sync": "onset",
+   "starts_at": 128.4979,
+   "gain_db": -4.0,
+   "note": "NonceUsed"
+  },
+  {
+   "time": 133.5,
+   "name": "refusal_stamp",
+   "source": "stamp",
+   "file": "sfx/stamp.wav",
+   "sync": "onset",
+   "starts_at": 133.4979,
+   "gain_db": -4.0,
+   "note": "PriceOutOfBand"
+  },
+  {
+   "time": 138.5,
+   "name": "refusal_stamp",
+   "source": "stamp",
+   "file": "sfx/stamp.wav",
+   "sync": "onset",
+   "starts_at": 138.4979,
+   "gain_db": -4.0,
+   "note": "Frozen"
+  },
+  {
+   "time": 147.5,
+   "name": "freeze_toggle",
+   "source": "toggle",
+   "file": "sfx/toggle.wav",
+   "sync": "onset",
+   "starts_at": 147.498,
+   "gain_db": -12.0,
+   "note": "bank confirms the freeze"
+  },
+  {
+   "time": 156.5,
+   "name": "exit_ding",
+   "source": "ding",
+   "file": "sfx/ding.wav",
+   "sync": "onset",
+   "starts_at": 156.4998,
+   "gain_db": -13.0,
+   "note": "exit executes while frozen"
+  },
+  {
+   "time": 160.0,
+   "name": "act_title",
+   "source": "act_title",
+   "file": "sfx/act_title.wav",
+   "sync": "peak",
+   "starts_at": 159.4231,
+   "gain_db": -8.0,
+   "note": "05 / Pay on proof"
+  },
+  {
+   "time": 166.0,
+   "name": "release_ding",
+   "source": "ding",
+   "file": "sfx/ding.wav",
+   "sync": "onset",
+   "starts_at": 165.9998,
+   "gain_db": -13.0,
+   "note": "200 USDC released"
+  },
+  {
+   "time": 172.0,
+   "name": "held_stamp",
+   "source": "stamp_soft",
+   "file": "sfx/stamp_soft.wav",
+   "sync": "onset",
+   "starts_at": 171.9998,
+   "gain_db": -6.0,
+   "note": "milestone 2 HELD"
+  },
+  {
+   "time": 178.0,
+   "name": "complete_ding",
+   "source": "ding",
+   "file": "sfx/ding.wav",
+   "sync": "onset",
+   "starts_at": 177.9998,
+   "gain_db": -12.0,
+   "note": "Order completed"
+  },
+  {
+   "time": 186.0,
+   "name": "proof_riser",
+   "source": "riser",
+   "file": "sfx/riser.wav",
+   "sync": "peak",
+   "starts_at": 182.0068,
+   "gain_db": -6.0,
+   "note": "riser apex into the proof montage"
+  },
+  {
+   "time": 186.0,
+   "name": "number_slam",
+   "source": "slam",
+   "file": "sfx/slam.wav",
+   "sync": "onset",
+   "starts_at": 185.421,
+   "gain_db": -3.0,
+   "note": "9 contracts"
+  },
+  {
+   "time": 189.0,
+   "name": "number_slam",
+   "source": "slam",
+   "file": "sfx/slam.wav",
+   "sync": "onset",
+   "starts_at": 188.421,
+   "gain_db": -3.0,
+   "note": "15 scenarios"
+  },
+  {
+   "time": 192.5,
+   "name": "number_slam",
+   "source": "slam",
+   "file": "sfx/slam.wav",
+   "sync": "onset",
+   "starts_at": 191.921,
+   "gain_db": -3.0,
+   "note": "tests"
+  },
+  {
+   "time": 197.0,
+   "name": "number_slam",
+   "source": "slam",
+   "file": "sfx/slam.wav",
+   "sync": "onset",
+   "starts_at": 196.421,
+   "gain_db": -3.0,
+   "note": "0 ways to send money out"
+  },
+  {
+   "time": 202.0,
+   "name": "card_cut",
+   "source": "card_cut",
+   "file": "sfx/card_cut.wav",
+   "sync": "peak",
+   "starts_at": 201.6792,
+   "gain_db": -10.0,
+   "note": "who it is for"
+  },
+  {
+   "time": 202.5,
+   "name": "ask_tick",
+   "source": "ui_tick",
+   "file": "sfx/ui_tick.wav",
+   "sync": "onset",
+   "starts_at": 202.498,
+   "gain_db": -16.0,
+   "note": "for"
+  },
+  {
+   "time": 204.5,
+   "name": "ask_tick",
+   "source": "ui_tick",
+   "file": "sfx/ui_tick.wav",
+   "sync": "onset",
+   "starts_at": 204.498,
+   "gain_db": -16.0,
+   "note": "live"
+  },
+  {
+   "time": 206.5,
+   "name": "ask_tick",
+   "source": "ui_tick",
+   "file": "sfx/ui_tick.wav",
+   "sync": "onset",
+   "starts_at": 206.498,
+   "gain_db": -16.0,
+   "note": "team"
+  },
+  {
+   "time": 208.5,
+   "name": "ask_tick",
+   "source": "ui_tick",
+   "file": "sfx/ui_tick.wav",
+   "sync": "onset",
+   "starts_at": 208.498,
+   "gain_db": -16.0,
+   "note": "looking for"
+  },
+  {
+   "time": 216.0,
+   "name": "logo_sting",
+   "source": "logo_sting",
+   "file": "sfx/logo_sting.wav",
+   "sync": "peak",
+   "starts_at": 215.6068,
+   "gain_db": -5.0,
+   "note": "logo returns"
+  },
+  {
+   "time": 221.0,
+   "name": "cta_tick",
+   "source": "ui_tick",
+   "file": "sfx/ui_tick.wav",
+   "sync": "onset",
+   "starts_at": 220.998,
+   "gain_db": -16.0,
+   "note": "CTA URL"
+  },
+  {
+   "time": 225.0,
+   "name": "team_tick",
+   "source": "ui_tick",
+   "file": "sfx/ui_tick.wav",
+   "sync": "onset",
+   "starts_at": 224.998,
+   "gain_db": -16.0,
+   "note": "team card"
+  }
+ ]
+}

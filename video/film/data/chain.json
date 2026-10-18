@@ -1,0 +1,191 @@
+{
+  "network": "Base Sepolia",
+  "chainId": 84532,
+  "rpc": "https://base-sepolia-rpc.publicnode.com",
+  "cards": [
+    {
+      "scenario": "E4a",
+      "hash": "0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6",
+      "hashShort": "0xdac68e93\u20265cc3d6",
+      "block": 48158282,
+      "timestamp": 1792084852,
+      "status": "Fail",
+      "statusCode": 0,
+      "gasUsed": 71217,
+      "from": "0xf325f85cf0c982c3f5b40f4aa127c03ebe2c7389",
+      "to": "0x786863e82d233eb60555dfeefee06068d8ecb318",
+      "error": "BadSignature",
+      "evidenceError": "BadSignature",
+      "errorSelector": "0x5cd5d233",
+      "replayRevertData": "0x5cd5d233",
+      "replayMatches": true,
+      "human": "Amount edited after signing",
+      "label": "E4a: amount tampered after signing",
+      "explorer": "https://sepolia.basescan.org/tx/0xdac68e9309a186f0cb6420ec21e3556b9b3efb64c2a3c483500079df595cc3d6"
+    },
+    {
+      "scenario": "E4b",
+      "hash": "0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7",
+      "hashShort": "0x431c79c3\u2026a3c5c7",
+      "block": 48158278,
+      "timestamp": 1792084844,
+      "status": "Fail",
+      "statusCode": 0,
+      "gasUsed": 77106,
+      "from": "0xf325f85cf0c982c3f5b40f4aa127c03ebe2c7389",
+      "to": "0x786863e82d233eb60555dfeefee06068d8ecb318",
+      "error": "NonceUsed",
+      "evidenceError": "NonceUsed",
+      "errorSelector": "0x1f6d5aef",
+      "replayRevertData": "0x1f6d5aef",
+      "replayMatches": true,
+      "human": "Signed decision replayed",
+      "label": "E4b: replayed DAR",
+      "explorer": "https://sepolia.basescan.org/tx/0x431c79c39fceaabacc3eb4c635be663dbe61001d5d9a542faf7a7f069ea3c5c7"
+    },
+    {
+      "scenario": "E4d",
+      "hash": "0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba",
+      "hashShort": "0x53939b60\u202627acba",
+      "block": 48158288,
+      "timestamp": 1792084864,
+      "status": "Fail",
+      "statusCode": 0,
+      "gasUsed": 90402,
+      "from": "0xfd299800e629ab2d708ff399c79dbed06569528d",
+      "to": "0x786863e82d233eb60555dfeefee06068d8ecb318",
+      "error": "PriceOutOfBand",
+      "evidenceError": "PriceOutOfBand",
+      "errorSelector": "0xa5f44447",
+      "replayRevertData": "0xa5f44447",
+      "replayMatches": true,
+      "human": "Price moved after signing",
+      "label": "E4d: out-of-band submit",
+      "explorer": "https://sepolia.basescan.org/tx/0x53939b6089bc14ab92a6b7b32d08fc2a539d105e34199c2d86f03609e327acba"
+    },
+    {
+      "scenario": "E5",
+      "hash": "0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799",
+      "hashShort": "0x2c033ba9\u2026b24799",
+      "block": 48158296,
+      "timestamp": 1792084880,
+      "status": "Fail",
+      "statusCode": 0,
+      "gasUsed": 54024,
+      "from": "0xfd299800e629ab2d708ff399c79dbed06569528d",
+      "to": "0x786863e82d233eb60555dfeefee06068d8ecb318",
+      "error": "Frozen",
+      "evidenceError": "Frozen",
+      "errorSelector": "0xa8cab3d1",
+      "replayRevertData": "0xa8cab3d1",
+      "replayMatches": true,
+      "human": "Bank froze the agent",
+      "label": "E5: deposit while bank-frozen",
+      "explorer": "https://sepolia.basescan.org/tx/0x2c033ba9997f0abbff177ea3672cfd09e71d00977c2a893d8d0aadf208b24799"
+    }
+  ],
+  "exit": {
+    "hash": "0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66",
+    "hashShort": "0xdf111f38\u2026728a66",
+    "block": 48158300,
+    "status": "Success",
+    "label": "E5: exit-key redeem still executes",
+    "explorer": "https://sepolia.basescan.org/tx/0xdf111f382bf5716d26347c6010344355188ae8abafe9bc50d7edf451c4728a66"
+  },
+  "tradeflow": [
+    {
+      "scenario": "E6a",
+      "title": "Order funded",
+      "human": "1,000 USDC as 200 / 400 / 400",
+      "hash": "0x63a8622b38aa631533900f5cea7b92699132b1d2e1e036bff2fc8f035c1a07f1",
+      "hashShort": "0x63a8622b\u20261a07f1",
+      "block": 48205059,
+      "status": "Success",
+      "decodedError": null,
+      "label": "owner funds the order: Safe -> MultiSendCallOnly (approve + createOrder)",
+      "explorer": "https://sepolia.basescan.org/tx/0x63a8622b38aa631533900f5cea7b92699132b1d2e1e036bff2fc8f035c1a07f1"
+    },
+    {
+      "scenario": "E6b",
+      "title": "Milestone 1 released",
+      "human": "Carrier proof verified",
+      "hash": "0x86cbfd7e450b18d54448d7b28c57c20d3ddbeb7308faa5e2eba392fa67402281",
+      "hashShort": "0x86cbfd7e\u2026402281",
+      "block": 48205076,
+      "status": "Success",
+      "decodedError": null,
+      "label": "Executor submits release of milestone 1 (200 USDC)",
+      "explorer": "https://sepolia.basescan.org/tx/0x86cbfd7e450b18d54448d7b28c57c20d3ddbeb7308faa5e2eba392fa67402281"
+    },
+    {
+      "scenario": "E6c",
+      "title": "Milestone 2 held",
+      "human": "Sensor max 9.40 \u00b0C, condition 2.00 to 8.00 \u00b0C",
+      "hash": "0x71c4032f5926988e7d28ef0e6c5bacda025ffc8ee2800517db885e69408386b6",
+      "hashShort": "0x71c4032f\u20268386b6",
+      "block": 48205087,
+      "status": "Fail",
+      "decodedError": "ConditionNotMet",
+      "label": "forced release of the held milestone (script-signed)",
+      "explorer": "https://sepolia.basescan.org/tx/0x71c4032f5926988e7d28ef0e6c5bacda025ffc8ee2800517db885e69408386b6"
+    },
+    {
+      "scenario": "E6d",
+      "title": "Milestone 2 waived",
+      "human": "Owner waived after a survey",
+      "hash": "0xb7a2a4178f7cbb6cb865244e6bc4a2832f94cbc8d926b848834ff432ef2a6160",
+      "hashShort": "0xb7a2a417\u20262a6160",
+      "block": 48205089,
+      "status": "Success",
+      "decodedError": null,
+      "label": "owner waives milestone 2 (Safe -> TradeEscrow.waive)",
+      "explorer": "https://sepolia.basescan.org/tx/0xb7a2a4178f7cbb6cb865244e6bc4a2832f94cbc8d926b848834ff432ef2a6160"
+    },
+    {
+      "scenario": "E6e",
+      "title": "Milestone 3 released",
+      "human": "Surveyor proof verified, order completed",
+      "hash": "0xf4a27910945cd6e6044bcd7973ee41e066c98762df15218802b70a60f1be1493",
+      "hashShort": "0xf4a27910\u2026be1493",
+      "block": 48205115,
+      "status": "Success",
+      "decodedError": null,
+      "label": "Executor submits release of milestone 3 (400 USDC)",
+      "explorer": "https://sepolia.basescan.org/tx/0xf4a27910945cd6e6044bcd7973ee41e066c98762df15218802b70a60f1be1493"
+    }
+  ],
+  "film": {
+    "r2Executed": {
+      "hash": "0x6e3c317235592eaf320fa390f81920d386688ada61bdfdc25f5e7db168ceab16",
+      "hashShort": "0x6e3c3172\u2026ceab16",
+      "block": 48273765,
+      "status": "Success",
+      "label": "Deposit 1,000 USDC into Vault B (tier 2)",
+      "explorer": "https://sepolia.basescan.org/tx/0x6e3c317235592eaf320fa390f81920d386688ada61bdfdc25f5e7db168ceab16"
+    },
+    "t3Executed": {
+      "hash": "0xf0b198f4a5b86459ed021dffcaab2acbc810bb513be85cb1908aed9238b03c40",
+      "hashShort": "0xf0b198f4\u2026b03c40",
+      "block": 48273666,
+      "status": "Success",
+      "label": "Deposit 1,000 USDC into Vault A (tier 3, owner signed)",
+      "explorer": "https://sepolia.basescan.org/tx/0xf0b198f4a5b86459ed021dffcaab2acbc810bb513be85cb1908aed9238b03c40"
+    },
+    "bankFreeze": {
+      "hash": "0x7d498afeee82bca1caebf8164397dc3975d2cca8a9775620e57f788f5d110fac",
+      "hashShort": "0x7d498afe\u2026110fac",
+      "block": 48274033,
+      "status": "Success",
+      "label": "Bank freezes the agent",
+      "explorer": "https://sepolia.basescan.org/tx/0x7d498afeee82bca1caebf8164397dc3975d2cca8a9775620e57f788f5d110fac"
+    },
+    "exitWhileFrozen": {
+      "hash": "0x7ce18a61c0c007f34fd0a0ff92f8c7f923d4d26d6a2dc496f7dd4175651bc59e",
+      "hashShort": "0x7ce18a61\u20261bc59e",
+      "block": 48275990,
+      "status": "Success",
+      "label": "Redeem 4,000.00 USDC from Vault B while frozen",
+      "explorer": "https://sepolia.basescan.org/tx/0x7ce18a61c0c007f34fd0a0ff92f8c7f923d4d26d6a2dc496f7dd4175651bc59e"
+    }
+  }
+}

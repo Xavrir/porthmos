@@ -1,0 +1,207 @@
+{
+  "resolution": "1920x1080",
+  "fps": 30,
+  "codec": "H.264 CRF 16 yuv420p",
+  "clips": {
+    "R1": {
+      "file": "R1.mp4",
+      "take": "takes/R1C-2026-10-18T05-47-16-084Z/R1C.mp4",
+      "duration": 87.43,
+      "fps": 30,
+      "marks": {
+        "signupVisible": 0.29,
+        "setupStart": 3.26,
+        "safeTx": 4.82,
+        "moduleEnabled": 8.94,
+        "setupCallsStart": 9.79,
+        "policyWritten": 61.57,
+        "activated": 70.21,
+        "recoveryDownloaded": 75.2,
+        "openTreasury": 78.68,
+        "dashboardVisible": 78.8,
+        "balanceSettled": 80.23,
+        "siweSign": 65.57
+      },
+      "notes": "Continues the interrupted sign-up: remaining setup calls, bank limit, SIWE activation, recovery file, dashboard. No new wallet picker (the wallet reconnects)."
+    },
+    "R1-intro": {
+      "file": "R1-intro.mp4",
+      "take": "takes/R1-intro-cut/R1-intro.mp4",
+      "duration": 14.8,
+      "fps": 30,
+      "marks": {
+        "signupVisible": 0.29,
+        "walletPicker": 3.16,
+        "walletConnected": 5.46,
+        "walletPlan": 7.34,
+        "setupStart": 11.89,
+        "faucetSign": 13.14
+      },
+      "notes": "First 14.8 s of the first R1 take: wallet picker, connect, plan, Create my treasury, faucet signature prompt. Cut before the faucet error."
+    },
+    "R2": {
+      "file": "R2.mp4",
+      "take": "takes/R2-2026-10-18T09-29-42-509Z/R2.mp4",
+      "duration": 45,
+      "fps": 30,
+      "marks": {
+        "typingStart": 3.26,
+        "send": 6.49,
+        "statusLine": 6.49,
+        "firstWord": 36.39,
+        "replyDone": 36.6,
+        "noConfirmCard": 36.6,
+        "resultVisible": 38.88
+      },
+      "reply": "Porthmos 17:30:19LLM\n: Written by the LLM from verified facts\n\nPorthmos has submitted a deposit of 1,000.00 USDC into Vault B at tier 2 to put your idle cash to work. The deposit is submitted but not yet confirmed.\n\nSubmitted\nInspect the decision",
+      "notes": "Exact line. Parsed as an allocation; being imperative and tier 2 it executes at once, so there is no Confirm card. Reply arrives in one piece after about 30 s of status line, then Executed 0x6e3c317235592eaf320fa390f81920d386688ada61bdfdc25f5e7db168ceab16."
+    },
+    "R2-T3-approve": {
+      "file": "R2-T3-approve.mp4",
+      "take": "takes/R2-T3-approve-2026-10-18T09-26-35-182Z/R2-T3-approve.mp4",
+      "duration": 30.57,
+      "fps": 30,
+      "marks": {
+        "approvalPanel": 0.28,
+        "approveSign": 5.27,
+        "resultVisible": 24.2
+      },
+      "notes": "Owner signs the tier 3 approval for 1,000 into Vault A; Executed 0xf0b198f4a5b86459ed021dffcaab2acbc810bb513be85cb1908aed9238b03c40."
+    },
+    "R2B": {
+      "file": "R2B.mp4",
+      "take": "takes/R2B-2026-10-18T05-53-54-706Z/R2B.mp4",
+      "duration": 49.87,
+      "fps": 30,
+      "marks": {
+        "typingStart": 3.01,
+        "send": 5.34,
+        "statusLine": 5.34,
+        "firstWord": 17.74,
+        "replyDone": 45.07,
+        "heldNoCard": 45.08
+      },
+      "reply": "Porthmos 13:54:39LLM\n: Written by the LLM from verified facts\n\nPorthmos has proposed depositing 5,000.00 USDC into Vault B, which is classed as tier 4 because it is above the bankLimit of 3,000.00 USDC and the autoCap of 1,000.00 USDC, and it is the first deposit into this vault. This needs approval from the authorizer, the owner, and the bank before it can proceed. Please review and sign the Approval in the action card, and Porthmos will re-check every condition before the final authorisation.\n\nAwaiting approval\nInspect the decision",
+      "notes": "\"Put idle cash to work.\" Proposes 5,000 into Vault B, tier 4 (owner and bank must sign). No Confirm card. Later denied."
+    },
+    "R3": {
+      "file": "R3.mp4",
+      "take": "takes/R3-2026-10-18T06-02-41-561Z/R3.mp4",
+      "duration": 29.07,
+      "fps": 30,
+      "marks": {
+        "typingStart": 3.07,
+        "send": 5.87,
+        "statusLine": 5.88,
+        "firstWord": 21.59,
+        "replyDone": 23.35
+      },
+      "reply": "Porthmos 14:03:04LLM\n: Written by the LLM from verified facts\n\nPorthmos hanya menampilkan saldo Anda dan tidak melakukan tindakan apa pun. Safe menyimpan 97,000.00 USDC, dengan Vault A 0.00 dan Vault B 3,000.00, serta cadangan wajib 500.00 USDC yang sinkron dengan batas on-chain 500.00, sehingga dana yang dapat dialokasikan adalah 99,500.00 USDC. Rencana default saat ini adalah menyimpan kelebihan dana ke Vault B.\n\nExplained\nInspect the decision"
+    },
+    "R4": {
+      "file": "R4.mp4",
+      "take": "takes/R4-2026-10-18T09-31-16-309Z/R4.mp4",
+      "duration": 22.83,
+      "fps": 30,
+      "marks": {
+        "typingStart": 3.16,
+        "send": 8.86,
+        "statusLine": 8.87,
+        "firstWord": 16.79,
+        "replyDone": 16.79
+      },
+      "reply": "Porthmos 17:31:33Rules\n: Fixed template, no LLM\n\nI cannot do that. Porthmos has no way to send funds outside the treasury: the only actions are deposits into vaults you approved and redemptions back to your Safe. Payments to third parties are made by you from the Safe directly.\n\nTransfers out are not allowed\n\nExplained\nInspect the decision",
+      "notes": "Injection refused from the fixed template (Rules badge) in about 8 s."
+    },
+    "R6-exit": {
+      "file": "R6-exit.mp4",
+      "take": "takes/R6-exit-final/R6-exit.mp4",
+      "duration": 60.73,
+      "fps": 30,
+      "marks": {
+        "typingStart": 2.98,
+        "firstWord": 27.36,
+        "proposalVisible": 27.57,
+        "executed": 35.1,
+        "dashboard": 49.87,
+        "frozenVisible": 51.19,
+        "positions": 55.49
+      },
+      "notes": "Two takes joined at 33.0 s. 0-33 s: owner types 'Exit Vault B' in Copilot while the bank freeze is on; the reply says the 4,000.00 USDC redeem from Vault B (tier 1) is submitted (no approval needed). The decision did not show 'Executed' in the 60 s the take waited, so 33 s on is a second take with no message: Audit ledger with the AegisExecuted Redeem 4,000.00 row (tx 0x7ce18a61c0c007f34fd0a0ff92f8c7f923d4d26d6a2dc496f7dd4175651bc59e, block 48275990), then Treasury with 99,000 total, Vault B 0, cash back in the Safe and deposits Frozen."
+    },
+    "R6-exit-held": {
+      "file": "R6-exit-held.mp4",
+      "take": "takes/R6-exit-2026-10-18T09-43-37-975Z/R6-exit-held.mp4",
+      "duration": 62,
+      "fps": 30,
+      "marks": {
+        "frozenStateOwner": 0.29,
+        "exit.typingStart": 16.72,
+        "exit.send": 18.11,
+        "exit.statusLine": 18.12,
+        "exit.replyDone": 54.8
+      },
+      "notes": "NOT for the film: 'Exit Vault B' while bank-frozen is held by the service ('Deposits are frozen'), so no exit executes. Evidence for the bug report."
+    },
+    "R6-freeze": {
+      "file": "R6-freeze.mp4",
+      "take": "takes/R6-2026-10-18T09-38-49-272Z/R6-freeze.mp4",
+      "duration": 30.73,
+      "fps": 30,
+      "marks": {
+        "bankDeskOwner": 0.29,
+        "seatChooser": 2.62,
+        "bankSeat": 4.64,
+        "clientDrawer": 16.93,
+        "freezeClick": 19.07,
+        "confirmFreeze": 21.37,
+        "frozen": 23.4
+      },
+      "notes": "Bank seat sign-in with the browser bank key, client drawer, Freeze, Confirm freeze, mined note with tx 0x7d498afeee82bca1caebf8164397dc3975d2cca8a9775620e57f788f5d110fac. Timestamps rebuilt from frame file times (the run stopped later at the seat switch)."
+    },
+    "R7": {
+      "file": "R7.mp4",
+      "take": "takes/R7-2026-10-18T06-05-08-654Z/R7.mp4",
+      "duration": 40.57,
+      "fps": 30,
+      "marks": {
+        "ordersList": 0.28,
+        "createOpen": 2.95,
+        "formFilled": 8.17,
+        "splitVisible": 8.8,
+        "reviewVisible": 13.17,
+        "signAndFund": 17.5,
+        "orderDetail": 20.68,
+        "milestones": 34.28
+      }
+    },
+    "R7-E6": {
+      "file": "R7-E6.mp4",
+      "take": "takes/R7-E6-2026-10-18T05-38-58-893Z/R7-E6.mp4",
+      "duration": 21.67,
+      "fps": 30,
+      "marks": {
+        "ordersList": 0.29,
+        "orderDetail": 2.8,
+        "milestones": 8.57,
+        "milestonesLower": 15.3
+      }
+    },
+    "R8": {
+      "file": "R8.mp4",
+      "takes": [
+        "takes/R8-treasury-2026-10-18T06-06-08-961Z/R8-treasury.mp4",
+        "takes/R8-risk-2026-10-18T06-06-37-845Z/R8-risk.mp4",
+        "takes/R8-audit-2026-10-18T06-07-01-587Z/R8-audit.mp4"
+      ],
+      "duration": 35.53,
+      "fps": 30,
+      "marks": {
+        "treasuryStart": 0,
+        "treasury.scrolledToLedger": 9.62,
+        "riskStart": 15.33,
+        "auditStart": 26.17
+      }
+    }
+  }
+}

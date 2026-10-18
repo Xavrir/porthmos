@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template id="sqend-template">
+      <style>
+        #sqend-root {
+          position: absolute;
+          inset: 0;
+          width: 100% !important;
+          height: 100% !important;
+          overflow: hidden;
+          background: radial-gradient(closest-side, rgba(1, 6, 4, 0.9), rgba(1, 6, 4, 0.72) 70%, rgba(1, 6, 4, 0.4));
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 26px;
+          padding: 0 8%;
+          text-align: center;
+        }
+        #sqend-mark {
+          display: block;
+          height: 210px;
+          width: auto;
+          filter: drop-shadow(0 0 40px rgba(78, 195, 151, 0.35));
+        }
+        #sqend-word {
+          font-size: 84px;
+          font-weight: 880;
+          letter-spacing: 0.06em;
+          line-height: 1;
+        }
+        #sqend-pos {
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: 44px;
+          font-weight: 800;
+          letter-spacing: -0.025em;
+          line-height: 1.15;
+          color: var(--green);
+          text-wrap: balance;
+        }
+        #sqend-url {
+          margin-top: 10px;
+          font-family: var(--mono);
+          font-size: 50px;
+          font-weight: 600;
+          color: var(--ink);
+          padding-bottom: 10px;
+          border-bottom: 3px solid var(--green);
+        }
+      </style>
+      <div id="sqend-root" data-composition-id="sqend" data-width="1080" data-height="1080" data-duration="5">
+        <img id="sqend-mark" src="assets/brand/porthmos-mark@2x.png" alt="Porthmos mark" />
+        <div id="sqend-word" class="hero">PORTHMOS</div>
+        <div id="sqend-pos">The agent wallet for cross-border trade treasuries.</div>
+        <div id="sqend-url">porthmos.vercel.app</div>
+      </div>
+      <script>
+        (function () {
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo("#sqend-root > *", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.08, ease: "power3.out" }, 0);
+          window.__timelines["sqend"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

@@ -167,6 +167,7 @@ class RpcChain(ChainClient):
         self._http = httpx.Client(timeout=15)
         self._ids = itertools.count(1)
         self._send_locks: dict[str, threading.Lock] = {}
+        self._next_nonce: dict[str, int] = {}
         self._send_guard = threading.Lock()
         self._proxy_code: bytes | None = None
         self._block_tag = "latest"
@@ -250,7 +251,10 @@ class RpcChain(ChainClient):
             except RpcError as e:
                 raise CallReverted(e.data, e.message) from None
         with self._sender_lock(acct.address):
-            nonce = int(self._rpc("eth_getTransactionCount", [acct.address, "pending"]), 16)
+            # A load-balanced RPC can answer "pending" from a node that has not seen our last send yet.
+            sender = acct.address.lower()
+            nonce = max(int(self._rpc("eth_getTransactionCount", [acct.address, "pending"]), 16),
+                        self._next_nonce.get(sender, 0))
             block = self._rpc("eth_getBlockByNumber", ["latest", False])
             base = int(block.get("baseFeePerGas", "0x0"), 16)
             try:
@@ -263,7 +267,9 @@ class RpcChain(ChainClient):
                 "maxFeePerGas": base * 2 + tip, "maxPriorityFeePerGas": tip,
             }
             signed = Account.sign_transaction(tx, key)
-            return self._rpc("eth_sendRawTransaction", ["0x" + bytes(signed.raw_transaction).hex()])
+            tx_hash = self._rpc("eth_sendRawTransaction", ["0x" + bytes(signed.raw_transaction).hex()])
+            self._next_nonce[sender] = nonce + 1
+            return tx_hash
 
     def _sender_lock(self, address: str) -> threading.Lock:
         # Two concurrent sends from one key would read the same pending nonce.

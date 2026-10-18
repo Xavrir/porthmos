@@ -124,3 +124,26 @@ def test_load_state_reads_one_block_in_two_round_trips():
     assert len(node.posts) == 2 and node.posts[0]["method"] == "eth_getBlockByNumber"
     assert isinstance(node.posts[1], list)
     assert {c["params"][1] for c in node.calls()} == {hex(HEAD)}
+
+
+def test_back_to_back_sends_do_not_reuse_a_stale_pending_nonce():
+    sent = []
+
+    def node(request: httpx.Request) -> httpx.Response:
+        req = json.loads(request.content)
+        result = {"eth_getTransactionCount": "0x5", "eth_maxPriorityFeePerGas": "0x1",
+                  "eth_getBlockByNumber": {"number": hex(HEAD), "baseFeePerGas": "0x1"}}.get(req["method"])
+        if req["method"] == "eth_sendRawTransaction":
+            sent.append(req["params"][0])
+            result = "0x" + f"{len(sent):064x}"
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": req["id"], "result": result})
+
+    chain = RpcChain(load_settings(chain_mode="rpc", chain_id=84532))
+    chain._http = httpx.Client(transport=httpx.MockTransport(node))
+    key = "0x" + "42" * 32
+    chain.send_value(key, ADDR, 1)
+    chain.send_value(key, "0x" + "22" * 20, 1)
+    import rlp
+
+    nonces = [int.from_bytes(rlp.decode(bytes.fromhex(raw[4:]))[1] or b"\0", "big") for raw in sent]
+    assert nonces == [5, 6]

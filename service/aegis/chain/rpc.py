@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import itertools
 import os
 import re
@@ -22,6 +23,12 @@ from aegis.tradeflow.typed import MilestoneTerms, Order
 
 LOG_WINDOW = int(os.environ.get("LOG_WINDOW", "5000"))
 RPC_BATCH_SIZE = int(os.environ.get("RPC_BATCH_SIZE", "50"))
+# After an endpoint rejects a batch, calls go one by one for this long before batches are tried again.
+BATCH_RETRY_AFTER = 300.0
+_RATE_LIMIT_CODES = {-32005, -32029, 429}
+# Logs this many blocks below the head are kept for later scans; newer ones are read again every time, so a short
+# reorg cannot leave a stale log in the cache.
+LOG_CACHE_MARGIN = 64
 BEHIND_RETRIES = 3
 # Long enough for a lagging node to see our last send, short enough that a dropped transaction does not leave a
 # nonce gap that blocks every later send.
@@ -73,6 +80,14 @@ def node_behind(e: Exception) -> bool:
 def reported_head(e: RpcError) -> int | None:
     m = _HEAD_RE.search(e.message)
     return int(m.group(1)) if m else None
+
+
+def _rate_limited(payload: dict) -> bool:
+    err = payload.get("error")
+    if not isinstance(err, dict):
+        return False
+    msg = str(err.get("message", "")).lower()
+    return err.get("code") in _RATE_LIMIT_CODES or "rate limit" in msg or "too many requests" in msg
 
 
 def _result(payload: dict):
@@ -169,6 +184,16 @@ class _Rounds:
                 self._cond.notify_all()
 
 
+class _LogCache:
+    """Raw logs of one filter from block `first` up to block `to`."""
+
+    def __init__(self, first: int):
+        self.first = first
+        self.to = first - 1
+        self.logs: list[dict] = []
+        self.lock = threading.Lock()
+
+
 class RpcChain(ChainClient):
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -191,12 +216,14 @@ class RpcChain(ChainClient):
         self._send_guard = threading.Lock()
         self._proxy_code: bytes | None = None
         self._block_tag = "latest"
-        self._caps = {"batch": True}
+        self._caps = {"batch_off_until": 0.0}
+        self._log_caches: dict[str, _LogCache] = {}
 
     def _post(self, body):
-        for attempt in range(5):
+        # At most 3.5 s of backoff: a chat turn waits on these reads, and background loops retry on their next tick.
+        for attempt in range(4):
             resp = self._http.post(self.url, json=body)
-            if resp.status_code != 429:
+            if resp.status_code != 429 or attempt == 3:
                 break
             time.sleep(0.5 * 2**attempt)
         resp.raise_for_status()
@@ -205,6 +232,7 @@ class RpcChain(ChainClient):
     def _rpc(self, method: str, params: list):
         if method == "evm_revert":
             self._next_nonce.clear()
+            self._log_caches.clear()
         body = {"jsonrpc": "2.0", "id": next(self._ids), "method": method, "params": params}
         rounds = getattr(_local, "rounds", None)
         if rounds is not None:
@@ -214,28 +242,40 @@ class RpcChain(ChainClient):
     def _send_round(self, batch: list[_Pending]) -> None:
         for i in range(0, len(batch), RPC_BATCH_SIZE):
             chunk = batch[i:i + RPC_BATCH_SIZE]
-            replies = self._post_batch([p.body for p in chunk]) if len(chunk) > 1 and self._caps["batch"] else None
+            batching = len(chunk) > 1 and time.monotonic() >= self._caps["batch_off_until"]
+            replies = (self._post_batch([p.body for p in chunk]) if batching else None) or {}
             for p in chunk:
                 try:
-                    p.result = _result(replies[p.body["id"]] if replies is not None else self._post(p.body))
+                    reply = replies.get(p.body["id"])
+                    p.result = _result(reply if reply is not None else self._post(p.body))
                 except Exception as e:
                     p.error = e
 
     def _post_batch(self, bodies: list[dict]) -> dict | None:
-        """Replies by id, or None when the endpoint does not take batches; the calls then go one by one."""
+        """Replies by id; a call the reply leaves out goes alone. None when the endpoint rejected the batch itself:
+        the calls then go one by one for BATCH_RETRY_AFTER seconds.
+
+        A rate limit or a server error raises instead. It says nothing about batch support, and turning batching
+        off for it would multiply the requests that caused it (one batch of 40 reads becomes 40 posts)."""
         try:
             payload = self._post(bodies)
         except httpx.HTTPStatusError as e:
-            if e.response.status_code >= 500:
+            if e.response.status_code >= 500 or e.response.status_code == 429:
                 raise
             payload = None
         except ValueError:
             payload = None
-        replies = {r.get("id"): r for r in payload if isinstance(r, dict)} if isinstance(payload, list) else {}
-        if any(b["id"] not in replies for b in bodies):
-            self._caps["batch"] = False
-            return None
-        return replies
+        if isinstance(payload, list):
+            payload = [r for r in payload if isinstance(r, dict)]
+            replies = {r["id"]: r for r in payload if r.get("id") is not None}
+            limited = next((r for r in payload if _rate_limited(r)), None)
+            if limited is not None and not any(b["id"] in replies for b in bodies):
+                _result(limited)
+            return replies
+        if isinstance(payload, dict) and _rate_limited(payload):
+            _result(payload)
+        self._caps["batch_off_until"] = time.monotonic() + BATCH_RETRY_AFTER
+        return None
 
     def gather(self, fns: list) -> list:
         rounds = getattr(_local, "rounds", None)
@@ -555,12 +595,13 @@ class RpcChain(ChainClient):
             "0x" + self.registry.topic("PolicyChanged").hex(),
             "0x" + self.registry.topic("Quarantined").hex(),
         ]
-        topics: list = [topics0]
-        if safe:
-            topics.append(_addr_topic(safe))
         flt = {"address": [to_checksum_address(self.addr.module), to_checksum_address(self.addr.registry)],
-               "topics": topics}
-        logs = self._logs(flt, max(from_block, self.addr.deploy_block), self.block_number(), exact=False)
+               "topics": [topics0]}
+        # One scan serves every Safe (the bank view reads all its clients), so the safe filter is applied here.
+        logs = self._cached_logs("aegis", flt, self.addr.deploy_block, max(from_block, self.addr.deploy_block),
+                                 self.block_number(), exact=False)
+        if safe:
+            logs = [log for log in logs if len(log["topics"]) > 1 and log["topics"][1].lower() == _addr_topic(safe)]
         out = []
         for log in logs:
             t0 = log["topics"][0]
@@ -664,17 +705,47 @@ class RpcChain(ChainClient):
     def escrow_events(self, from_block: int, to_block: int) -> list[dict]:
         topics0 = ["0x" + self.escrow.topic(e).hex() for e in ("OrderCreated", "MilestoneReleased", "OrderRefunded")]
         flt = {"address": to_checksum_address(self._escrow_address()), "topics": [topics0]}
-        logs = self._logs(flt, max(from_block, self.addr.trade_escrow_block), to_block, exact=True)
+        first = self.addr.trade_escrow_block
+        logs = self._cached_logs("escrow", flt, first, max(from_block, first), to_block, exact=True)
         return [self._decode_escrow(log) for log in logs]
 
+    def _cached_logs(self, name: str, flt: dict, first: int, start: int, head: int, exact: bool) -> list[dict]:
+        """_logs through a cache of this filter's logs from block `first`, so a scan from the deployment block reads
+        only the blocks no earlier scan covered. A range starting past the cached blocks is read directly."""
+        cache = self._log_caches.setdefault(name, _LogCache(first))
+        with cache.lock:
+            to, cached = cache.to, cache.logs
+        if start < first or start > to + 1:
+            return self._logs(flt, start, head, exact)
+        fresh, scanned = self._scan(flt, to + 1, head, exact)
+        settled = scanned - LOG_CACHE_MARGIN
+        if settled > to:
+            keep = [log for log in fresh if int(log["blockNumber"], 16) <= settled]
+            with cache.lock:
+                if cache.to == to:
+                    cache.logs, cache.to = cached + keep, settled
+        return [log for log in cached + fresh if start <= int(log["blockNumber"], 16) <= head]
+
     def _logs(self, flt: dict, start: int, head: int, exact: bool) -> list[dict]:
-        """eth_getLogs over [start, head] in LOG_WINDOW chunks (public RPCs cap the range).
+        return self._scan(flt, start, head, exact)[0]
+
+    def _scan(self, flt: dict, start: int, head: int, exact: bool) -> tuple[list[dict], int]:
+        """eth_getLogs over [start, head] in LOG_WINDOW chunks (public RPCs cap the range); returns the logs and the
+        last block covered.
 
         The head usually comes from another node behind the load balancer than the one answering the logs, which
         then refuses a range past its own head. exact=False stops at the head that node reports (a snapshot read);
         exact=True waits for it to catch up, because the caller stores `head` as its scan cursor and a shorter
         range would skip blocks."""
         logs: list[dict] = []
+        # Windows ending far below the head cannot reach past a lagging node's head, so they go out as one batch.
+        settled = []
+        while start + LOG_WINDOW - 1 <= head - LOG_CACHE_MARGIN:
+            settled.append({**flt, "fromBlock": hex(start), "toBlock": hex(start + LOG_WINDOW - 1)})
+            start += LOG_WINDOW
+        if settled:
+            for part in self.gather([functools.partial(self._rpc, "eth_getLogs", [w]) for w in settled]):
+                logs.extend(part)
         attempt = 0
         while start <= head:
             end = min(head, start + LOG_WINDOW - 1)
@@ -693,7 +764,7 @@ class RpcChain(ChainClient):
                 attempt += 1
                 continue
             start = end + 1
-        return logs
+        return logs, head
 
     def wait_receipt(self, tx_hash: str, timeout: float = 30.0) -> Receipt | None:
         deadline = time.time() + timeout

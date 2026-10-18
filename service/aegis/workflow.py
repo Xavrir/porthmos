@@ -586,7 +586,7 @@ class Workflow:
                                              json.dumps(data, sort_keys=True, default=str))
         if reason == "AwaitingObligationConfirmation":
             rec["data"]["obligationDraft"] = _obligation_draft(intent)
-        refusal = (intent.kind == I.TRANSFER_OUT or bool(intent.refused)
+        refusal = (intent.kind == I.TRANSFER_OUT or intent.refused == "SuspiciousRequest"
                    or bool(I.SUSPICIOUS_FLAGS & set(rec["data"].get("flags", []))))
         if intent.kind == I.TRANSFER_OUT or "crossClient" in rec["data"].get("flags", []):
             facts["securityNote"] = "transfer or cross-client request refused"

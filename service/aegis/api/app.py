@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import hmac
 import json
 import logging
@@ -418,11 +419,19 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
     @app.get("/api/bank/clients")
     def bank_clients(sess: Session = Depends(bank_dep)):
         clients = []
-        escrow_events = rt.chain.escrow_events(0, rt.chain.block_number()) if rt.tradeflow is not None else []
-        for safe in bank_safes(sess):
-            snap = snap_for(safe)
+        safes = bank_safes(sess)
+
+        def escrow_scan() -> list[dict]:
+            return rt.chain.escrow_events(0, rt.chain.block_number()) if rt.tradeflow is not None else []
+
+        # Every client's snapshot and both event scans share batched round trips instead of running one by one.
+        escrow_events, events, *snaps = rt.chain.gather(
+            [escrow_scan, rt.chain.events, *(functools.partial(snap_for, safe) for safe in safes)])
+        summaries = rt.chain.gather([functools.partial(rt.tradeflow.bank_summary, safe, escrow_events)
+                                     for safe in safes]) if rt.tradeflow is not None else [None] * len(safes)
+        for safe, snap, tf in zip(safes, snaps, summaries):
             p = snap.state.policy
-            rec = reconcile(s.ledger, rt.chain.events(safe), safe)
+            rec = reconcile(s.ledger, [e for e in events if e.get("safe", "").lower() == safe.lower()], safe)
             awaiting = rt.workflow.store.by_state("AWAITING_APPROVAL", safe)
             clients.append({
                 "safe": safe, "owner": p.owner, "riskScore": round(max((v.score for v in snap.risk.vaults),
@@ -440,8 +449,7 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
                 "limits": {"autoCap": amount(p.auto_cap), "dailyCap": amount(p.daily_cap),
                            "bankLimit": amount(p.bank_limit)},
             })
-            if rt.tradeflow is not None:
-                tf = rt.tradeflow.bank_summary(safe, escrow_events)
+            if tf is not None:
                 clients[-1]["tradeflow"] = tf
                 clients[-1]["mismatches"] += tf["reconciliation"]["mismatches"]
         return {"clients": clients}

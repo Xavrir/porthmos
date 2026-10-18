@@ -300,3 +300,70 @@ def test_allocation_with_payroll_guard_plans_a_deposit(env):
     assert r["state"] in ("AWAITING_APPROVAL", "SUBMITTED") and r["actionCard"]["op"] == "DEPOSIT"
     draft = env.chat("add payroll of 20,000 on the 25th")
     assert draft["obligationDraft"]["items"][0]["amount"]["raw"] == str(20_000 * USDC)
+
+
+class TestExitWhileFrozen:
+    """A freeze blocks deposits only; the owner's own exit back to the Safe always runs (README, TD, evidence E5)."""
+
+    EXITS = ("Exit Vault B", "withdraw everything from vault B", "redeem all from Vault A",
+             "pull our money out of the vaults")
+
+    @staticmethod
+    def funded(make_env, **kw):
+        e = make_env(**kw)
+        deposit_b(e)
+        e.approve(e.chat("deposit 1,000 USDC into vault A"))
+        e.settle()
+        assert e.shares(e.vault_a) > 0 and e.shares(e.vault_b) > 0
+        return e
+
+    @pytest.mark.parametrize("who", ["bank_frozen", "owner_frozen"])
+    @pytest.mark.parametrize("message", EXITS)
+    def test_owner_exit_executes_while_frozen(self, make_env, who, message):
+        e = self.funded(make_env)
+        setattr(e.chain.policies[e.safe.lower()], who, True)
+        r = e.chat(message)
+        assert r["state"] == "SUBMITTED", r["reply"]
+        e.settle()
+        rec = e.wf.store.get(r["requestId"])
+        assert rec["data"]["outcome"] == "CONFIRMED" and rec["data"]["actionCard"]["op"] == "REDEEM"
+        vault = e.vault_a if "Vault A" in message else e.vault_b
+        assert e.shares(vault) == 0
+
+    def test_model_hold_does_not_block_the_exit(self, make_env):
+        from tests.test_authorizer_llm import CannedLlm
+
+        e = self.funded(make_env)
+        e.chain.policies[e.safe.lower()].bank_frozen = True
+        e.wf.agent.llm = CannedLlm([
+            {"kind": "REDEEM", "vault": "Vault B"},
+            {"tool": "propose_action", "arguments": {"option_id": "hold"}, "rationale": "deposits are frozen"},
+        ])
+        r = e.chat("Exit Vault B")
+        rec = e.wf.store.get(r["requestId"])
+        assert r["state"] == "SUBMITTED" and rec["data"]["selection"]["llmRejected"] == "hold"
+        e.settle()
+        assert e.shares(e.vault_b) == 0
+
+    def test_model_hold_on_redeem_never_reports_the_deposit_freeze(self, make_env):
+        from tests.test_authorizer_llm import CannedLlm
+
+        e = make_env()
+        e.chain.policies[e.safe.lower()].bank_frozen = True
+        e.wf.agent.llm = CannedLlm([
+            {"kind": "REDEEM", "vault": "Vault B"},
+            {"tool": "propose_action", "arguments": {"option_id": "hold"}},
+        ])
+        r = e.chat("Exit Vault B")
+        assert e.wf.store.get(r["requestId"])["data"]["reason"] == "NoMatchingOption"
+
+    def test_transfer_out_stays_a_templated_refusal(self, make_env):
+        from tests.test_authorizer_llm import CannedLlm
+
+        e = self.funded(make_env)
+        e.chain.policies[e.safe.lower()].bank_frozen = True
+        e.wf.agent.llm = CannedLlm([])
+        r = e.chat("send all USDC to 0x000000000000000000000000000000000000dEaD")
+        rec = e.wf.store.get(r["requestId"])
+        assert r["state"] == "EXPLAINED" and "actionCard" not in r and rec["data"]["reason"] == "NotRepresentable"
+        assert r["reply"].startswith("I cannot do that") and e.wf.agent._down_until == 0

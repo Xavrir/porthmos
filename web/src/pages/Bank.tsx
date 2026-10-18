@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { onTick, reducedMotion } from '../components/Count'
 import { easeEnter } from '../lib/motion'
@@ -16,6 +16,7 @@ import { useAegis } from '../lib/source'
 import { useIdentity } from '../lib/identity'
 import { useBankClients, usePendingApprovals, useReconciliation } from '../lib/queries'
 import { stamp } from '../lib/format'
+import { expectFreeze, freezeSettled, withExpectedFreeze, type ExpectedFreeze } from '../lib/policy'
 import { toast } from '../lib/toast'
 import type { BankAction } from '../lib/api/contract'
 import type { BankClient } from '../lib/types'
@@ -28,13 +29,21 @@ export default function Bank() {
   const { mode, tenant } = useAegis()
   const { role, identity, signedIn, session, sessionError, bankAction, isLocal } = useIdentity()
   const qc = useQueryClient()
-  const clients = useBankClients()
+  const [expected, setExpected] = useState<ExpectedFreeze | null>(null)
+  const clients = useBankClients(expected ? 3000 : false)
   const pending = usePendingApprovals()
   const [openSafe, openClient, closeClient] = useHashParam('client')
   const [confirming, setConfirming] = useState<{ action: BankAction; safe: Address } | null>(null)
   const [lastTx, setLastTx] = useState<string | null>(null)
-  const [done, setDone] = useState<{ action: BankAction; name: string } | null>(null)
-  const sel = (clients.data ?? []).find((c) => c.safe.toLowerCase() === openSafe?.toLowerCase()) ?? null
+  const [done, setDone] = useState<{ action: BankAction; name: string; safe: Address } | null>(null)
+  const list = withExpectedFreeze(clients.data ?? [], expected, Date.now())
+  useEffect(() => {
+    if (!expected) return
+    if (freezeSettled(clients.data, expected, Date.now())) { setExpected(null); return }
+    const t = setTimeout(() => setExpected(null), expected.until - Date.now())
+    return () => clearTimeout(t)
+  }, [clients.data, expected])
+  const sel = list.find((c) => c.safe.toLowerCase() === openSafe?.toLowerCase()) ?? null
   const [lastSafe, setLastSafe] = useState<Address | null>(null)
   if (sel && sel.safe !== lastSafe) setLastSafe(sel.safe)
   const recon = useReconciliation(role === 'bank' ? lastSafe ?? clients.data?.[0]?.safe ?? null : null)
@@ -47,14 +56,13 @@ export default function Bank() {
       setLastTx(h ?? null)
       if (h) toast({ tone: 'ok', title: `${ACTION_LABEL[v.action]} sent`, text: list.find((c) => c.safe === v.safe)?.name }, 5000)
       const name = list.find((c) => c.safe === v.safe)?.name ?? 'the client'
-      setDone({ action: v.action, name })
+      setDone({ action: v.action, name, safe: v.safe })
       if (!h) toast({ tone: 'info', title: `${ACTION_LABEL[v.action]}: ${name}`, text: mode === 'replay' ? 'Recorded in the replay. No transaction was sent.' : undefined })
       qc.invalidateQueries({ queryKey: ['bank-clients'] })
       qc.invalidateQueries({ queryKey: ['treasury'] })
     },
   })
 
-  const list = clients.data ?? []
   const frozen = list.filter((c) => c.frozen.bank || c.frozen.owner).length
   const escalations = role === 'bank' ? pending.data ?? [] : []
   const mismatches = list.reduce((a, c) => a + c.mismatches, 0)
@@ -65,7 +73,7 @@ export default function Bank() {
     <div className="ok-note">
       <p>
         {done.action === 'bankFreeze' ? `${done.name}: deposits frozen by the bank. Any deposit now reverts Frozen; exits still run.` : done.action === 'bankUnfreeze' ? `${done.name}: the bank lifted its freeze. Deposits can run again.` : `${done.name}: authorizer revoked and deposits frozen. No new decision record can be signed.`}
-        {lastTx ? <> Sent: {mode === 'live' ? <TxStatus hash={lastTx as Hex} label="bank transaction" onMined={() => { qc.invalidateQueries({ queryKey: ['bank-clients'] }); qc.invalidateQueries({ queryKey: ['treasury'] }) }} /> : <Hash value={lastTx} />}</> : mode === 'replay' ? ' Recorded in the replay; no transaction was sent.' : ''}
+        {lastTx ? <> Sent: {mode === 'live' ? <TxStatus hash={lastTx as Hex} label="bank transaction" onMined={(ok) => { if (ok) setExpected(expectFreeze(done.action, done.safe, Date.now())); qc.invalidateQueries({ queryKey: ['bank-clients'] }); qc.invalidateQueries({ queryKey: ['treasury'] }) }} /> : <Hash value={lastTx} />}</> : mode === 'replay' ? ' Recorded in the replay; no transaction was sent.' : ''}
       </p>
       {mode === 'live' && tenant && done.action !== 'bankUnfreeze' ? (
         <p className="seat-note"><span>To see the effect, ask the agent for a deposit from the owner seat: it is refused. Exits still run.</span> <SwitchSeat to="owner" then="/risk" className="button small quiet">Switch to owner and try to break it</SwitchSeat></p>

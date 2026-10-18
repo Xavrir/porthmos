@@ -49,10 +49,10 @@ export function useChainEvents(safe?: Address) {
   return useQuery({ queryKey: ['events', mode, safe ?? 'own'], queryFn: () => api.events(safe), enabled: ready })
 }
 
-export function useBankClients() {
+export function useBankClients(pollMs: number | false = false) {
   const { api, mode, ready, sessionEpoch } = useBase()
   const { role, sessionReady } = useIdentity()
-  return useQuery({ queryKey: ['bank-clients', mode, sessionEpoch], queryFn: () => api.bankClients(), enabled: ready && role === 'bank' && sessionReady, retry: false })
+  return useQuery({ queryKey: ['bank-clients', mode, sessionEpoch], queryFn: () => api.bankClients(), enabled: ready && role === 'bank' && sessionReady, retry: false, refetchInterval: pollMs })
 }
 
 export function useRequest(id: string | null) {

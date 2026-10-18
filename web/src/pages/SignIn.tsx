@@ -48,7 +48,7 @@ export default function SignIn() {
   usePageTitle('Log in')
   const navigate = useNavigate()
   const from = (useLocation().state as { from?: unknown } | null)?.from
-  const { phase, mode, service, onboard, wallet, setWallet, tenant, refresh, chainId, deployment, walletRoles, rolesFor, accountSource, chooseAccount } = useAegis()
+  const { phase, mode, service, onboard, wallet, setWallet, tenant, refresh, chainId, deployment, walletRoles, rolesFor, rolesFailed, accountSource, chooseAccount } = useAegis()
   const { identity, seat: currentSeat, chooseSeat, chooseDemo, demoAvailable, signedIn, session, sessionError, signIn, signInLocal, localAddress, lost, clearLost } = useIdentity()
   const conn = useConnection()
   const picker = useWalletPicker()
@@ -205,6 +205,11 @@ export default function SignIn() {
           <p className="auth-note">Checking your account on {net(target)}…</p>
         ) : mode !== 'live' && !held.length ? (
           <p className="auth-note">No live Porthmos service answers here, so this wallet cannot sign in. View the demo instead.</p>
+        ) : !held.length && rolesFailed ? (
+          <>
+            <p className="auth-note">Porthmos could not check this wallet's account just now. Nothing is wrong with the wallet.</p>
+            <button type="button" id="signin-roles-retry" className="pill pill-outline" onClick={() => refresh()}>Check again</button>
+          </>
         ) : !held.length ? (
           walletRoles?.pendingOwner ? (
             <p className="auth-note">This wallet started creating an account, but setup is not finished. <Link to="/signup">Finish creating your account</Link>.</p>

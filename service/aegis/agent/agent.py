@@ -226,7 +226,8 @@ class Agent:
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": json.dumps({
                 "task": "Choose one plan option for the owner's request by calling propose_action. "
-                        "Prefer the default; pick hold if nothing fits.",
+                        "Prefer the default; pick hold if nothing fits. A freeze blocks deposits only: a "
+                        "redemption back to the treasury Safe is always allowed.",
                 "tools": [t["function"] for t in TOOL_SCHEMAS if t["function"]["name"] == "propose_action"],
                 "reply_schema": {"tool": "propose_action",
                                  "arguments": {"option_id": "string", "reductions": {"amount": "raw units or omit"}},
@@ -243,12 +244,18 @@ class Agent:
         if not isinstance(option_id, str) or plan.option(option_id) is None:
             return rule
         reductions = args.get("reductions") if isinstance(args.get("reductions"), dict) else None
+        if option_id == HOLD_ID and intent.kind == I.REDEEM and rule["optionId"] != HOLD_ID:
+            # A redemption only returns funds to the Safe and no freeze or deposit hold applies to it, so holding
+            # the owner's own exit protects nothing.
+            return {**rule, "rationale": f"{rule['rationale']}; model hold ignored: a redemption back to the Safe "
+                                         "is not blocked by a deposit hold", "llmRejected": option_id}
         if not _within_request(intent, plan.option(option_id), reductions):
             return {**rule, "rationale": f"{rule['rationale']}; model choice {option_id} ignored: outside the "
                                          "owner's stated request", "llmRejected": option_id}
         return {"optionId": option_id, "reductions": reductions or None,
                 "rationale": str(data.get("rationale", ""))[:500], "holdReason": None if option_id != HOLD_ID
-                else (plan.hold_reason or "NoMatchingOption"), "source": "llm"}
+                else (rule["holdReason"] if intent.kind != I.ALLOCATE and rule["holdReason"]
+                      else plan.hold_reason or "NoMatchingOption"), "source": "llm"}
 
     def _select_rule(self, intent: I.Intent, plan: Plan) -> dict:
         def hold(reason: str) -> dict:

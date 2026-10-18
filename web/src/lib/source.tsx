@@ -59,6 +59,7 @@ type ApiContextValue = {
   forgetReplay: () => void
   walletRoles: AuthRoles | null
   rolesFor: Address | null
+  rolesFailed: boolean
   accountSource: AccountSource
   chooseAccount: (source: AccountSource) => void
 }
@@ -168,6 +169,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
   const probedAddr = useRef<Address | null>(null)
   const [walletRoles, setWalletRoles] = useState<AuthRoles | null>(null)
   const [rolesFor, setRolesFor] = useState<Address | null>(null)
+  const [rolesFailed, setRolesFailed] = useState(false)
 
   const probe = useCallback(async (prefer: Mode | null, base: string = apiBase) => {
     const my = ++seq.current
@@ -205,10 +207,12 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     // The connected wallet wins when it was chosen at sign-in, or when no keys file in this browser names an owner.
     const viaWallet = !!cfg && !!addr && (accountRef.current === 'wallet' || !w || w.chainId !== cfg.chainId || fileOwner === addr.toLowerCase())
     let roles: AuthRoles | null = null
-    if (cfg && addr) roles = await client.authRoles(addr).catch(() => null)
+    // A failed lookup is not "no account": one retry, then the sign-in page says the check failed.
+    if (cfg && addr) roles = await client.authRoles(addr).catch(() => client.authRoles(addr)).catch(() => null)
     if (stale()) return
     setWalletRoles(roles)
     setRolesFor(addr)
+    setRolesFailed(!!cfg && !!addr && roles === null)
     if (cfg && w && w.chainId === cfg.chainId && !(viaWallet && fileOwner !== addr?.toLowerCase())) {
       const owner = ownerAddress(w)
       st = await client.onboardStatus(owner).catch(() => null)
@@ -343,6 +347,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     replayChosen,
     walletRoles: rolesFor && connected && rolesFor.toLowerCase() === connected.toLowerCase() ? walletRoles : null,
     rolesFor,
+    rolesFailed: rolesFailed && !!rolesFor && !!connected && rolesFor.toLowerCase() === connected.toLowerCase(),
     accountSource: accountPref ?? (wallet ? 'file' : 'wallet'),
     chooseAccount: (src) => {
       try { sessionStorage.setItem(ACCOUNT_KEY, src) } catch { /* the choice lasts for this page */ }

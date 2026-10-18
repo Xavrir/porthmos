@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { deviceStatus, forgetConfirmed, gate, homeFor, isAppPath, returnPath, type DeviceInput, type GateInput } from './auth'
+import { deviceStatus, forgetConfirmed, gate, homeFor, isAppPath, restoringSession, returnPath, type DeviceInput, type GateInput, type RestoreInput } from './auth'
 
-const base: GateInput = { phase: 'ready', mode: 'live', replayChosen: false, identity: 'none', localConfirmed: false, signedIn: false, storedSignIn: false }
+const base: GateInput = { phase: 'ready', mode: 'live', replayChosen: false, identity: 'none', localConfirmed: false, signedIn: false, storedSignIn: false, restoring: false }
 const OWNER = '0x1111111111111111111111111111111111111111'
 const SAFE = '0x2222222222222222222222222222222222222222'
 
@@ -42,6 +42,36 @@ describe('route guard', () => {
 
   it('does not let a stale replay choice open a live app without a session', () => {
     expect(gate({ ...base, mode: 'live', replayChosen: true })).toBe('signin')
+  })
+})
+
+describe('reload with a stored wallet session', () => {
+  const API = 'https://api.example'
+  const stored = { role: 'owner' as const, address: OWNER as `0x${string}`, chainId: 84532, api: API }
+  const back: RestoreInput = { stored, walletPending: false, graceOver: false, identity: 'wallet', role: 'owner', address: OWNER, chainId: 84532, api: API, taken: false }
+
+  it('waits on the render before the stored session is taken over instead of redirecting', () => {
+    const restoring = restoringSession(back)
+    expect(restoring).toBe(true)
+    expect(gate({ ...base, identity: 'wallet', storedSignIn: true, restoring })).toBe('wait')
+    expect(restoringSession({ ...back, taken: true })).toBe(false)
+    expect(gate({ ...base, identity: 'wallet', signedIn: true, storedSignIn: true, restoring: false })).toBe('allow')
+  })
+
+  it('waits while wagmi reconnects the wallet, even after a probe that ran without it, but not forever', () => {
+    const pending = { ...back, walletPending: true, identity: 'none' as const, role: null, address: null }
+    expect(restoringSession(pending)).toBe(true)
+    expect(gate({ ...base, mode: 'replay', storedSignIn: true, restoring: true })).toBe('wait')
+    expect(restoringSession({ ...pending, graceOver: true })).toBe(false)
+  })
+
+  it('signs in again when nothing stored fits the wallet that came back', () => {
+    expect(restoringSession({ ...back, stored: null })).toBe(false)
+    expect(restoringSession({ ...back, address: SAFE })).toBe(false)
+    expect(restoringSession({ ...back, role: 'bank' })).toBe(false)
+    expect(restoringSession({ ...back, chainId: 31337 })).toBe(false)
+    expect(restoringSession({ ...back, api: 'https://other.example' })).toBe(false)
+    expect(gate({ ...base, identity: 'wallet', storedSignIn: true, restoring: false })).toBe('signin')
   })
 })
 

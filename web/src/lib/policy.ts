@@ -1,4 +1,6 @@
-import type { ErrorName, OracleState, Tier, TreasuryState, VaultPosition } from './types'
+import type { Address } from 'viem'
+import type { BankAction } from './api/contract'
+import type { BankClient, ErrorName, OracleState, Tier, TreasuryState, VaultPosition } from './types'
 import { num } from './format'
 
 export const TRIGGERS = {
@@ -80,4 +82,25 @@ export function reserveRequired(obligations: { amount: number; due: number; infl
   }
   const buffer = Math.max(bufferMin, bufferRate * outflows)
   return { worst, buffer, required: worst + buffer }
+}
+
+// The service reads the registry through its own RPC node, which can answer from a block before the bank's mined
+// transaction; the mined freeze is shown until the service agrees, for at most this long.
+export const FREEZE_EXPECT_MS = 60_000
+
+export type ExpectedFreeze = { safe: Address; bank: boolean; until: number }
+
+export function expectFreeze(action: BankAction, safe: Address, now: number): ExpectedFreeze {
+  return { safe, bank: action !== 'bankUnfreeze', until: now + FREEZE_EXPECT_MS }
+}
+
+export function withExpectedFreeze(clients: BankClient[], e: ExpectedFreeze | null, now: number): BankClient[] {
+  if (!e || now >= e.until) return clients
+  return clients.map((c) => (c.safe.toLowerCase() === e.safe.toLowerCase() && c.frozen.bank !== e.bank ? { ...c, frozen: { ...c.frozen, bank: e.bank } } : c))
+}
+
+export function freezeSettled(clients: BankClient[] | undefined, e: ExpectedFreeze, now: number): boolean {
+  if (now >= e.until) return true
+  const c = clients?.find((x) => x.safe.toLowerCase() === e.safe.toLowerCase())
+  return !!c && c.frozen.bank === e.bank
 }

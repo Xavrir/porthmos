@@ -6,9 +6,9 @@ import type { Role } from '../lib/types'
 
 export function useGate(): Gate {
   const { phase, mode, replayChosen } = useAegis()
-  const { identity, confirmed, signedIn, storedSignIn } = useIdentity()
+  const { identity, confirmed, signedIn, storedSignIn, restoring } = useIdentity()
   return gate({
-    phase, mode, replayChosen, signedIn, storedSignIn,
+    phase, mode, replayChosen, signedIn, storedSignIn, restoring,
     identity: identity.kind,
     localConfirmed: identity.kind === 'local' && confirmed(identity.role),
   })

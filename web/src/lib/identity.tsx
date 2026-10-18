@@ -14,6 +14,7 @@ import { publicClientFor } from './onboard/chain'
 import { localSender } from './onboard/signers'
 import { buildSiwe, pageOrigin, siweExpiry, siweProblem } from './siwe'
 import { RPC_URLS, wagmiConfig } from './wallet'
+import { restoringSession } from './auth'
 import { useAegis } from './source'
 import type { Role, Session, TxRequest, TypedDataPayload } from './types'
 import type { BankAction } from './api/contract'
@@ -69,6 +70,7 @@ type IdentityValue = {
   isLocal: boolean
   sessionReady: boolean
   storedSignIn: boolean
+  restoring: boolean
 }
 
 const IdentityContext = createContext<IdentityValue | null>(null)
@@ -79,6 +81,8 @@ const WALLET_SESSION_KEY = 'porthmos.session'
 const WRONG_NETWORK = 'Your wallet is on another network. Switch it to the Porthmos network first. Nothing was sent.'
 // A prepared message must outlive the walk from the confirm button to the server.
 const PREPARED_MARGIN_MS = 30_000
+// How long a reload waits for wagmi to reconnect the wallet of a stored session before showing sign in.
+const RECONNECT_GRACE_MS = 8_000
 
 const ROLE_ABI = parseAbi(['function owner(address) view returns (address)', 'function bank(address) view returns (address)'])
 
@@ -155,6 +159,11 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const [lost, setLost] = useState<LostSession | null>(null)
   const adopted = useRef<AdoptedSession | null>(null)
   const pendingPrep = useRef<Prepared | null>(null)
+  const [graceOver, setGraceOver] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setGraceOver(true), RECONNECT_GRACE_MS)
+    return () => clearTimeout(t)
+  }, [])
 
   const roles = useQuery({
     queryKey: ['registry-roles', chainId, deployment.registry, deployment.safe],
@@ -511,13 +520,19 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   }), [chooserIntent, chooserOpen, chooserWanted])
 
   const signedIn = signedInNow
+  const stored = readStored()
+  const restoring = restoringSession({
+    stored, walletPending: conn.status === 'connecting' || conn.status === 'reconnecting', graceOver,
+    identity: identity.kind, role, address, chainId, api: apiBase, taken: signedFor === key,
+  })
   // Right after a seat change the old session is still 'ready' for one render; only a session opened for this key counts.
   const sessionReady = session === 'ready' && (signedFor === null ? identity.kind !== 'local' && identity.kind !== 'wallet' : signedFor === key)
   const value: IdentityValue = {
     identity, role, address, seat, demoAvailable, chooseSeat, chooseDemo, session, sessionError, signedIn, prepareSignIn, signIn, signOut, adoptSession,
     lost, clearLost: () => setLost(null), walletRole, chooser, sign, sendTx, bankAction,
     localAddress, confirmed, signInLocal, sendAs, isLocal: identity.kind === 'local', sessionReady,
-    storedSignIn: confirmedList.length > 0 || demoChoice === 'owner' || demoChoice === 'bank' || !!readStored(),
+    storedSignIn: confirmedList.length > 0 || demoChoice === 'owner' || demoChoice === 'bank' || !!stored,
+    restoring,
   }
   return <IdentityContext.Provider value={value}>{children}</IdentityContext.Provider>
 }

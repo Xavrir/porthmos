@@ -12,9 +12,17 @@ export type GateInput = {
   localConfirmed: boolean
   signedIn: boolean
   storedSignIn: boolean
+  restoring: boolean
 }
 
 export function gate(i: GateInput): Gate {
+  const g = baseGate(i)
+  // A stored wallet session is taken over by an effect after this render, and wagmi may still be reconnecting the
+  // wallet; redirecting now would drop a valid session on every reload.
+  return g === 'signin' && i.restoring ? 'wait' : g
+}
+
+function baseGate(i: GateInput): Gate {
   // While the service is probed, wait only if something stored in this tab can still open a session.
   if (i.phase === 'probing') return i.replayChosen || i.storedSignIn || i.signedIn ? 'wait' : 'signin'
   if (i.mode === 'replay') return i.replayChosen ? 'allow' : 'signin'
@@ -22,6 +30,30 @@ export function gate(i: GateInput): Gate {
   if (i.identity === 'local') return i.localConfirmed ? 'allow' : 'signin'
   if (i.identity === 'wallet') return i.signedIn ? 'allow' : 'signin'
   return 'signin'
+}
+
+export type StoredWalletSession = { role: Role; address: Address; chainId: number; api: string }
+
+export type RestoreInput = {
+  stored: StoredWalletSession | null
+  walletPending: boolean
+  graceOver: boolean
+  identity: GateInput['identity']
+  role: Role | null
+  address: Address | null
+  chainId: number
+  api: string
+  taken: boolean
+}
+
+// Whether a wallet session stored in this tab may still be restored: the wallet is reconnecting (for a bounded
+// time), or it is back as the stored address and role and the session has not been taken over yet.
+export function restoringSession(i: RestoreInput): boolean {
+  const s = i.stored
+  if (!s) return false
+  if (i.walletPending && !i.graceOver) return true
+  return i.identity === 'wallet' && !i.taken && s.role === i.role && !!i.address &&
+    s.address.toLowerCase() === i.address.toLowerCase() && s.chainId === i.chainId && s.api === i.api
 }
 
 export const APP_ROUTES = ['/treasury', '/copilot', '/risk', '/audit', '/bank', '/orders'] as const

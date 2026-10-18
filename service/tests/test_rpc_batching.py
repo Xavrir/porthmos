@@ -254,3 +254,127 @@ def test_remembered_nonce_covers_a_lagging_node_but_not_a_revert_or_a_dropped_tx
     monkeypatch.setattr(rpc.time, "monotonic", lambda: now + rpc.NONCE_MEMORY + 1)
     chain.send_value(key, ADDR, 1)
     assert nonces == [5, 6, 5, 5]
+
+
+class FlakyBatchNode(Node):
+    """Answers batches with the given status codes first, then normally."""
+
+    def __init__(self, statuses: list[int], drop_ids: int = 0):
+        super().__init__()
+        self.statuses = list(statuses)
+        self.drop_ids = drop_ids
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if isinstance(body, list):
+            self.posts.append(body)
+            if self.statuses:
+                code = self.statuses.pop(0)
+                return httpx.Response(code, json={"jsonrpc": "2.0", "id": None,
+                                                  "error": {"code": -32005, "message": "rate limit exceeded"}})
+            return httpx.Response(200, json=[self.reply(r) for r in body[self.drop_ids:]])
+        return super().__call__(request)
+
+
+def test_rate_limited_batch_raises_and_keeps_batching(no_sleep):
+    node = FlakyBatchNode([429] * 4)
+    chain = make_chain(node)
+    with pytest.raises(httpx.HTTPStatusError):
+        chain.gather([echo(chain, n) for n in range(1, 5)])
+    assert len(node.posts) == 4 and all(isinstance(p, list) for p in node.posts)
+    node.posts.clear()
+    assert chain.gather([echo(chain, n) for n in range(1, 5)]) == [1, 2, 3, 4]
+    assert len(node.posts) == 1 and isinstance(node.posts[0], list)
+
+
+def test_rate_limit_error_body_in_a_200_is_not_a_batch_rejection():
+    node = FlakyBatchNode([200])
+    chain = make_chain(node)
+    with pytest.raises(RpcError, match="rate limit"):
+        chain.gather([echo(chain, n) for n in range(1, 4)])
+    node.posts.clear()
+    assert chain.gather([echo(chain, n) for n in range(1, 4)]) == [1, 2, 3]
+    assert len(node.posts) == 1
+
+
+def test_calls_a_batch_reply_leaves_out_go_alone():
+    node = FlakyBatchNode([], drop_ids=1)
+    chain = make_chain(node)
+    assert chain.gather([echo(chain, n) for n in range(1, 5)]) == [1, 2, 3, 4]
+    assert [len(p) if isinstance(p, list) else 1 for p in node.posts] == [4, 1]
+    assert chain._caps["batch_off_until"] == 0.0
+
+
+def test_rejected_batch_is_tried_again_later(monkeypatch):
+    import aegis.chain.rpc as rpc
+
+    node = Node(batches=False)
+    chain = make_chain(node)
+    chain.gather([echo(chain, n) for n in range(1, 3)])
+    node.batches = True
+    node.posts.clear()
+    chain.gather([echo(chain, n) for n in range(1, 3)])
+    assert all(isinstance(p, dict) for p in node.posts)
+    now = rpc.time.monotonic()
+    monkeypatch.setattr(rpc.time, "monotonic", lambda: now + rpc.BATCH_RETRY_AFTER + 1)
+    node.posts.clear()
+    assert chain.gather([echo(chain, n) for n in range(1, 3)]) == [1, 2]
+    assert len(node.posts) == 1 and isinstance(node.posts[0], list)
+
+
+class LogNode:
+    """eth_getLogs answers one raw log per block listed in `blocks` that falls in the requested range."""
+
+    def __init__(self, head: int, blocks: list[int]):
+        self.head, self.blocks = head, blocks
+        self.ranges: list[tuple[int, int]] = []
+
+        self.posts: list = []
+
+    def reply(self, req: dict) -> dict:
+        if req["method"] == "eth_blockNumber":
+            return {"jsonrpc": "2.0", "id": req["id"], "result": hex(self.head)}
+        lo, hi = (int(req["params"][0][k], 16) for k in ("fromBlock", "toBlock"))
+        self.ranges.append((lo, hi))
+        logs = [{"blockNumber": hex(b), "topics": ["0x00", "0x" + "0" * 64]} for b in self.blocks if lo <= b <= hi]
+        return {"jsonrpc": "2.0", "id": req["id"], "result": logs}
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        self.posts.append(body)
+        return httpx.Response(200, json=[self.reply(r) for r in body] if isinstance(body, list) else self.reply(body))
+
+
+def test_log_scans_from_the_deployment_read_only_new_blocks():
+    import aegis.chain.rpc as rpc
+
+    node = LogNode(head=10_000, blocks=[1_000, 9_990, 10_005])
+    chain = RpcChain(load_settings(chain_mode="rpc", chain_id=84532))
+    chain._http = httpx.Client(transport=httpx.MockTransport(node))
+    blocks = lambda logs: [int(log["blockNumber"], 16) for log in logs]  # noqa: E731
+    assert blocks(chain._cached_logs("t", {}, 500, 500, node.head, exact=False)) == [1_000, 9_990]
+    node.head = 10_010
+    node.ranges.clear()
+    assert blocks(chain._cached_logs("t", {}, 500, 500, node.head, exact=False)) == [1_000, 9_990, 10_005]
+    assert node.ranges == [(10_000 - rpc.LOG_CACHE_MARGIN + 1, 10_010)]
+    node.ranges.clear()
+    assert blocks(chain._cached_logs("t", {}, 500, 9_995, node.head, exact=False)) == [10_005]
+    assert blocks(chain._cached_logs("t", {}, 500, 10_008, node.head, exact=False)) == []
+    assert node.ranges == [(9_995, 10_010), (10_008, 10_010)]
+    chain._log_caches.clear()
+    node.ranges.clear()
+    chain._cached_logs("t", {}, 500, 500, node.head, exact=False)
+    assert node.ranges[0][0] == 500
+
+
+def test_long_log_scan_sends_its_settled_windows_as_one_batch(monkeypatch):
+    import aegis.chain.rpc as rpc
+
+    monkeypatch.setattr(rpc, "LOG_WINDOW", 100)
+    node = LogNode(head=1_000, blocks=[650, 990])
+    chain = RpcChain(load_settings(chain_mode="rpc", chain_id=84532))
+    chain._http = httpx.Client(transport=httpx.MockTransport(node))
+    logs, scanned = chain._scan({}, 500, node.head, exact=False)
+    assert [int(log["blockNumber"], 16) for log in logs] == [650, 990] and scanned == 1_000
+    assert [len(p) if isinstance(p, list) else 1 for p in node.posts] == [4, 1, 1]
+    assert sorted(node.ranges) == [(500, 599), (600, 699), (700, 799), (800, 899), (900, 999), (1_000, 1_000)]

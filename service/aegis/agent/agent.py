@@ -151,7 +151,7 @@ class Agent:
             if on_chunk is None:
                 return self.llm.complete_json(messages)
             parts = []
-            for piece in self.llm.stream(messages, json_mode=True):
+            for piece in self.llm.stream(messages):
                 parts.append(piece)
                 on_chunk(piece)
             return parse_json_object("".join(parts))

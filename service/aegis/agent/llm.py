@@ -72,7 +72,7 @@ class LlmClient:
             raise LlmError(str(e)) from e
 
     def complete_json(self, messages: list[dict]) -> dict:
-        return parse_json_object(self.complete(messages, json_mode=True))
+        return parse_json_object(self.complete(messages))
 
 
 def parse_json_object(text: str) -> dict:

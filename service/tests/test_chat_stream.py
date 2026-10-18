@@ -43,7 +43,7 @@ class ScriptedLlm(LlmClient):
         return parse_json_object("".join(self.chunks))
 
     def stream(self, messages, json_mode=False, temperature=0.0):
-        assert json_mode and not self._classify(messages)
+        assert not json_mode and not self._classify(messages)
         self.streams += 1
         for c in self.chunks:
             if isinstance(c, Exception):

@@ -220,8 +220,8 @@ Measured on 18 Oct 2026 at commit `b8e0f15`:
 | Suite | Command | Result |
 |:-|:-|:-|
 | Contracts | `cd contracts && forge test` | **106 passed** (9 suites, unit, fuzz and invariant) |
-| Service | `cd service && uv run pytest` | **356 passed**, 18 skipped (the Anvil integration tests; run them with `make test-integration`) |
-| Web | `cd web && npm test` | **154 passed** (18 files, Vitest) |
+| Service | `cd service && uv run pytest` | **412 passed**, plus **20** Anvil integration tests (run them with `make test-integration`) |
+| Web | `cd web && npm test` | **176 passed** (21 files, Vitest) |
 
 ## Repository layout
 

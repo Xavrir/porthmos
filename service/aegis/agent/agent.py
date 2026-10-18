@@ -11,12 +11,13 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from aegis.agent import intent as I
-from aegis.agent.llm import LlmClient, LlmError, LlmGate, quoted
+from aegis.agent.llm import LlmClient, LlmError, LlmGate, parse_json_object, quoted
 from aegis.agent.tools import TOOL_SCHEMAS
 from aegis.core.planner import HOLD_ID, Plan
 from aegis.eip712 import OP_DEPOSIT, OP_REDEEM
@@ -69,6 +70,8 @@ LLM_COOLDOWN = 30.0
 LEAK_RE = re.compile(r"you are aegis|you are porthmos|reply with json only|data block|system prompt|private key|seed phrase|mnemonic"
                      r"|api key", re.I)
 HEX_RE = re.compile(r"0x[0-9a-fA-F]{40,}")
+LEAK_PHRASES = tuple(p.lower() for p in LEAK_RE.pattern.split("|"))
+REPLY_LIMIT = 1200
 
 
 def _usd(raw: int | str) -> str:
@@ -129,7 +132,7 @@ class Agent:
         state = getattr(self._ctx, "state", None)
         return self.gate.status(state["tenant"] if state else None)
 
-    def _complete_json(self, messages: list[dict]) -> dict | None:
+    def _complete_json(self, messages: list[dict], on_chunk: Callable[[str], None] | None = None) -> dict | None:
         if self.llm is None:
             return None
         state = getattr(self._ctx, "state", None)
@@ -145,7 +148,13 @@ class Agent:
                 state["fallback"] = "limit"
             return None
         try:
-            return self.llm.complete_json(messages)
+            if on_chunk is None:
+                return self.llm.complete_json(messages)
+            parts = []
+            for piece in self.llm.stream(messages, json_mode=True):
+                parts.append(piece)
+                on_chunk(piece)
+            return parse_json_object("".join(parts))
         except LlmError as e:
             log.warning("LLM call failed, deterministic fallback for %.0f s: %s", LLM_COOLDOWN, e)
             self._down_until = time.monotonic() + LLM_COOLDOWN
@@ -282,7 +291,9 @@ class Agent:
         return {"optionId": choice.id, "reductions": reductions, "rationale": note, "holdReason": None,
                 "source": "rules"}
 
-    def explain(self, facts: dict) -> str:
+    def explain(self, facts: dict, on_delta: Callable[[str, str], None] | None = None) -> str:
+        """on_delta(kind, text) receives the reply while it streams: kind "delta" appends, "replace" swaps out
+        everything shown so far. The returned reply is the same with or without on_delta."""
         text = template(facts)
         if self.llm is None:
             return text
@@ -291,6 +302,8 @@ class Agent:
         data_block = {"source": "Porthmos deterministic record", "facts": facts, "draft": text}
         if message:
             data_block["owner_message"] = quoted("owner chat message", message[:1000])
+        facts_json = json.dumps(facts, default=str)
+        guard = ReplyStream(facts_json, text, on_delta) if on_delta else None
         data = self._complete_json([
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": json.dumps({
@@ -301,14 +314,14 @@ class Agent:
                         "in the facts. Reply as {\"reply\": \"...\"}.",
                 "DATA": data_block,
             }, default=str)},
-        ])
-        if not isinstance(data, dict):
-            return text
-        reply = str(data.get("reply", "")).strip()[:1200]
-        if not reply or not safe_reply(reply, json.dumps(facts, default=str)):
-            return text
-        if state is not None:
+        ], guard.feed if guard else None)
+        reply = str(data.get("reply", "")).strip()[:REPLY_LIMIT] if isinstance(data, dict) else ""
+        if not reply or not safe_reply(reply, facts_json):
+            reply = text
+        elif state is not None:
             state["reply"] = reply
+        if guard:
+            guard.finish(reply)
         return reply
 
 
@@ -319,6 +332,126 @@ def safe_reply(reply: str, facts_json: str) -> bool:
         return False
     known = facts_json.lower()
     return all(h.lower() in known for h in HEX_RE.findall(reply))
+
+
+class ReplyField:
+    """Decodes the "reply" string of a JSON object as its text streams in. Display only: the stored reply always
+    comes from parsing the complete text."""
+
+    START = re.compile(r'"reply"\s*:\s*"')
+    ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f"}
+
+    def __init__(self):
+        self.raw = ""
+        self.pos: int | None = None
+        self.done = False
+
+    def feed(self, piece: str) -> str:
+        self.raw += piece
+        if self.done:
+            return ""
+        if self.pos is None:
+            m = self.START.search(self.raw)
+            if not m:
+                return ""
+            self.pos = m.end()
+        raw, i, out = self.raw, self.pos, []
+        try:
+            while i < len(raw):
+                c = raw[i]
+                if c == '"':
+                    self.done = True
+                    break
+                if c != "\\":
+                    out.append(c)
+                    i += 1
+                    continue
+                if i + 1 >= len(raw):
+                    break
+                esc = raw[i + 1]
+                if esc != "u":
+                    out.append(self.ESCAPES.get(esc, esc))
+                    i += 2
+                    continue
+                if i + 6 > len(raw):
+                    break
+                code = int(raw[i + 2:i + 6], 16)
+                if 0xD800 <= code < 0xDC00:
+                    if i + 12 > len(raw):
+                        break
+                    if raw[i + 6:i + 8] == "\\u" and 0xDC00 <= (low := int(raw[i + 8:i + 12], 16)) < 0xE000:
+                        out.append(chr(0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00)))
+                        i += 12
+                        continue
+                out.append(chr(code))
+                i += 6
+        except ValueError:
+            self.done = True
+        self.pos = i
+        return "".join(out)
+
+
+class ReplyStream:
+    """Streams a model reply while it still passes the safe_reply checks. Only whole words go out, and a word that
+    could still grow into an address or a leak phrase is held back. A failed check shows the template at once;
+    finish() then reconciles what is shown with the reply explain() returns."""
+
+    def __init__(self, facts_json: str, template_text: str, on_delta: Callable[[str, str], None]):
+        self.known = facts_json.lower()
+        self.template = template_text
+        self.on_delta = on_delta
+        self.field = ReplyField()
+        self.text = ""
+        self.shown = ""
+        self.tripped = False
+
+    def feed(self, piece: str) -> None:
+        self.text += self.field.feed(piece)
+        if self.tripped:
+            return
+        view = self.text.lstrip()[:REPLY_LIMIT]
+        if not _passes_so_far(view, self.known):
+            self.tripped = True
+            self.shown = self.template
+            self.on_delta("replace", self.template)
+            return
+        end = _release_end(view)
+        if end > len(self.shown):
+            self.on_delta("delta", view[len(self.shown):end])
+            self.shown = view[:end]
+
+    def finish(self, reply: str) -> None:
+        if reply == self.shown:
+            return
+        if not self.tripped and reply.startswith(self.shown):
+            self.on_delta("delta", reply[len(self.shown):])
+        else:
+            self.on_delta("replace", reply)
+        self.shown = reply
+
+
+def _passes_so_far(view: str, known: str) -> bool:
+    """safe_reply on a prefix: an address or hash counts once a non-hex character follows it."""
+    if LEAK_RE.search(view) or SYSTEM[:60] in view:
+        return False
+    return all(m.group(0).lower() in known for m in HEX_RE.finditer(view) if m.end() < len(view))
+
+
+def _release_end(view: str) -> int:
+    """End of the text that may be shown: up to the last whitespace, minus any tail that could still become a leak
+    phrase."""
+    def boundary(limit: int) -> int:
+        cut = max((i for i in range(limit) if view[i].isspace()), default=-1)
+        return len(view[:cut].rstrip()) if cut >= 0 else 0
+
+    end = boundary(len(view))
+    longest = max(map(len, LEAK_PHRASES))
+    lower = view[:end].lower()
+    for k in range(max(0, end - longest), end):
+        word_start = k == 0 or not view[k - 1].isalnum()
+        if word_start and any(p.startswith(lower[k:]) for p in LEAK_PHRASES):
+            return boundary(k)
+    return end
 
 
 def _within_request(intent: I.Intent, option, reductions: dict | None) -> bool:

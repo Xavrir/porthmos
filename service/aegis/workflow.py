@@ -7,6 +7,7 @@ import json
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from decimal import ROUND_DOWN, Decimal
@@ -183,6 +184,7 @@ class Workflow:
         self._locks: dict[str, threading.RLock] = {}
         self._locks_guard = threading.Lock()
         self._prefetch = ThreadPoolExecutor(max_workers=4, thread_name_prefix="state-prefetch")
+        self._stream = threading.local()
 
 
     def _lock(self, request_id: str) -> threading.RLock:
@@ -275,16 +277,47 @@ class Workflow:
 
 
     @llm_scope
-    def chat(self, session: Session, message: str, request_id: str | None = None) -> dict:
+    def chat(self, session: Session, message: str, request_id: str | None = None,
+             stream: Callable[[str, dict], None] | None = None) -> dict:
+        """stream(event, data), when given, receives status stages and the reply of this chat's own request while
+        it is written. Explanations of other requests (for example one a "cancel" closes) never stream."""
+        self._stream.emit, self._stream.request_id, self._stream.shown = stream, None, False
+        try:
+            return self._chat(session, message, request_id)
+        finally:
+            self._stream.emit = None
+
+    def _status(self, stage: str) -> None:
+        emit = getattr(self._stream, "emit", None)
+        if emit is not None:
+            emit("status", {"stage": stage})
+
+    def _explain(self, rec: dict, facts: dict) -> str:
+        emit = getattr(self._stream, "emit", None)
+        if emit is None or rec["id"] != self._stream.request_id:
+            return self.agent.explain(facts)
+        if self._stream.shown:
+            emit("replace", {"text": ""})
+        self._status("writing")
+
+        def on_delta(kind: str, text: str) -> None:
+            self._stream.shown = True
+            emit(kind, {"text": text})
+
+        return self.agent.explain(facts, on_delta)
+
+    def _chat(self, session: Session, message: str, request_id: str | None) -> dict:
         if session.role != "owner" or not session.safe:
             raise WorkflowError(403, "Forbidden", "chat requires an owner session bound to a Safe")
         message = (message or "").strip()
         if not message:
             raise WorkflowError(400, "EmptyMessage")
         self.agent.owner_said(message)
+        self._status("thinking")
         now = self._now()
         pending = self._pending_clarification(session.safe, message, request_id, now)
         if pending is not None:
+            self._stream.request_id = pending["id"]
             with self._lock(pending["id"]):
                 rec = self.store.get(pending["id"])
                 intent = I.Intent.from_json(rec["data"]["intent"])
@@ -296,6 +329,7 @@ class Workflow:
                 return self._response(rec)
 
         rec = self.store.create(session.safe, session.role, message)
+        self._stream.request_id = rec["id"]
         # Chain reads do not depend on the intent, so they overlap the model call instead of following it.
         prefetch = (self._prefetch.submit(load_state, self.s.chain, self.s.settings, session.safe)
                     if self.agent.llm is not None else None)
@@ -389,6 +423,7 @@ class Workflow:
 
     def _continue_after_intent(self, rec: dict, intent: I.Intent,
                                prefetch: Future[TreasuryState] | None = None) -> None:
+        self._status("reading")
         tools = self._tools(rec["safe"])
         tools.prefetched = prefetch
         if intent.missing:
@@ -472,7 +507,7 @@ class Workflow:
             facts = {"outcome": "AWAITING_APPROVAL", "action": _action(card), "tier": tier,
                      "requiredSigners": prepared.policy.required_signers, "tierReason": card["reason"]}
             rec["data"]["outcome"] = "AWAITING_APPROVAL"
-            rec["data"]["reply"] = self.agent.explain(facts)
+            rec["data"]["reply"] = self._explain(rec, facts)
             self._move(rec, "AWAITING_APPROVAL", card["reason"], snap.versions(),
                        {"action": _action(card), "approval": rec["data"]["approval"], "tier": tier})
             return
@@ -521,7 +556,7 @@ class Workflow:
         rec["data"]["reason"] = reason
         self._move(rec, "HELD", reason, snap.versions(), {"reason": reason, "planHash": snap.plan.plan_hash,
                                                           "defaultOptionId": snap.plan.default_id})
-        rec["data"]["reply"] = self.agent.explain(facts)
+        rec["data"]["reply"] = self._explain(rec, facts)
         self._move(rec, "EXPLAINED", "explained")
 
     def _finish(self, rec: dict, state: str, reason: str | None, facts: dict, versions: dict | None = None,
@@ -529,7 +564,7 @@ class Workflow:
         rec["data"]["outcome"] = state
         rec["data"]["reason"] = reason
         self._move(rec, state, reason or "", versions, {"reason": reason, **facts}, **ledger_kw)
-        rec["data"]["reply"] = self.agent.explain({"outcome": state, "reason": reason, **facts})
+        rec["data"]["reply"] = self._explain(rec, {"outcome": state, "reason": reason, **facts})
         self._move(rec, "EXPLAINED", "explained")
 
     def _orders_summary(self, intent: I.Intent, rec: dict) -> tuple[str, dict]:
@@ -666,7 +701,7 @@ class Workflow:
         except AuthorizerRefused as e:
             rec["data"]["outcome"] = "CANCELLED"
             rec["data"]["reason"] = f"AuthorizerRefused: {e}"
-            rec["data"]["reply"] = self.agent.explain({"outcome": "CANCELLED", "reason": rec["data"]["reason"]})
+            rec["data"]["reply"] = self._explain(rec, {"outcome": "CANCELLED", "reason": rec["data"]["reason"]})
             self._move(rec, "CANCELLED", rec["data"]["reason"], snap.versions(), {"reason": rec["data"]["reason"]})
             return
         dar = prepared.dar
@@ -686,7 +721,7 @@ class Workflow:
         if not final.ok:
             rec["data"]["outcome"] = "CANCELLED"
             rec["data"]["reason"] = f"FinalSimulationFailed: {final.error}"
-            rec["data"]["reply"] = self.agent.explain({"outcome": "CANCELLED", "reason": rec["data"]["reason"]})
+            rec["data"]["reply"] = self._explain(rec, {"outcome": "CANCELLED", "reason": rec["data"]["reason"]})
             self._move(rec, "CANCELLED", rec["data"]["reason"], snap.versions(), {"reason": final.error},
                        dar_hash=dar_hash)
             return
@@ -695,7 +730,7 @@ class Workflow:
                                     prepared.approval, dar_hash, rec["id"])
         rec["data"]["submissionId"] = sub_id
         rec["data"]["outcome"] = "SUBMITTED"
-        rec["data"]["reply"] = self.agent.explain({"outcome": "SUBMITTED", "action": _action(card), "tier": dar.tier})
+        rec["data"]["reply"] = self._explain(rec, {"outcome": "SUBMITTED", "action": _action(card), "tier": dar.tier})
         self._move(rec, "SUBMITTED", f"submission {sub_id}", snap.versions(), {"action": _action(card)},
                    dar_hash=dar_hash)
 
@@ -705,7 +740,7 @@ class Workflow:
         if rec["data"]["replans"] > self.s.settings.params.max_replans:
             rec["data"]["outcome"] = "CANCELLED"
             rec["data"]["reason"] = f"ReplanLimit after {reason}"
-            rec["data"]["reply"] = self.agent.explain({"outcome": "CANCELLED", "reason": rec["data"]["reason"]})
+            rec["data"]["reply"] = self._explain(rec, {"outcome": "CANCELLED", "reason": rec["data"]["reason"]})
             self._move(rec, "CANCELLED", rec["data"]["reason"])
             return
         for k in ("approval", "signatures", "approvalTier", "actionCard", "dar", "darHash"):
@@ -849,7 +884,7 @@ class Workflow:
                                   "AND status='pending'", (time.time(), reason, rec["data"].get("submissionId")))
             rec["data"]["outcome"] = "CANCELLED"
             rec["data"]["reason"] = reason
-            rec["data"]["reply"] = self.agent.explain({"outcome": "CANCELLED", "reason": reason})
+            rec["data"]["reply"] = self._explain(rec, {"outcome": "CANCELLED", "reason": reason})
             self._move(rec, "CANCELLED", reason, None, {"reason": reason})
             return True
 

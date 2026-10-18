@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+from collections.abc import Iterator
 
 import httpx
 
@@ -19,11 +21,15 @@ class LlmClient:
         self.api_key = api_key
         self.timeout = timeout
 
-    def complete(self, messages: list[dict], json_mode: bool = False, temperature: float = 0.0) -> str:
+    def _request(self, messages: list[dict], json_mode: bool, temperature: float) -> tuple[dict, dict]:
         body: dict = {"model": self.model, "messages": messages, "temperature": temperature}
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        return body, headers
+
+    def complete(self, messages: list[dict], json_mode: bool = False, temperature: float = 0.0) -> str:
+        body, headers = self._request(messages, json_mode, temperature)
         try:
             resp = httpx.post(f"{self.base_url}/chat/completions", json=body, headers=headers, timeout=self.timeout)
             resp.raise_for_status()
@@ -31,15 +37,52 @@ class LlmClient:
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as e:
             raise LlmError(str(e)) from e
 
-    def complete_json(self, messages: list[dict]) -> dict:
-        text = self.complete(messages, json_mode=True)
-        m = re.search(r"\{.*\}", text, re.S)
-        if not m:
-            raise LlmError("no JSON object in reply")
+    def stream(self, messages: list[dict], json_mode: bool = False, temperature: float = 0.0) -> Iterator[str]:
+        """Yields content deltas of a streamed completion. Any failure, including one after some deltas, raises
+        LlmError."""
+        body, headers = self._request(messages, json_mode, temperature)
+        body["stream"] = True
+        # httpx timeouts are per read, so a slow trickle would never time out; the deadline keeps the
+        # non-streamed bound on the whole reply.
+        deadline = time.monotonic() + self.timeout
+        finished = False
         try:
-            return json.loads(m.group(0))
-        except json.JSONDecodeError as e:
+            with httpx.stream("POST", f"{self.base_url}/chat/completions", json=body, headers=headers,
+                              timeout=self.timeout) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if time.monotonic() > deadline:
+                        raise LlmError("stream exceeded the timeout")
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        return
+                    chunk = json.loads(data)
+                    if chunk.get("error"):
+                        raise LlmError(str(chunk["error"])[:300])
+                    for choice in chunk.get("choices") or []:
+                        finished = finished or bool(choice.get("finish_reason"))
+                        content = (choice.get("delta") or {}).get("content")
+                        if content:
+                            yield content
+            if not finished:
+                raise LlmError("stream ended before the reply finished")
+        except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError, AttributeError) as e:
             raise LlmError(str(e)) from e
+
+    def complete_json(self, messages: list[dict]) -> dict:
+        return parse_json_object(self.complete(messages, json_mode=True))
+
+
+def parse_json_object(text: str) -> dict:
+    m = re.search(r"\{.*\}", text, re.S)
+    if not m:
+        raise LlmError("no JSON object in reply")
+    try:
+        return json.loads(m.group(0))
+    except json.JSONDecodeError as e:
+        raise LlmError(str(e)) from e
 
 
 class LlmGate:

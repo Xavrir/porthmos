@@ -5,7 +5,8 @@ import type {
   PendingApproval, RequestRecord, RiskReport, Role, ScenarioName, Session, StreamEvent, TreasuryState, TxRequest,
 } from '../types'
 import type { DemoVariant, OrderView, ProofResult, TradeFlowConfig } from '../tradeflow/types'
-import { ApiError, type AegisApi, type ApprovalSubmission, type AuthRoles, type NewObligation, type SessionProof, type StreamStatus } from './contract'
+import { ApiError, type AegisApi, type ApprovalSubmission, type AuthRoles, type ChatStage, type ChatStreamHandlers, type NewObligation, type SessionProof, type StreamStatus } from './contract'
+import { SseParser } from './sse'
 import type { AuthNonce } from '../siwe'
 import { amount, PRICE_DECIMALS, fromUnits } from '../format'
 import { reconcile } from '../reconcile'
@@ -23,6 +24,9 @@ function asList<T>(v: unknown, key: string): T[] {
   if (v && typeof v === 'object' && Array.isArray((v as Record<string, unknown>)[key])) return (v as Record<string, T[]>)[key]
   return []
 }
+
+// The service sends a heartbeat every 10 s while a chat turn runs, so this long without a byte means the link is gone.
+const CHAT_IDLE_MS = 30000
 
 export class HttpApi implements AegisApi {
   readonly mode = 'live' as const
@@ -129,6 +133,70 @@ export class HttpApi implements AegisApi {
 
   chat(message: string): Promise<ChatResponse> {
     return this.call('/api/agent/chat', { method: 'POST', body: JSON.stringify({ message }) }, 60000)
+  }
+
+  // Falls back to chat() only while no stream was accepted. Once the service answers with an event stream the
+  // turn is running there, so a broken stream is an error rather than a second request.
+  async chatStream(message: string, on: ChatStreamHandlers = {}, signal?: AbortSignal): Promise<ChatResponse> {
+    const ctrl = new AbortController()
+    const abort = () => ctrl.abort()
+    signal?.addEventListener('abort', abort)
+    let idle: ReturnType<typeof setTimeout> | undefined
+    const arm = () => {
+      clearTimeout(idle)
+      idle = setTimeout(abort, CHAT_IDLE_MS)
+    }
+    const headers: Record<string, string> = { Accept: 'text/event-stream', 'Content-Type': 'application/json' }
+    if (this.token) headers['X-Aegis-Session'] = this.token
+    try {
+      let res: Response
+      try {
+        arm()
+        res = await fetch(`${this.base}/api/agent/chat/stream`, { method: 'POST', headers, body: JSON.stringify({ message }), signal: ctrl.signal })
+      } catch (e) {
+        if (signal?.aborted) throw e
+        clearTimeout(idle)
+        return this.chat(message)
+      }
+      if (!res.ok || !res.body || !(res.headers.get('content-type') ?? '').startsWith('text/event-stream')) {
+        clearTimeout(idle)
+        void res.body?.cancel().catch(() => {})
+        return this.chat(message)
+      }
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+      const parser = new SseParser()
+      for (;;) {
+        let chunk: ReadableStreamReadResult<string>
+        try {
+          chunk = await reader.read()
+        } catch (e) {
+          if (signal?.aborted) throw e
+          throw new ApiError('The reply stream was interrupted. The request may still have run; check the request list.', 0)
+        }
+        arm()
+        for (const m of chunk.done ? parser.end() : parser.push(chunk.value)) {
+          const data = safeJson(m.data) as Record<string, unknown>
+          if (!data || typeof data !== 'object') continue
+          if (m.event === 'status' && typeof data.stage === 'string') on.onStatus?.(data.stage as ChatStage)
+          else if (m.event === 'delta' && typeof data.text === 'string') on.onDelta?.(data.text)
+          else if (m.event === 'replace' && typeof data.text === 'string') on.onReplace?.(data.text)
+          else if (m.event === 'done') {
+            void reader.cancel().catch(() => {})
+            return data as unknown as ChatResponse
+          } else if (m.event === 'error') {
+            const status = typeof data.status === 'number' ? data.status : 500
+            const body = { error: data.code, detail: data.detail }
+            if (status === 401 && data.code === 'SessionRequired' && headers['X-Aegis-Session'] && this.token === headers['X-Aegis-Session']) this.onSessionLost?.()
+            throw new ApiError(errorText(body) || `HTTP ${status}`, status, body)
+          }
+        }
+        if (chunk.done) break
+      }
+      throw new ApiError('The reply stream ended early. The request may still have run; check the request list.', 0)
+    } finally {
+      clearTimeout(idle)
+      signal?.removeEventListener('abort', abort)
+    }
   }
 
   async request(id: string): Promise<RequestRecord> {

@@ -12,9 +12,21 @@ import { useIdentity } from '../lib/identity'
 import { usePendingApprovals, useRequest, useRequestHistory } from '../lib/queries'
 import { clock, stamp } from '../lib/format'
 import { sentenceCase } from '../lib/vocabulary'
+import type { ChatStage } from '../lib/api/contract'
 import type { RequestRecord, WorkflowState } from '../lib/types'
 
-type Msg = { id: string; who: 'owner' | 'agent'; text: string; at: number; requestId?: string; state?: WorkflowState }
+type Msg = { id: string; who: 'owner' | 'agent'; text: string; at: number; requestId?: string; state?: WorkflowState; streamed?: boolean }
+
+type Live = { text: string; stage: ChatStage | null }
+
+const IDLE: Live = { text: '', stage: null }
+
+const STAGE_TEXT: Record<ChatStage | 'start', string> = {
+  start: 'Reading the treasury and building options…',
+  thinking: 'Reading your message…',
+  reading: 'Reading your treasury…',
+  writing: 'Writing the reply…',
+}
 
 const SUGGESTIONS = [
   'What is our reserve?',
@@ -52,7 +64,12 @@ export default function Copilot() {
   const [text, setText] = useState('')
   const listRef = useRef<HTMLOListElement>(null)
   const [jump, setJump] = useState<string | null>(null)
+  const [live, setLive] = useState<Live>(IDLE)
+  const streamRef = useRef<AbortController | null>(null)
+  const shownRef = useRef(false)
   const req = useRequest(selected)
+
+  useEffect(() => () => streamRef.current?.abort(), [])
 
   useEffect(() => {
     if (messages !== null || !history.data) return
@@ -68,18 +85,42 @@ export default function Copilot() {
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messages])
+  }, [messages, live.text])
 
   const chat = useMutation({
-    mutationFn: (m: string) => api.chat(m),
-    onMutate: (m) => setMessages((xs) => [...(xs ?? []), { id: `q-${Date.now()}`, who: 'owner', text: m, at: Date.now() / 1000 }]),
+    mutationFn: (m: string) => {
+      if (!api.chatStream) return api.chat(m)
+      streamRef.current?.abort()
+      const ctrl = new AbortController()
+      streamRef.current = ctrl
+      return api.chatStream(m, {
+        onStatus: (stage) => setLive((l) => ({ ...l, stage })),
+        onDelta: (t) => {
+          shownRef.current = true
+          setLive((l) => ({ ...l, text: l.text + t }))
+        },
+        onReplace: (t) => {
+          shownRef.current = true
+          setLive((l) => ({ ...l, text: t }))
+        },
+      }, ctrl.signal)
+    },
+    onMutate: (m) => {
+      shownRef.current = false
+      setLive(IDLE)
+      setMessages((xs) => [...(xs ?? []), { id: `q-${Date.now()}`, who: 'owner', text: m, at: Date.now() / 1000 }])
+    },
     onSuccess: (res) => {
-      setMessages((xs) => [...(xs ?? []), { id: `a-${res.requestId}`, who: 'agent', text: res.reply, at: Date.now() / 1000, requestId: res.requestId, state: res.state }])
+      setMessages((xs) => [...(xs ?? []), { id: `a-${res.requestId}`, who: 'agent', text: res.reply, at: Date.now() / 1000, requestId: res.requestId, state: res.state, streamed: shownRef.current }])
       setSelected(res.requestId)
       qc.invalidateQueries({ queryKey: ['approvals'] })
       qc.invalidateQueries({ queryKey: ['requests'] })
     },
-    onError: (e: Error) => setMessages((xs) => [...(xs ?? []), { id: `e-${Date.now()}`, who: 'agent', text: `Request refused: ${e.message}`, at: Date.now() / 1000 }]),
+    onError: (e: Error) => {
+      if (e.name === 'AbortError') return
+      setMessages((xs) => [...(xs ?? []), { id: `e-${Date.now()}`, who: 'agent', text: `Request refused: ${e.message}`, at: Date.now() / 1000 }])
+    },
+    onSettled: () => setLive(IDLE),
   })
 
   const send = (e?: FormEvent) => {
@@ -127,7 +168,7 @@ export default function Copilot() {
           ) : null}
           <ol className="messages" ref={listRef} aria-live="polite" aria-relevant="additions">
             {messages === null ? <li><Loading what="the conversation" /></li> : messages.map((m) => (
-              <li key={m.id} className={`msg msg-${m.who}`}>
+              <li key={m.id} className={`msg msg-${m.who}${m.streamed ? ' is-streamed' : ''}`}>
                 <span className="msg-who">{m.who === 'owner' ? 'You' : 'Porthmos'} <span className="msg-time nums">{clock(m.at)}</span></span>
                 <p>{m.text}</p>
                 {m.requestId ? (
@@ -137,7 +178,12 @@ export default function Copilot() {
                 ) : null}
               </li>
             ))}
-            {chat.isPending ? <li className="msg msg-agent"><span className="msg-who">Porthmos</span><p>Reading the treasury and building options…</p></li> : null}
+            {chat.isPending ? (
+              <li className="msg msg-agent" aria-busy="true">
+                <span className="msg-who">Porthmos</span>
+                {live.text ? <p>{live.text}<span className="msg-caret" aria-hidden="true" /></p> : <p className="msg-stage">{STAGE_TEXT[live.stage ?? 'start']}</p>}
+              </li>
+            ) : null}
           </ol>
           <div className="suggest" aria-label="Try one of these">
             {SUGGESTIONS.map((s) => (

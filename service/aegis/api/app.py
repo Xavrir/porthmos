@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import logging
 import time
 from contextlib import asynccontextmanager
 
 from eth_utils import is_address
 from fastapi import Depends, FastAPI, Header, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -28,6 +30,8 @@ from aegis.runtime import Runtime
 from aegis.units import amount, parse_raw, price
 from aegis.workflow import Session, WorkflowError
 
+log = logging.getLogger("aegis.api")
+CHAT_HEARTBEAT = 10.0
 
 class SessionBody(BaseModel):
     message: str | None = None
@@ -303,13 +307,59 @@ def create_app(rt: Runtime, start_background: bool = True) -> FastAPI:
                 "stale": age > limit, "maxOracleAge": limit,
                 "pegDeviationPct": round(abs(r.answer - PRICE_ONE) / PRICE_ONE * 100, 4)}
 
-    @app.post("/api/agent/chat")
-    def chat(body: ChatBody, sess: Session = Depends(owner_dep)):
+    def chat_turn(sess: Session, body: ChatBody, stream=None) -> dict:
         lim = rt.settings.limits
         if not s.limiter.hit("chat", sess.safe.lower(), lim.chat_per_tenant, lim.chat_window):
             raise WorkflowError(429, "RateLimited", f"at most {lim.chat_per_tenant} chat messages per "
                                                     f"{lim.chat_window // 60} minutes per treasury")
-        return rt.workflow.chat(sess, body.message[:4000], body.requestId)
+        if stream is None:
+            return rt.workflow.chat(sess, body.message[:4000], body.requestId)
+        return rt.workflow.chat(sess, body.message[:4000], body.requestId, stream=stream)
+
+    @app.post("/api/agent/chat")
+    def chat(body: ChatBody, sess: Session = Depends(owner_dep)):
+        return chat_turn(sess, body)
+
+    @app.post("/api/agent/chat/stream")
+    async def chat_stream(body: ChatBody, request: Request, x_aegis_session: str | None = Header(default=None)):
+        """The chat turn as Server-Sent Events: status, delta and replace while it runs, then done with the exact
+        /api/agent/chat body, or error. Session and rate-limit refusals arrive as error events too."""
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def emit(event: str, data) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, (event, data))
+
+        def work() -> None:
+            try:
+                sess = owner_dep(session_dep(request, x_aegis_session))
+                emit("done", jsonable_encoder(chat_turn(sess, body, emit)))
+            except WorkflowError as e:
+                emit("error", {"status": e.status, "code": e.code, "detail": e.detail})
+            except Exception:
+                log.exception("chat stream failed")
+                emit("error", {"status": 500, "code": "InternalError", "detail": "the chat request failed"})
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        # The turn runs to completion even if the client goes away: it is a persisted request, not a view.
+        worker = loop.run_in_executor(None, work)
+
+        async def gen():
+            while True:
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=CHAT_HEARTBEAT)
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                if item is None:
+                    break
+                event, data = item
+                yield f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
+            await worker
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.get("/api/requests/{request_id}")
     def get_request(request_id: str, sess: Session = Depends(session_dep)):

@@ -3,6 +3,7 @@
 @keyframes grow { from { transform: scaleX(0); } to { transform: none; } }
 @keyframes settle { from { transform: scaleY(0.55); } to { transform: scaleY(1); } }
 @keyframes dialog-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes caret-blink { 50% { opacity: 0; } }
 @keyframes settle-x { from { transform: scaleX(0.15); } to { transform: scaleX(1); } }
 
 :where(html:not(.app-theme)) {
@@ -328,8 +329,12 @@
   .msg-time { font-weight: 400; opacity: 0.75; margin-left: 0.35rem; }
   .msg-inspect { display: inline-flex; align-items: center; gap: 0.5rem; font-size: var(--step-small); font-weight: 600; min-height: 44px; text-decoration: underline; text-underline-offset: 0.18em; text-decoration-thickness: 0.07em; align-self: flex-start; }
   .msg-inspect.is-on { text-decoration-thickness: 3px; }
+  .msg-stage { color: var(--muted); }
+  .msg-caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -0.12em; background: currentColor; }
   @media (prefers-reduced-motion: no-preference) {
     .msg { animation: rise 320ms var(--ease-out); }
+    .msg.is-streamed { animation: none; }
+    .msg-caret { animation: caret-blink 1s steps(1) infinite; }
   }
   .suggest { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .suggest-chip { background: var(--surface); min-height: 44px; padding: 0 0.8rem; font-size: var(--step-small); font-weight: 500; transition: background-color var(--t-hover) ease, transform var(--t-press) var(--ease-out); }

@@ -8,6 +8,15 @@ import type {
 export type Mode = 'live' | 'replay'
 export type StreamStatus = 'connecting' | 'open' | 'closed'
 
+export type ChatStage = 'thinking' | 'reading' | 'writing'
+
+// delta appends to the reply shown so far; replace swaps out everything shown (a safety check failed).
+export type ChatStreamHandlers = {
+  onStatus?(stage: ChatStage): void
+  onDelta?(text: string): void
+  onReplace?(text: string): void
+}
+
 export type NewObligation = { label: string; amount: string; dueDate: string; confirmedInflow?: boolean }
 
 export type ApprovalSubmission = { signature: Hex; approval: Record<string, string | number> }
@@ -41,6 +50,7 @@ export interface AegisApi {
   risk(): Promise<RiskReport>
   oracle(): Promise<OracleState>
   chat(message: string): Promise<ChatResponse>
+  chatStream?(message: string, on: ChatStreamHandlers, signal?: AbortSignal): Promise<ChatResponse>
   request(id: string): Promise<RequestRecord>
   submitApproval(id: string, body: ApprovalSubmission): Promise<unknown>
   deny(id: string, reason: string): Promise<unknown>

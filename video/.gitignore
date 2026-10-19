@@ -13,3 +13,11 @@ sound/.venv/
 **/.hyperframes/
 **/*.npy
 **/__pycache__/
+voice/.venv/
+voice/models/
+voice/out/
+voice/ref/
+voice/**/*.wav
+voice/**/*.mp3
+film/assets/team/
+film/.tools/

@@ -14,13 +14,15 @@ node scripts/sync-media.mjs          # footage + soundtrack into assets/, writes
 npx hyperframes@0.8.169 lint
 npx hyperframes@0.8.169 preview      # Studio preview
 
-npx hyperframes@0.8.169 render --quality delivery -o out/porthmos-launch.mp4
-npx hyperframes@0.8.169 render -c compositions/square.html --quality delivery -o out/porthmos-launch-square.mp4
+npx hyperframes@0.8.169 render --quality delivery --no-browser-gpu -o out/porthmos-launch.mp4
+npx hyperframes@0.8.169 render -c compositions/square.html --quality delivery --no-browser-gpu -o out/porthmos-launch-square.mp4
 node scripts/mux-audio.mjs out/porthmos-launch.mp4
 node scripts/mux-audio.mjs out/porthmos-launch-square.mp4 50
 ```
 
 Always run `mux-audio.mjs` after a render. HyperFrames' own audio mix comes out about 6.6 dB under the mastered soundtrack (-20.6 instead of -14 LUFS), so the script replaces the audio track with the mastered WAV (video stream copied). Result: -14.3 LUFS integrated, -1.1 dBTP.
+
+Keep `--no-browser-gpu`: on this laptop the GPU path picks the Intel iGPU and corrupts the ASCII sea layer. The team photos live in the gitignored `assets/team/`, so a fresh clone renders the team card without faces.
 
 Test counts and the other proof numbers live in `data/facts.json`. Edit it, run `sync-media.mjs`, then render. Real chain values are baked by `python3 scripts/bake-chain.py` (read-only RPC, no transactions) into `data/chain.json` / `data/chain.js`.
 

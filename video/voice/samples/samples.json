@@ -1,0 +1,390 @@
+{
+ "a": {
+  "params": {
+   "exaggeration": 0.35,
+   "cfg_weight": 0.5,
+   "temperature": 0.8
+  },
+  "lines": [
+   {
+    "id": "V02",
+    "segments": [
+     {
+      "offset_s": 0.0,
+      "duration_s": 3.853,
+      "text": "Porthmos is the agent wallet for cross-border trade treasuries.",
+      "params": {
+       "exaggeration": 0.35,
+       "cfg_weight": 0.5,
+       "temperature": 0.8
+      },
+      "natural_wpm": 161.2,
+      "stretch": 1.15,
+      "sentences": [
+       {
+        "text": "Porthmos is the agent wallet for cross-border trade treasuries.",
+        "chosen_take": 1,
+        "seed": 2000,
+        "issues": [],
+        "heard": "Porthmos is the agent wallet for cross-border trade treasuries.",
+        "takes": [
+         {
+          "attempt": 1,
+          "seed": 2000,
+          "score": 0.239,
+          "issues": [],
+          "heard": "Porthmos is the agent wallet for cross-border trade treasuries.",
+          "dur": 3.35
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "V23",
+    "segments": [
+     {
+      "offset_s": 0.0,
+      "duration_s": 9.857,
+      "text": "But your exit always stays open. Here, the treasury is frozen, and the owner still pulls four thousand U.S.D.C. back to the Safe.",
+      "params": {
+       "exaggeration": 0.35,
+       "cfg_weight": 0.5,
+       "temperature": 0.8
+      },
+      "natural_wpm": 160.7,
+      "stretch": 1.148,
+      "sentences": [
+       {
+        "text": "But your exit always stays open.",
+        "chosen_take": 1,
+        "seed": 23000,
+        "issues": [
+         "too fast 176 wpm"
+        ],
+        "heard": "but your exit always stays open.",
+        "takes": [
+         {
+          "attempt": 1,
+          "seed": 23000,
+          "score": 3.321,
+          "issues": [
+           "too fast 176 wpm"
+          ],
+          "heard": "but your exit always stays open.",
+          "dur": 2.05
+         },
+         {
+          "attempt": 2,
+          "seed": 23001,
+          "score": 3.321,
+          "issues": [
+           "too fast 176 wpm"
+          ],
+          "heard": "But your exit always stays open.",
+          "dur": 2.05
+         },
+         {
+          "attempt": 3,
+          "seed": 23002,
+          "score": 3.328,
+          "issues": [
+           "too fast 177 wpm"
+          ],
+          "heard": "But your exit always stays open.",
+          "dur": 2.03
+         }
+        ]
+       },
+       {
+        "text": "Here, the treasury is frozen, and the owner still pulls four thousand U.S.D.C. back to the Safe.",
+        "chosen_take": 1,
+        "seed": 23010,
+        "issues": [],
+        "heard": "Here, the Treasury is frozen, and the owner still pulls 4,000 USDC back to the safe.",
+        "takes": [
+         {
+          "attempt": 1,
+          "seed": 23010,
+          "score": 0.319,
+          "issues": [],
+          "heard": "Here, the Treasury is frozen, and the owner still pulls 4,000 USDC back to the safe.",
+          "dur": 6.19
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "b": {
+  "params": {
+   "exaggeration": 0.5,
+   "cfg_weight": 0.45,
+   "temperature": 0.8
+  },
+  "lines": [
+   {
+    "id": "V02",
+    "segments": [
+     {
+      "offset_s": 0.0,
+      "duration_s": 3.91,
+      "text": "Porthmos is the agent wallet for cross-border trade treasuries.",
+      "params": {
+       "exaggeration": 0.5,
+       "cfg_weight": 0.45,
+       "temperature": 0.8
+      },
+      "natural_wpm": 138.1,
+      "stretch": 1.0,
+      "sentences": [
+       {
+        "text": "Porthmos is the agent wallet for cross-border trade treasuries.",
+        "chosen_take": 1,
+        "seed": 2100,
+        "issues": [],
+        "heard": "Porthmos is the agent wallet for cross-border trade treasuries.",
+        "takes": [
+         {
+          "attempt": 1,
+          "seed": 2100,
+          "score": 0.112,
+          "issues": [],
+          "heard": "Porthmos is the agent wallet for cross-border trade treasuries.",
+          "dur": 3.91
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "V23",
+    "segments": [
+     {
+      "offset_s": 0.0,
+      "duration_s": 9.857,
+      "text": "But your exit always stays open. Here, the treasury is frozen, and the owner still pulls four thousand U.S.D.C. back to the Safe.",
+      "params": {
+       "exaggeration": 0.5,
+       "cfg_weight": 0.45,
+       "temperature": 0.8
+      },
+      "natural_wpm": 155.9,
+      "stretch": 1.114,
+      "sentences": [
+       {
+        "text": "But your exit always stays open.",
+        "chosen_take": 3,
+        "seed": 23102,
+        "issues": [],
+        "heard": "But your exit always stays open.",
+        "takes": [
+         {
+          "attempt": 1,
+          "seed": 23100,
+          "score": 3.43,
+          "issues": [
+           "too fast 209 wpm"
+          ],
+          "heard": "But your exit always stays open.",
+          "dur": 1.72
+         },
+         {
+          "attempt": 2,
+          "seed": 23101,
+          "score": 3.371,
+          "issues": [
+           "too fast 189 wpm"
+          ],
+          "heard": "But your exit always stays open.",
+          "dur": 1.9
+         },
+         {
+          "attempt": 3,
+          "seed": 23102,
+          "score": 0.232,
+          "issues": [],
+          "heard": "But your exit always stays open.",
+          "dur": 2.32
+         }
+        ]
+       },
+       {
+        "text": "Here, the treasury is frozen, and the owner still pulls four thousand U.S.D.C. back to the Safe.",
+        "chosen_take": 3,
+        "seed": 23112,
+        "issues": [],
+        "heard": "Here, the Treasury is frozen and the owner still pulls 4,000 USDC back to the safe.",
+        "takes": [
+         {
+          "attempt": 1,
+          "seed": 23110,
+          "score": 3.405,
+          "issues": [
+           "too fast 189 wpm"
+          ],
+          "heard": "Here, the Treasury is frozen and the owner still pulls 4,000 USDC back to the safe.",
+          "dur": 5.41
+         },
+         {
+          "attempt": 2,
+          "seed": 23111,
+          "score": 3.393,
+          "issues": [
+           "too fast 185 wpm"
+          ],
+          "heard": "Here, the treasury is frozen, and the owner still pulls 4,000 USDC back to the safe.",
+          "dur": 5.52
+         },
+         {
+          "attempt": 3,
+          "seed": 23112,
+          "score": 0.321,
+          "issues": [],
+          "heard": "Here, the Treasury is frozen and the owner still pulls 4,000 USDC back to the safe.",
+          "dur": 6.18
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "c": {
+  "params": {
+   "exaggeration": 0.65,
+   "cfg_weight": 0.4,
+   "temperature": 0.8
+  },
+  "lines": [
+   {
+    "id": "V02",
+    "segments": [
+     {
+      "offset_s": 0.0,
+      "duration_s": 3.829,
+      "text": "Porthmos is the agent wallet for cross-border trade treasuries.",
+      "params": {
+       "exaggeration": 0.65,
+       "cfg_weight": 0.4,
+       "temperature": 0.8
+      },
+      "natural_wpm": 162.2,
+      "stretch": 1.15,
+      "sentences": [
+       {
+        "text": "Porthmos is the agent wallet for cross-border trade treasuries.",
+        "chosen_take": 1,
+        "seed": 2200,
+        "issues": [],
+        "heard": "Portmos is the agent wallet for cross-border trade treasuries.",
+        "takes": [
+         {
+          "attempt": 1,
+          "seed": 2200,
+          "score": 0.244,
+          "issues": [],
+          "heard": "Portmos is the agent wallet for cross-border trade treasuries.",
+          "dur": 3.33
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "V23",
+    "segments": [
+     {
+      "offset_s": 0.0,
+      "duration_s": 9.857,
+      "text": "But your exit always stays open. Here, the treasury is frozen, and the owner still pulls four thousand U.S.D.C. back to the Safe.",
+      "params": {
+       "exaggeration": 0.65,
+       "cfg_weight": 0.4,
+       "temperature": 0.8
+      },
+      "natural_wpm": 153.8,
+      "stretch": 1.099,
+      "sentences": [
+       {
+        "text": "But your exit always stays open.",
+        "chosen_take": 2,
+        "seed": 23201,
+        "issues": [],
+        "heard": "but your exit always stays open.",
+        "takes": [
+         {
+          "attempt": 1,
+          "seed": 23200,
+          "score": 3.361,
+          "issues": [
+           "too fast 187 wpm"
+          ],
+          "heard": "But your exit always stays open.",
+          "dur": 1.93
+         },
+         {
+          "attempt": 2,
+          "seed": 23201,
+          "score": 0.261,
+          "issues": [],
+          "heard": "but your exit always stays open.",
+          "dur": 2.23
+         }
+        ]
+       },
+       {
+        "text": "Here, the treasury is frozen, and the owner still pulls four thousand U.S.D.C. back to the Safe.",
+        "chosen_take": 3,
+        "seed": 23212,
+        "issues": [],
+        "heard": "Here, the treasury is frozen and the owner still pulls 4,000 USDC back to the safe.",
+        "takes": [
+         {
+          "attempt": 1,
+          "seed": 23210,
+          "score": 3.389,
+          "issues": [
+           "too fast 183 wpm"
+          ],
+          "heard": "Here, the treasury is frozen, and the owner still pulls 4,000 USDC back to the safe.",
+          "dur": 5.56
+         },
+         {
+          "attempt": 2,
+          "seed": 23211,
+          "score": 3.357,
+          "issues": [
+           "too fast 174 wpm"
+          ],
+          "heard": "Here, the treasury is frozen and the owner still pulls 4,000 USDC back to the safe.",
+          "dur": 5.85
+         },
+         {
+          "attempt": 3,
+          "seed": 23212,
+          "score": 0.298,
+          "issues": [],
+          "heard": "Here, the treasury is frozen and the owner still pulls 4,000 USDC back to the safe.",
+          "dur": 6.39
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

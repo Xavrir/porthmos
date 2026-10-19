@@ -17,18 +17,18 @@
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 26px;
-          padding: 0 8%;
+          gap: 22px;
+          padding: 0 4%;
           text-align: center;
         }
         #sqend-mark {
           display: block;
-          height: 210px;
+          height: 150px;
           width: auto;
           filter: drop-shadow(0 0 40px rgba(78, 195, 151, 0.35));
         }
         #sqend-word {
-          font-size: 84px;
+          font-size: 72px;
           font-weight: 880;
           letter-spacing: 0.06em;
           line-height: 1;
@@ -36,7 +36,7 @@
         #sqend-pos {
           font-family: var(--sans);
           font-optical-sizing: auto;
-          font-size: 44px;
+          font-size: 38px;
           font-weight: 800;
           letter-spacing: -0.025em;
           line-height: 1.15;
@@ -46,17 +46,47 @@
         #sqend-url {
           margin-top: 10px;
           font-family: var(--mono);
-          font-size: 50px;
+          font-size: 46px;
           font-weight: 600;
           color: var(--ink);
           padding-bottom: 10px;
           border-bottom: 3px solid var(--green);
+        }
+        #sqend-team {
+          margin-top: 8px;
+          display: flex;
+          gap: 18px;
+        }
+        #sqend-team div {
+          width: 228px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 14px;
+        }
+        #sqend-team img {
+          width: 128px;
+          height: 128px;
+          border-radius: 50%;
+          background: #c4c4c1;
+          border: 3px solid rgba(78, 195, 151, 0.85);
+          box-shadow: 0 0 0 5px rgba(78, 195, 151, 0.12), 0 0 30px rgba(78, 195, 151, 0.2);
+        }
+        #sqend-team b {
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: 24px;
+          font-weight: 720;
+          letter-spacing: -0.015em;
+          line-height: 1.15;
+          color: var(--ink);
         }
       </style>
       <div id="sqend-root" data-composition-id="sqend" data-width="1080" data-height="1080" data-duration="5">
         <img id="sqend-mark" src="assets/brand/porthmos-mark@2x.png" alt="Porthmos mark" />
         <div id="sqend-word" class="hero">PORTHMOS</div>
         <div id="sqend-pos">The agent wallet for cross-border trade treasuries.</div>
+        <div id="sqend-team"><div><img src="assets/team/rizky.png" alt="" /><b>Rizky Mirzaviandy<br />Priambodo</b></div><div><img src="assets/team/stanley.png" alt="" /><b>Stanley Nathanael<br />Wijaya</b></div><div><img src="assets/team/aarief.png" alt="" /><b>Aarief Fawwaz<br />Satriahutama</b></div><div><img src="assets/team/hansel.png" alt="" /><b>Hansel Mitchell<br />Tumanggor</b></div></div>
         <div id="sqend-url">porthmos.vercel.app</div>
       </div>
       <script>

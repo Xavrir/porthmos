@@ -83,12 +83,27 @@
         }
         #ask-root .team {
           display: flex;
-          flex-wrap: wrap;
-          gap: 12px 22px;
-          font-family: var(--mono);
-          font-size: 34px;
-          font-weight: 600;
+          flex-direction: column;
+          gap: 8px;
+        }
+        #ask-root .team span {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: 31px;
+          font-weight: 680;
+          letter-spacing: -0.015em;
+          line-height: 1;
           color: var(--ink);
+        }
+        #ask-root .team img {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          border: 2px solid rgba(78, 195, 151, 0.8);
+          background: #c4c4c1;
         }
       </style>
       <div id="ask-root" data-composition-id="ask" data-width="1920" data-height="1080" data-duration="14">
@@ -100,7 +115,7 @@
         <div class="grid">
           <div class="cell" id="ask-c1"><small>FOR</small><b>Importers and SME trade-finance teams, and the banks behind them.</b></div>
           <div class="cell" id="ask-c2"><small>LIVE NOW</small><b>On Base Sepolia. Try it yourself:</b><div class="mono">porthmos.vercel.app</div></div>
-          <div class="cell" id="ask-c3"><small>TEAM</small><div class="team"><span>Xavrir</span><span>StyNW7</span><span>aarieffawwaz</span><span>HanselMitchell</span></div></div>
+          <div class="cell" id="ask-c3"><small>TEAM</small><div class="team"><span><img src="assets/team/rizky.png" alt="" />Rizky Mirzaviandy Priambodo</span><span><img src="assets/team/stanley.png" alt="" />Stanley Nathanael Wijaya</span><span><img src="assets/team/aarief.png" alt="" />Aarief Fawwaz Satriahutama</span><span><img src="assets/team/hansel.png" alt="" />Hansel Mitchell Tumanggor</span></div></div>
           <div class="cell ask" id="ask-c4"><small>LOOKING FOR</small><b>A bank pilot and an audit partner.</b></div>
         </div>
       </div>

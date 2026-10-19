@@ -22,6 +22,12 @@
           background: radial-gradient(closest-side, rgba(1, 6, 4, 0.9), rgba(1, 6, 4, 0.7) 55%, rgba(1, 6, 4, 0));
           opacity: 0;
         }
+        #act8-team-scrim {
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(ellipse 62% 58% at 50% 58%, rgba(1, 6, 4, 0.88), rgba(1, 6, 4, 0.6) 70%, rgba(1, 6, 4, 0));
+          opacity: 0;
+        }
         #act8-lock {
           position: absolute;
           left: 0;
@@ -96,7 +102,7 @@
           padding: 14px 28px;
         }
         #act8-team {
-          top: 372px;
+          top: 352px;
           gap: 30px;
         }
         #act8-team .by {
@@ -108,34 +114,40 @@
         }
         #act8-team .people {
           display: flex;
-          gap: 64px;
+          gap: 24px;
         }
         #act8-team .person {
+          width: 420px;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 18px;
+          text-align: center;
         }
         #act8-team .av {
-          width: 132px;
-          height: 132px;
+          width: 196px;
+          height: 196px;
           border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: radial-gradient(circle at 30% 25%, #1d4a3a, #0b1a14 70%);
-          border: 2px solid rgba(78, 195, 151, 0.7);
-          box-shadow: 0 0 40px rgba(78, 195, 151, 0.25);
-          font-family: var(--sans);
-          font-size: 56px;
-          font-weight: 820;
-          color: var(--ink);
+          object-fit: cover;
+          background: #c4c4c1;
+          border: 4px solid rgba(78, 195, 151, 0.85);
+          box-shadow: 0 0 0 7px rgba(78, 195, 151, 0.12), 0 0 44px rgba(78, 195, 151, 0.22);
         }
         #act8-team .person b {
-          font-family: var(--mono);
-          font-size: 32px;
-          font-weight: 600;
+          margin-top: 24px;
+          font-family: var(--sans);
+          font-optical-sizing: auto;
+          font-size: 46px;
+          font-weight: 760;
+          letter-spacing: -0.02em;
+          line-height: 1.1;
           color: var(--ink);
+        }
+        #act8-team .person code {
+          margin-top: 10px;
+          font-family: var(--mono);
+          font-size: 28px;
+          font-weight: 500;
+          color: var(--green);
         }
         #act8-team .track {
           margin-top: 14px;
@@ -159,6 +171,7 @@
       </style>
       <div id="act8-root" data-composition-id="act8" data-width="1920" data-height="1080" data-duration="14">
         <div id="act8-scrim"></div>
+        <div id="act8-team-scrim"></div>
         <div id="act8-lock">
           <img id="act8-mark" src="assets/brand/porthmos-mark@2x.png" alt="Porthmos mark" />
           <div id="act8-word" class="hero">PORTHMOS</div>
@@ -175,10 +188,10 @@
         <div class="phase" id="act8-team">
           <div class="by">BUILT BY</div>
           <div class="people">
-            <div class="person"><div class="av">X</div><b>Xavrir</b></div>
-            <div class="person"><div class="av">S</div><b>StyNW7</b></div>
-            <div class="person"><div class="av">A</div><b>aarieffawwaz</b></div>
-            <div class="person"><div class="av">H</div><b>HanselMitchell</b></div>
+            <div class="person"><img class="av" src="assets/team/rizky.png" alt="Rizky Mirzaviandy Priambodo" /><b>Rizky Mirzaviandy<br />Priambodo</b><code>@Xavrir</code></div>
+            <div class="person"><img class="av" src="assets/team/stanley.png" alt="Stanley Nathanael Wijaya" /><b>Stanley Nathanael<br />Wijaya</b><code>@StyNW7</code></div>
+            <div class="person"><img class="av" src="assets/team/aarief.png" alt="Aarief Fawwaz Satriahutama" /><b>Aarief Fawwaz<br />Satriahutama</b><code>@aarieffawwaz</code></div>
+            <div class="person"><img class="av" src="assets/team/hansel.png" alt="Hansel Mitchell Tumanggor" /><b>Hansel Mitchell<br />Tumanggor</b><code>@HanselMitchell</code></div>
           </div>
           <div class="track">Shenzhen FinTechathon 2026 · Topic F: Agent Wallet</div>
           <div class="links"><b>porthmos.vercel.app</b><span>·</span><b>github.com/Xavrir/porthmos</b></div>
@@ -202,6 +215,7 @@
           tl.fromTo($("act8-cta"), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 5.2);
           tl.to($("act8-cta"), { opacity: 0, y: -20, duration: 0.2, ease: "power2.in" }, 8.3);
 
+          tl.fromTo($("act8-team-scrim"), { opacity: 0 }, { opacity: 1, duration: 0.5 }, 8.3);
           tl.set($("act8-team"), { opacity: 1 }, 8.45);
           tl.fromTo("#act8-team .by", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 8.45);
           tl.fromTo("#act8-team .person", { opacity: 0, y: 30, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 0.45, ease: "back.out(1.6)", stagger: 0.1 }, 8.5);

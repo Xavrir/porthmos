@@ -52,6 +52,10 @@ Open **[porthmos.vercel.app](https://porthmos.vercel.app)** (Base Sepolia testne
 <br/>
 <sub>Live on Base Sepolia. The bank froze this treasury (<a href="https://sepolia.basescan.org/tx/0x7d498afeee82bca1caebf8164397dc3975d2cca8a9775620e57f788f5d110fac">freeze tx</a>), and the owner still pulled 4,000 USDC out of Vault B back to the Safe through the Copilot (<a href="https://sepolia.basescan.org/tx/0x7ce18a61c0c007f34fd0a0ff92f8c7f923d4d26d6a2dc496f7dd4175651bc59e">exit tx</a>). Deposits stay frozen; exits stay open.</sub>
 <br/><br/>
+<img src="docs/readme/basescan-exit.png" alt="BaseScan: the exit transaction on Base Sepolia, status Success" width="820" />
+<br/>
+<sub>The same exit on BaseScan: status Success. 4,000 vault shares are burned and 4,000 USDC returns to the treasury Safe <code>0x9f0dA153…964c3A70e</code>.</sub>
+<br/><br/>
 <img src="docs/readme/order-live.png" alt="Live TradeFlow order on Base Sepolia with three milestones" width="820" />
 <br/>
 <sub>Live on Base Sepolia. A 1,000 USDC TradeFlow order split 200 / 400 / 400, funded by the treasury Safe in one owner-signed transaction (<a href="https://sepolia.basescan.org/tx/0x516b003630e1235227805dc3dc5d74abe02d46509e9a2523f742edb3dca6666c">funding tx</a>). The full released, held and completed path is recorded on Base Sepolia as E6a to E6g (table below).</sub>

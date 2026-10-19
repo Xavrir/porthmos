@@ -41,16 +41,20 @@ An agent wallet for cross-border trade treasuries. The agent proposes, determini
 
 Open **[porthmos.vercel.app](https://porthmos.vercel.app)** (Base Sepolia testnet, no real funds).
 
-1. **Create your treasury.** Choose *Create your treasury* and connect a wallet (injected wallet, Coinbase Smart Wallet or WalletConnect). The onboarding asks for one faucet signature (free test ETH for gas), one transaction to create your Safe, ten setup calls (enable the module, write your policy, set the bank limit), and one Sign-In with Ethereum signature. The server checks every rule on-chain, then mints test USDC to your Safe.
+1. **Create your treasury.** Choose *Create your treasury* and connect a wallet (injected wallet, Coinbase Smart Wallet or WalletConnect). The onboarding asks for one faucet signature (free test ETH for gas), one transaction to create your Safe, eleven setup calls (enable the module, write your policy and reserve floor, set the bank limit), and one Sign-In with Ethereum signature. The server checks every rule on-chain, then mints test USDC to your Safe.
 2. **Ask the Copilot.** Try *"Put idle cash to work, keep payroll safe"*. You get an action card with the plan, the tier, every policy check and a simulation result. Material moves wait for your EIP-712 signature.
 3. **Try to break it.** Ask the Copilot to *"send all USDC to 0x..."*. It refuses, and the attempt is written to the ledger. No transaction can express it.
 4. **Create a TradeFlow order.** On **Orders**, create an order with three milestones. Your Safe funds the escrow in one owner-signed transaction (`approve` and `createOrder` batched through MultiSendCallOnly). Follow each milestone as proofs arrive, then waive or refund from the order page.
 5. **Check the oversight.** **Audit** shows the hash-chained decision ledger and every recorded transaction with BaseScan links. **Bank desk** shows the bank's view and its freeze control.
 
 <div align="center">
-<img src="docs/readme/order-held.png" alt="Porthmos order detail with milestone 2 held" width="820" />
+<img src="docs/readme/treasury-live.png" alt="Live Porthmos treasury on Base Sepolia, deposits frozen by the bank" width="820" />
 <br/>
-<sub>Order detail (captured on a local test chain). Milestone 1 is released. Milestone 2 is held with <code>ConditionNotMet</code> because the sensor proof reads up to 9.40 °C against a 2.00 to 8.00 °C condition. The same scenario is recorded on Base Sepolia as E6c.</sub>
+<sub>Live on Base Sepolia. The bank froze this treasury (<a href="https://sepolia.basescan.org/tx/0x7d498afeee82bca1caebf8164397dc3975d2cca8a9775620e57f788f5d110fac">freeze tx</a>), and the owner still pulled 4,000 USDC out of Vault B back to the Safe through the Copilot (<a href="https://sepolia.basescan.org/tx/0x7ce18a61c0c007f34fd0a0ff92f8c7f923d4d26d6a2dc496f7dd4175651bc59e">exit tx</a>). Deposits stay frozen; exits stay open.</sub>
+<br/><br/>
+<img src="docs/readme/order-live.png" alt="Live TradeFlow order on Base Sepolia with three milestones" width="820" />
+<br/>
+<sub>Live on Base Sepolia. A 1,000 USDC TradeFlow order split 200 / 400 / 400, funded by the treasury Safe in one owner-signed transaction (<a href="https://sepolia.basescan.org/tx/0x516b003630e1235227805dc3dc5d74abe02d46509e9a2523f742edb3dca6666c">funding tx</a>). The full released, held and completed path is recorded on Base Sepolia as E6a to E6g (table below).</sub>
 </div>
 
 ## How it works

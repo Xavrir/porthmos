@@ -4,10 +4,28 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/proof",
+      "destination": "https://sepolia.basescan.org/address/0x786863E82d233eb60555dfeEFEe06068d8EcB318",
+      "permanent": false
+    }
+  ],
   "rewrites": [
-    { "source": "/((?!assets/|media/|deployments/|brand/|favicon\\.svg).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!assets/|media/|deployments/|brand/|favicon\\.svg).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
-    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
   ]
 }

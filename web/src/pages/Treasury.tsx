@@ -281,12 +281,14 @@ export default function Treasury() {
           const committed = tr.figures?.committed.display ?? (orders.data ? money(fromUnits(orders.data.reduce((a, o) => a + committedRaw(o), 0n))) : '…')
           const active = orders.data?.filter((o) => o.order.status === 'ACTIVE').length
           return (
-            <Kpis label="Trade position">
-              <Figure label="Cash" value={(tr.figures?.cash ?? tr.balances.safeUsdc).display} note={tr.figures ? 'Safe plus withdrawable vault value' : 'USDC in the Safe'} info="What the treasury can pay from now. Escrowed funds are not part of it." />
-              <Figure label="Committed" value={committed} note={<Link className="card-link" to="/orders">{active === undefined ? 'View orders' : `${active} active order${active === 1 ? '' : 's'}`}</Link>}
-                info="Unreleased funds of active trade orders, read from TradeEscrow.committedOf. They left the Safe and can never be invested." />
-              <Figure label="Free" value={(tr.figures?.free ?? tr.deployable).display} note="Deployable after floor and fees" />
-            </Kpis>
+            <Section title="Trade position" info="TradeFlow orders lock supplier payments in escrow. Cash is what the treasury can pay from now, Committed is held for suppliers, Free can go to work.">
+              <Kpis label="Trade position">
+                <Figure label="Cash" value={(tr.figures?.cash ?? tr.balances.safeUsdc).display} note={tr.figures ? 'Safe plus withdrawable vault value' : 'USDC in the Safe'} info="What the treasury can pay from now. Escrowed funds are not part of it." />
+                <Figure label="Committed" value={committed} note={<Link className="card-link" to="/orders">{active === undefined ? 'View orders' : `${active} active order${active === 1 ? '' : 's'}`}</Link>}
+                  info="Unreleased funds of active trade orders, read from TradeEscrow.committedOf. They left the Safe and can never be invested." />
+                <Figure label="Free" value={(tr.figures?.free ?? tr.deployable).display} note="Deployable after floor and fees" />
+              </Kpis>
+            </Section>
           )
         })() : null}
 

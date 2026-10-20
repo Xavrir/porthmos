@@ -91,14 +91,14 @@ function TickerRow({ items, hidden }: { items: TickerItem[]; hidden?: boolean })
 
 type Stat = { key: string; value: number; label: string; source: string }
 
-type Step = { n: string; title: string; text: string; art: ReactNode; fn: string; flow?: boolean }
+type Step = { n: string; title: string; tag: string; text: string; art: ReactNode; fn: string; flow?: boolean }
 
 const STEPS: Step[] = [
-  { n: '01', title: 'Lock', text: 'The buyer funds the order in one signed transaction. The contract holds the money, out of the agent’s reach.', art: <ArtLock />, fn: 'TradeEscrow.createOrder' },
-  { n: '02', title: 'Ship', text: 'The carrier takes the goods and signs the handover. That document is the proof for the first milestone.', art: <ArtShip />, fn: 'Proof kind: HANDOVER' },
-  { n: '03', title: 'Prove', text: 'A trusted issuer signs each proof: a carrier, a sensor, a surveyor. Anyone may submit it. The signature is the authority.', art: <ArtProof />, fn: 'POST /api/tradeflow/orders/{id}/proofs' },
-  { n: '04', title: 'Verify', text: 'Fixed code checks the issuer, the document and the conditions. If one check fails, the payment is held.', art: <ArtVerify />, fn: 'Proof Verifier, then the Authorizer' },
-  { n: '05', title: 'Release', text: 'The contract pays the supplier fixed in the order. No one can change the payee or the amount.', art: <ArtRelease />, fn: 'TradeEscrow.release', flow: true },
+  { n: '01', title: 'Lock', tag: 'Escrow funded', text: 'The buyer funds the order in one signed transaction. The contract holds the money, out of the agent’s reach.', art: <ArtLock />, fn: 'TradeEscrow.createOrder' },
+  { n: '02', title: 'Ship', tag: 'Handover signed', text: 'The carrier takes the goods and signs the handover. That document is the proof for the first milestone.', art: <ArtShip />, fn: 'Proof kind: HANDOVER' },
+  { n: '03', title: 'Prove', tag: 'Proof issued', text: 'A trusted issuer signs each proof: a carrier, a sensor, a surveyor. Anyone may submit it. The signature is the authority.', art: <ArtProof />, fn: 'POST /api/tradeflow/orders/{id}/proofs' },
+  { n: '04', title: 'Verify', tag: 'Checks pass', text: 'Fixed code checks the issuer, the document and the conditions. If one check fails, the payment is held.', art: <ArtVerify />, fn: 'Proof Verifier, then the Authorizer' },
+  { n: '05', title: 'Release', tag: 'Supplier paid', text: 'The contract pays the supplier fixed in the order. No one can change the payee or the amount.', art: <ArtRelease />, fn: 'TradeEscrow.release', flow: true },
 ]
 
 type Fact = { icon: ReactNode; title: string; text: string; link?: { href: string; label: string } }
@@ -240,6 +240,7 @@ export function Landing() {
             </div>
             <div className="pm-scrim" aria-hidden="true" />
             <div className="pm-hero-in">
+              <p className="pm-eyebrow pm-mono"><span className="pm-dot is-live" aria-hidden="true" />Agent wallet for cross-border trade</p>
               <h1 id="pm-hero-title" className="pm-hero-title">Pay suppliers on proof</h1>
               <p className="pm-hero-sub">Porthmos holds the buyer’s payment in a smart contract and releases each milestone only when its proof checks out.</p>
               <div className="pm-hero-actions">
@@ -298,6 +299,11 @@ export function Landing() {
             <ol className="pm-steps">
               {STEPS.map((s) => (
                 <li key={s.n} className="pm-step">
+                  <div className="pm-step-ghost" aria-hidden="true">
+                    <span className="pm-step-ghost-n">{s.n}</span>
+                    <span className="pm-step-ghost-t">{s.title}</span>
+                    <span className="pm-step-ghost-tag pm-mono"><span className="pm-dot" />{s.tag}</span>
+                  </div>
                   <div className="pm-step-head">
                     <span className="pm-step-n pm-mono">{s.n}</span>
                     <h3 className="pm-step-title pm-mono">{s.title}</h3>

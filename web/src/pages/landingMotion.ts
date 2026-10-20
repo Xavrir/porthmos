@@ -28,6 +28,7 @@ export function initLandingMotion(root: HTMLElement): () => void {
         if (!h1) return
         const split = SplitText.create(h1, { type: 'words', mask: 'words' })
         gsap.set(split.words, { yPercent: 40, autoAlpha: 0 })
+        gsap.from(q('.pm-eyebrow'), { y: 10, autoAlpha: 0, duration: 0.8, ease: 'pmOut', delay: 0.05 })
         html.classList.remove('motion-pending')
         gsap.to(split.words, { yPercent: 0, autoAlpha: 1, duration: 0.9, stagger: 0.08, ease: 'pmOut', delay: 0.1 })
         gsap.from(qa('.pm-hero-sub, .pm-pair, .pm-hero-chips', q('.pm-hero') ?? root), { y: 12, autoAlpha: 0, duration: 0.9, stagger: 0.1, ease: 'pmOut', delay: 0.45 })

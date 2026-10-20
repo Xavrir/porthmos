@@ -2,9 +2,10 @@ import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useConnection, useDisconnect } from 'wagmi'
 import type { Address } from 'viem'
-import { AuthLayout } from '../auth/AuthLayout'
+import { AuthLayout, OrDivider } from '../auth/AuthLayout'
 import { useViewDemo } from '../auth/hooks'
 import { Dialog } from '../components/Dialog'
+import { Icon } from '../components/icons'
 import { SignConfirm } from '../components/SignConfirm'
 import { usePageTitle } from '../components/chrome'
 import { useSwitchToApp } from '../components/wallet/AccountMenu'
@@ -270,11 +271,17 @@ export default function SignIn() {
         )}
       </div>
 
+      <OrDivider />
+
       <div className="auth-test">
-        <p className="auth-quiet">
-          <button type="button" id="signin-test" className="auth-link" aria-expanded={testOpen} aria-controls="signin-test-panel" onClick={openTest}>{wallet ? 'Use the test wallet in this browser' : 'Try with a test wallet'}</button>
-          {' '}A throwaway key made in this browser and saved to a recovery file. No extension needed.
-        </p>
+        <button type="button" id="signin-test" className="auth-option" aria-expanded={testOpen} aria-controls="signin-test-panel" onClick={openTest}>
+          <span className="auth-option-icon" aria-hidden="true"><Icon name="key" /></span>
+          <span className="auth-option-text">
+            <span className="auth-option-title">{wallet ? 'Use the test wallet in this browser' : 'Try with a test wallet'}</span>
+            <span className="auth-option-sub">A throwaway key made in this browser and saved to a recovery file. No extension needed.</span>
+          </span>
+          <Icon name="right" className="auth-option-chev" />
+        </button>
         {testOpen ? (
           <div id="signin-test-panel" className="auth-section">
             <form className="auth-section" onSubmit={(e) => { e.preventDefault(); if (deviceReady) startDevice() }}>
@@ -343,7 +350,14 @@ export default function SignIn() {
         </p>
       ) : null}
 
-      <p className="auth-quiet">Judging or just curious? <button type="button" id="signin-demo" className="auth-link" onClick={() => viewDemo(seat, from)}>View the demo</button>, a recorded run of the reference treasury on {net(84532)}. Nothing to sign.</p>
+      <button type="button" id="signin-demo" className="auth-option" onClick={() => viewDemo(seat, from)}>
+        <span className="auth-option-icon" aria-hidden="true"><Icon name="clock" /></span>
+        <span className="auth-option-text">
+          <span className="auth-option-title">View the demo</span>
+          <span className="auth-option-sub">Judging or just curious? A recorded run of the reference treasury on {net(84532)}. Nothing to sign.</span>
+        </span>
+        <Icon name="right" className="auth-option-chev" />
+      </button>
 
       <Dialog open={help} onClose={() => setHelp(false)} labelledBy={helpId} className="dialog-auth-help">
         <div className="dialog-body">

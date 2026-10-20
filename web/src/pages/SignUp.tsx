@@ -2,9 +2,10 @@ import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'r
 import { Link, useNavigate } from 'react-router-dom'
 import { useConnection } from 'wagmi'
 import type { Address, Hex } from 'viem'
-import { AuthLayout } from '../auth/AuthLayout'
+import { AuthLayout, OrDivider } from '../auth/AuthLayout'
 import { useViewDemo } from '../auth/hooks'
 import { usePageTitle } from '../components/chrome'
+import { Icon } from '../components/icons'
 import { SiweConfirm } from '../components/SignConfirm'
 import { Term } from '../components/Glossary'
 import { keyLabel, useSwitchToApp } from '../components/wallet/AccountMenu'
@@ -251,10 +252,15 @@ export default function SignUp() {
         <div className="auth-stack">
           <button type="button" id="signup-wallet" className="pill pill-primary pill-block" disabled={!config.onboardingOpen || wrongChain} onClick={() => void connectOwner()}>Connect wallet</button>
           <p className="auth-quiet">Your wallet becomes the owner of a new Safe. The bank seat is a key kept in this browser for testnet.</p>
-          <p className="auth-quiet">
-            <button type="button" id="signup-test" className="auth-link" disabled={!config.onboardingOpen || wrongChain} onClick={begin}>{wallet ? 'Continue with the test wallet in this browser' : 'Try with a test wallet'}</button>
-            {' '}A throwaway owner key made in this browser and saved to a recovery file. No extension, no prompts.
-          </p>
+          <OrDivider />
+          <button type="button" id="signup-test" className="auth-option" disabled={!config.onboardingOpen || wrongChain} onClick={begin}>
+            <span className="auth-option-icon" aria-hidden="true"><Icon name="key" /></span>
+            <span className="auth-option-text">
+              <span className="auth-option-title">{wallet ? 'Continue with the test wallet in this browser' : 'Try with a test wallet'}</span>
+              <span className="auth-option-sub">A throwaway owner key made in this browser and saved to a recovery file. No extension, no prompts.</span>
+            </span>
+            <Icon name="right" className="auth-option-chev" />
+          </button>
         </div>
       )
     }

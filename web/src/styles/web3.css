@@ -244,6 +244,7 @@ html.app-theme:not(.auth-theme) {
   & .kpi { padding: 16px 18px; gap: 6px; }
   & .kpi-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
   & .kpi-value { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+  & .kpi-note .card-link { margin-left: 0; }
   & .kpi.is-alert { border-color: color-mix(in srgb, var(--refused-dot) 45%, var(--glass-line)); background: linear-gradient(180deg, color-mix(in srgb, var(--refused-bg) 70%, transparent), var(--glass)); }
   & .trend { border-radius: 999px; padding: 0 8px 0 6px; }
   & .spark-line { stroke: color-mix(in srgb, var(--c1) 55%, var(--c-muted)); }
@@ -278,6 +279,27 @@ html.app-theme:not(.auth-theme) {
   /* facts */
   & .facts dt, & .facts dd { border-bottom-style: dashed; }
 
+  /* side panels built from a plain section (Audit and Bank "Ledger against chain") get the same glass panel as their neighbours */
+  & .sec.col-narrow { position: relative; padding: 16px 20px; gap: 10px; background: var(--glass); border: 1px solid var(--glass-line); border-radius: var(--radius-lg); box-shadow: var(--panel-shadow); }
+  & .recon li { gap: 4px 16px; }
+
+  /* gates (a seat or a sign-in is needed): a lock tile, a clear title and the one action, on a soft glow */
+  & .gate-block {
+    position: relative; overflow: hidden; gap: 10px; padding: 28px 28px 28px 96px; min-height: 120px; justify-content: center;
+    background: radial-gradient(70% 140% at 0% 0%, var(--glow-soft), transparent 60%), var(--glass);
+    border: 1px solid var(--glass-line); box-shadow: var(--panel-shadow);
+  }
+  & .gate-block::before, & .gate-block::after { content: ''; position: absolute; left: 28px; top: 28px; width: 48px; height: 48px; }
+  & .gate-block::before { border-radius: 14px; background: var(--grad-primary); box-shadow: 0 10px 24px -10px var(--glow), 0 0 0 4px var(--glow-soft); }
+  & .gate-block::after {
+    background: var(--on-primary);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9'%3E%3Cpath d='M6 10.5h12v9H6z M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5 M12 14v2.5'/%3E%3C/svg%3E") center / 24px 24px no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9'%3E%3Cpath d='M6 10.5h12v9H6z M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5 M12 14v2.5'/%3E%3C/svg%3E") center / 24px 24px no-repeat;
+  }
+  & .gate-block > * { position: relative; }
+  & .gate-block h1, & .gate-block h2 { font-size: 1.125rem; letter-spacing: -0.01em; }
+  & .gate-block .button { margin-top: 6px; }
+
   /* alerts */
   & .alert-block { background: linear-gradient(135deg, var(--refused-bg), color-mix(in srgb, var(--refused-bg) 40%, var(--glass))); }
   & .alert-inline, & .ok-note, & .check-sum, & .drawer-note, & .decision-why, & .proof-note, & .keys-warning, & .step-error { border-radius: 10px; }
@@ -297,13 +319,51 @@ html.app-theme:not(.auth-theme) {
   & [data-ui] .checks { border-radius: 12px; }
   & .decision-quote { font-size: 1.125rem; letter-spacing: -0.01em; }
 
-  /* decision chain and milestones */
-  & .gate { border-radius: 12px; border-top-width: 1px; background: var(--glass); overflow: hidden; }
-  & .gate::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--line); }
-  & .g-done::before { background: linear-gradient(90deg, var(--ok-dot), var(--mint)); box-shadow: 0 0 10px var(--glow); }
-  & .g-current::before { background: var(--wait-dot); }
-  & .g-failed::before { background: var(--refused-dot); }
-  & .g-held::before { background: var(--held-dot); }
+  /* decision chain: a vertical stepper. A node per gate, joined by a rail that turns green as gates pass; the status sits
+     right of the gate name as a pill and the time and note read underneath. */
+  & .chain { display: flex; flex-direction: column; gap: 0; padding: 4px 0; }
+  & .gate {
+    display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 2px;
+    min-height: 0; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--muted);
+  }
+  & .gate::before {
+    content: ''; grid-column: 1; grid-row: 1; justify-self: center; position: relative; z-index: 1;
+    width: 22px; height: 22px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--line-strong); background: var(--surface);
+    background-position: center; background-repeat: no-repeat; background-size: 12px 12px;
+  }
+  & .gate:not(:last-child)::after {
+    content: ''; position: absolute; left: 20px; top: 30px; bottom: -8px; width: 2px; border-radius: 1px; background: var(--line);
+  }
+  & .gate.g-done:not(:last-child)::after { background: linear-gradient(180deg, var(--ok-dot), color-mix(in srgb, var(--ok-dot) 55%, var(--line))); }
+  & .gate-name { grid-column: 2; grid-row: 1; font-size: var(--step-body); }
+  & .gate-status {
+    grid-column: 3; grid-row: 1; justify-self: end; padding: 0 8px; border-radius: 999px; line-height: 20px; white-space: nowrap;
+    background: var(--neutral-bg); color: var(--neutral-t); border: 1px solid var(--neutral-bd);
+  }
+  & .gate-note { grid-column: 2 / -1; grid-row: 2; margin-top: 0; }
+  & .g-todo { background: transparent; }
+  & .g-todo .gate-name { color: var(--muted); font-weight: 500; }
+  & .g-todo::before { border-style: dashed; border-color: var(--line-strong); opacity: 0.7; }
+  & .g-done::before {
+    border-color: var(--ok-dot); background-color: var(--ok-dot); box-shadow: 0 0 0 4px var(--glow-soft);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230c1f17' stroke-width='3.2'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+  }
+  & .g-done .gate-status { background: var(--ok-bg); color: var(--ok-t); border-color: var(--ok-bd); }
+  & .g-current { background: var(--wait-bg); }
+  & .g-current::before { border-color: var(--wait-dot); background-color: var(--surface); background-image: radial-gradient(circle, var(--wait-dot) 0 4px, transparent 4.5px); background-size: 100% 100%; --halo: color-mix(in srgb, var(--wait-dot) 50%, transparent); }
+  & .g-current .gate-status { background: var(--surface); color: var(--wait-t); border-color: var(--wait-bd); }
+  & .g-held { background: var(--held-bg); }
+  & .g-held::before { border-color: var(--held-dot); background-color: var(--held-dot); background-image: radial-gradient(circle, var(--surface) 0 3px, transparent 3.5px); background-size: 100% 100%; }
+  & .g-held .gate-status { background: var(--surface); color: var(--held-t); border-color: var(--held-bd); }
+  & .g-failed { background: var(--refused-bg); }
+  & .g-failed::before {
+    border-color: var(--refused-dot); background-color: var(--refused-dot);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.2'%3E%3Cpath d='M7 7l10 10M17 7L7 17'/%3E%3C/svg%3E");
+  }
+  & .g-failed .gate-status { background: var(--surface); color: var(--refused-t); border-color: var(--refused-bd); }
+  @media (prefers-reduced-motion: no-preference) { & .g-current::before { animation: p-halo 2s var(--m-enter) infinite; } }
+
+  /* milestones */
   & .ms-released .ms-node, & .ms-waived .ms-node, & .step.s-done .step-n, & .tl-ok .tl-dot { box-shadow: 0 0 0 4px var(--glow-soft), 0 0 12px var(--glow); }
   & .ms-step:not(:last-child)::after { background: linear-gradient(180deg, var(--ok-dot), var(--mint)); }
   & .ms-card { padding: 14px 18px; }
@@ -336,7 +396,10 @@ html.app-theme:not(.auth-theme) {
 @media (max-width: 760px) {
   html.app-theme:not(.auth-theme) {
     & .kpis { gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    & .kpis > .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
     & .kpi { padding: 12px 14px; }
+    & .gate-block { padding: 88px 20px 22px; }
+    & .gate-block::before, & .gate-block::after { left: 20px; top: 22px; }
     & .kpi-value { font-size: 1.25rem; }
     & .card.today { padding: 16px; }
     & .page-head h1 { font-size: 1.5rem; }
@@ -347,7 +410,7 @@ html.app-theme:not(.auth-theme) {
 html.auth-theme {
   & .auth-main { background: radial-gradient(60% 50% at 70% 10%, rgba(78, 195, 151, 0.10), transparent 70%), radial-gradient(40% 40% at 100% 100%, rgba(78, 195, 151, 0.06), transparent 70%), var(--bg); }
   & .auth-brand img { filter: drop-shadow(0 4px 12px rgba(78, 195, 151, 0.35)); }
-  & .auth-title { font-size: 1.625rem; letter-spacing: -0.02em; }
+  & .auth-title { font-size: clamp(1.75rem, 1.2vw + 1.3rem, 2.25rem); font-weight: 500; letter-spacing: -0.03em; line-height: 1.15; }
   & .auth-panel, & .auth-box { background: linear-gradient(160deg, rgba(78, 195, 151, 0.06), transparent 50%), var(--surface); border-color: #1f2623; border-radius: 14px; }
   & .pill { transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease, box-shadow 240ms ease, transform var(--t-fast) ease; }
   @media (hover: hover) and (pointer: fine) {

@@ -1,4 +1,24 @@
+<p align="center">
+  <img src="figures/ev-banner.png" alt="Porthmos execution evidence: 33 testnet transactions re-checked, 7 attacks refused, contracts byte-identical" width="100%" />
+</p>
+
+<div align="center">
+
 # Porthmos: Execution Evidence
+
+<img alt="Network: Base Sepolia" src="https://img.shields.io/badge/network-Base_Sepolia_(84532)-0052FF" />
+<img alt="Revision 1c19881" src="https://img.shields.io/badge/revision-1c19881-4EC397" />
+<img alt="Audited 20 Oct 2026" src="https://img.shields.io/badge/audit_date-20_Oct_2026-F99510" />
+<img alt="Transactions 33/33 re-checked" src="https://img.shields.io/badge/tx_re--checked-33%2F33-4EC397" />
+<img alt="Attacks refused 7/7" src="https://img.shields.io/badge/attacks_refused-7%2F7-F99510" />
+<img alt="Tests 713/714" src="https://img.shields.io/badge/tests_passed-713%2F714-4EC397" />
+
+[README](../README.md) · [Technical Documentation](TECHNICAL_DOCUMENTATION.md) · [Security Self-Assessment](SECURITY_SELF_ASSESSMENT_REPORT.md) · **Execution Evidence** · [Live demo](https://porthmos.vercel.app)
+
+</div>
+
+> [!NOTE]
+> **Testnet only.** All evidence is on Base Sepolia with mock vaults, a mock price feed and demo proof issuers. A reverted attack transaction is a **refused attempt**, not a fund movement.
 
 | | |
 |:-|:-|
@@ -32,6 +52,10 @@
 ## 1. Executive evidence summary
 
 **What is demonstrated.** On Base Sepolia, the Porthmos treasury agent deposited surplus cash into a vault with the owner's signed approval, pulled cash back when an invoice raised the required reserve, exited both vaults on a simulated depeg, and kept exits working while the bank froze the agent. TradeFlow escrowed a 1,000 test-USDC order and paid the supplier milestone by milestone on verified proofs, held a milestone whose temperature reading failed its condition, and let the owner waive it. Seven attack transactions (tampered signature, replay, moved price, deposit while frozen, forced release of a failing proof, tampered release, release while frozen) were mined and **reverted** with the expected custom errors.
+
+<p align="center">
+  <img src="figures/evidence-timeline.png" alt="Timeline of recorded Base Sepolia transactions from 14 to 18 Oct 2026, executed, reverted and held" width="100%" />
+</p>
 
 **How the evidence was checked in this audit (20 Oct 2026).**
 
@@ -149,6 +173,10 @@ Whether the source is verified on BaseScan was not checked.
 
 ## 5. End-to-end demonstration
 
+<p align="center">
+  <img src="figures/e1-trace.png" alt="E1 traced end to end: request, analysis, policy, approval, sign, submit, enforce, record" width="100%" />
+</p>
+
 E1 is the clearest single trace of the whole pipeline. Every step below is backed by the evidence file (request `req_a4180fd1bf1441d8`) and the final transaction by the chain.
 
 | Step | What happened | Evidence | Class |
@@ -191,11 +219,23 @@ The same pipeline is exercised end to end, on a local chain, by `tests/integrati
 | Bank freezes the tenant Safe | [0x7d498afe…](https://sepolia.basescan.org/tx/0x7d498afeee82bca1caebf8164397dc3975d2cca8a9775620e57f788f5d110fac) (block 48274033) | `bankFreeze`; `PolicyChanged` |
 | Executor redeems 4,000 USDC from Vault B to the tenant Safe | [0x7ce18a61…](https://sepolia.basescan.org/tx/0x7ce18a61c0c007f34fd0a0ff92f8c7f923d4d26d6a2dc496f7dd4175651bc59e) (block 48275990) | `AegisExecuted` REDEEM 4,000; `bankFrozen(safe)` read as `true` at block 48275989 |
 
+<div align="center">
+<img src="readme/treasury-live.png" alt="Live Porthmos treasury on Base Sepolia, deposits frozen by the bank" width="820" />
+<br/><sub>The live tenant treasury on 18 Oct 2026: frozen by its bank, exit still possible.</sub>
+<br/><br/>
+<img src="readme/basescan-exit.png" alt="BaseScan: the exit transaction on Base Sepolia, status Success" width="820" />
+<br/><sub>The 4,000 USDC exit on BaseScan.</sub>
+</div>
+
 That these were triggered from the web UI is supported by the screenshots in [`docs/readme/`](readme/), not by the chain itself.
 
 ---
 
 ## 7. Security rejection evidence
+
+<p align="center">
+  <img src="figures/rejections.png" alt="Seven attack transactions mined on Base Sepolia and refused by the contracts with typed errors" width="100%" />
+</p>
 
 Each row is a mined transaction with receipt status 0. The "decoded" column is the custom error returned when the same call is re-executed at the parent block in this audit.
 
@@ -220,6 +260,10 @@ Each row is a mined transaction with receipt status 0. The "decoded" column is t
 ## 8. Smart escrow and trade evidence
 
 Order 1 on the reference Safe: total 1,000 USDC; supplier `0xF64f…a7Ab`; milestones 200 / 400 / 400 with issuers carrier, sensor, surveyor; the arrival milestone requires 2.00 to 8.00 °C. The steps ran in this order: E6a, E6b, E6c, E6d, E6f, E6g, E6e.
+
+<p align="center">
+  <img src="readme/tradeflow.png" alt="TradeFlow order 1 on Base Sepolia: 1,000 USDC paid 200 / 400 / 400 on proof, with a held cold-chain milestone" width="100%" />
+</p>
 
 ```mermaid
 sequenceDiagram
@@ -274,6 +318,10 @@ The evidence file's `e6SchemaCheck` is `ok` (test T54 checks its structure). Lin
 ## 10. Test execution matrix
 
 ### 10.1 Suite results (20 Oct 2026)
+
+<p align="center">
+  <img src="figures/test-matrix.png" alt="Test execution matrix: 713 of 714 automated tests passed; scenario matrix 27 pass, 3 not implemented, 1 blocked" width="100%" />
+</p>
 
 | Command | Environment | Result | Reproduced in this audit |
 |:-|:-|:-|:-|
@@ -432,6 +480,10 @@ Do not run `evidence_84532.py` against Base Sepolia while the hosted service run
 
 ## 13. Evidence coverage and gaps
 
+<p align="center">
+  <img src="figures/evidence-coverage.png" alt="Evidence coverage by capability: on-chain, automated tests, recorded records, and gaps" width="100%" />
+</p>
+
 | Capability | Evidence level |
 |:-|:-|
 | Containment, tiers, signatures, replay, price band, freeze, exits, escrow release/hold/waive | On-chain + automated tests |
@@ -457,3 +509,7 @@ The repository's central claims are supported by verifiable evidence. Every reco
 - supplier payments are released only for proofs that meet the order's conditions, only to the fixed supplier and only in the fixed amounts.
 
 The evidence is from a **testnet** with **mock** vaults, price feed and proof issuers. It does not show production readiness, real-world proof verification, or live LLM behaviour on the day of this audit, and the off-chain ledger references are recorded claims rather than independently verifiable facts.
+
+---
+
+<div align="center"><sub>[README](../README.md) · [Technical Documentation](TECHNICAL_DOCUMENTATION.md) · [Security Self-Assessment](SECURITY_SELF_ASSESSMENT_REPORT.md) · [Execution Evidence](EXECUTION_EVIDENCE.md) · [Live demo](https://porthmos.vercel.app) · <a href="#contents">Back to contents</a></sub></div>

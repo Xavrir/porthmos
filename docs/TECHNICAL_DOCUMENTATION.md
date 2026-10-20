@@ -1,6 +1,23 @@
+<p align="center">
+  <img src="figures/tech-banner.png" alt="Porthmos technical documentation: three layers, one rule" width="100%" />
+</p>
+
+<div align="center">
+
 # Porthmos: Technical Documentation
 
-**2026 Shenzhen International FinTechathon · International AI Track · Topic F: Agent Wallet**
+*2026 Shenzhen International FinTechathon · International AI Track · Topic F: Agent Wallet*
+
+<img alt="Network: Base Sepolia" src="https://img.shields.io/badge/network-Base_Sepolia_(84532)-0052FF" />
+<img alt="Revision 1c19881" src="https://img.shields.io/badge/revision-1c19881-4EC397" />
+<img alt="Audited 20 Oct 2026" src="https://img.shields.io/badge/audit_date-20_Oct_2026-F99510" />
+<img alt="Solidity 0.8.28" src="https://img.shields.io/badge/Solidity-0.8.28-363636?logo=solidity" />
+<img alt="Python 3.12+" src="https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white" />
+<img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white" />
+
+[README](../README.md) · **Technical Documentation** · [Security Self-Assessment](SECURITY_SELF_ASSESSMENT_REPORT.md) · [Execution Evidence](EXECUTION_EVIDENCE.md) · [Live demo](https://porthmos.vercel.app)
+
+</div>
 
 | | |
 |:-|:-|
@@ -10,6 +27,9 @@
 | Repository revision | `main` at `1c19881`. The audit changed documentation only; no source code was modified ([§17.4](#174-audit-scope-and-changes)) |
 | Network | Base Sepolia testnet (chain ID 84532); Anvil (31337) for local work |
 | Companion documents | [Security Self-Assessment Report](SECURITY_SELF_ASSESSMENT_REPORT.md) · [Execution Evidence](EXECUTION_EVIDENCE.md) · [Design specification v0.7](TECHNICAL-DOCUMENT.md) |
+
+> [!NOTE]
+> **Testnet prototype.** Base Sepolia only, with test USDC, mock vaults, a mock price feed and demo proof issuers. The contracts are not externally audited.
 
 This document describes what the repository implements, as verified by reading the source and running the test suites on 20 October 2026. Every claim points to a file. Where the code and an earlier document disagree, this document follows the code. Status labels used throughout:
 
@@ -88,6 +108,13 @@ An owner chats with the Copilot in the web app. The service turns the request in
 
 ### 2.1 High-level architecture
 
+<p align="center">
+  <img src="readme/architecture.png" alt="Porthmos architecture: people and issuers, the five-process service with one key each, and the Base Sepolia contracts" width="100%" />
+</p>
+
+<details>
+<summary>Text version (Mermaid)</summary>
+
 ```mermaid
 flowchart LR
   subgraph Users
@@ -146,6 +173,8 @@ flowchart LR
   Escrow -->|reads| Registry
   Keep -->|poke| Feed
 ```
+
+</details>
 
 The diagram is grounded in `service/aegis/supervisor.py` (processes and key ownership), `service/aegis/api/app.py` (endpoints), `web/src/lib/txguard.ts` (browser transaction guard) and `contracts/src/*.sol`.
 
@@ -207,6 +236,10 @@ The security argument does not rest on boundary 2 or 3 being honest for fund con
 | Audit trail | `AegisExecuted`, `PolicyChanged`, `OrderCreated`, `MilestoneReleased`, `OrderRefunded` events; typed revert errors | Hash-chained decision ledger; bank desk reconciles ledger rows against events |
 
 ### 2.5 Data flow: one Copilot request
+
+<p align="center">
+  <img src="readme/decision-flow.png" alt="One request end to end: ask, plan, check, sign, enforce, record, with four checks and the approval tiers" width="100%" />
+</p>
 
 ```mermaid
 sequenceDiagram
@@ -287,7 +320,7 @@ web/                  React + Vite app
   scripts/            deployment sync, evidence sync, browser QA scripts, mock API/chain
 deployments/          deployed addresses (84532, 31337) and the recorded evidence file
 deploy/tencent/       Dockerfile, docker-compose.yml, Caddy site block, environment template
-docs/                 this document set, design specification v0.7, interface specs, archive/
+docs/                 this document set, design specification v0.7, interface specs, figures
 video/                demo film sources (not part of the runtime)
 brand/                logo files
 ```
@@ -353,7 +386,7 @@ Streaming: the Copilot uses `POST /api/agent/chat/stream` (Server-Sent Events, p
 
 - Plain-language error mapping for chain, wallet and API errors (`web/src/lib/onboard/errors.ts`), including every custom contract error.
 - The transaction guard throws `RefusedTx` with the reason and "Nothing was sent".
-- Accessibility: skip link, `prefers-reduced-motion` support (`web/src/lib/motion.ts`), and a browser QA script using axe (`web/scripts/qa/axe.js`). A recorded UX review is in `docs/design/aegis-web-qa-101526/`. Accessibility was **not re-tested** in this audit.
+- Accessibility: skip link, `prefers-reduced-motion` support (`web/src/lib/motion.ts`), and a browser QA script using axe (`web/scripts/qa/axe.js`). Accessibility was **not re-tested** in this audit.
 
 ---
 
@@ -550,6 +583,10 @@ Committed funds have already left the Safe. They are never added to `L` or to th
 
 Implemented in `service/aegis/core/reserve.py`:
 
+<p align="center">
+  <img src="figures/reserve-model.png" alt="Reserve model: obligations and buffer form the required reserve written on-chain as the floor; only the deployable surplus can go to vaults" width="100%" />
+</p>
+
 ```
 R_required = max over t in [now, now + H] of max(0, Σ outflows(≤ t) − Σ confirmed inflows(≤ t)) + B
 B          = max(B_min, b × Σ outflows in the horizon)       H = 30 days, B_min = 500 USDC, b = 10 %
@@ -668,6 +705,10 @@ The Executor waits up to 60 s for a receipt; the workflow reconciles an executed
 
 ## 9. Trade and escrow workflows (TradeFlow)
 
+<p align="center">
+  <img src="readme/tradeflow.png" alt="TradeFlow order 1 on Base Sepolia: 1,000 USDC paid 200 / 400 / 400 on proof, with a held cold-chain milestone" width="100%" />
+</p>
+
 ### 9.1 Order model
 
 One order has one buyer (a registered Safe), one supplier fixed at creation, MockUSDC as the token, and exactly three milestones, each with its own amount, issuer, proof kind, conditions and deadline:
@@ -781,6 +822,13 @@ This section summarises the design; the assessment, findings and residual risks 
 
 ### 12.1 Enforcement layers
 
+<p align="center">
+  <img src="figures/defence-layers.png" alt="Six enforcement layers: five off-chain layers of defence in depth and the on-chain contracts, which hold on their own" width="100%" />
+</p>
+
+<details>
+<summary>Text version (Mermaid)</summary>
+
 ```mermaid
 flowchart LR
   L1["1 Rule parser + confirm gate<br/>(questions never act)"] --> L2["2 Proposal Validator<br/>(only more conservative)"]
@@ -790,9 +838,15 @@ flowchart LR
   L5 --> L6["6 AegisModule / TradeEscrow<br/>on-chain checks"]
 ```
 
+</details>
+
 Layers 1 to 5 are defence in depth; layer 6 holds on its own.
 
 ### 12.2 Wallet and key responsibilities
+
+<p align="center">
+  <img src="figures/key-isolation.png" alt="Key isolation: each service process loads only its own key, and the blast radius of each leaked key" width="100%" />
+</p>
 
 | Key | Holder | Worst case if compromised |
 |:-|:-|:-|
@@ -964,6 +1018,10 @@ No CI workflow exists in the repository; all results above come from local runs.
 
 ### 17.1 Feature matrix
 
+<p align="center">
+  <img src="figures/status-board.png" alt="Implementation status: 9 of 17 features implemented and verified, with mocks and gaps named" width="100%" />
+</p>
+
 | Feature | Status | Evidence |
 |:-|:-|:-|
 | Typed deposit/redeem through a Safe module | Implemented & Verified | Foundry tests; E1, E3 |
@@ -1029,3 +1087,7 @@ Issues found in the code during the audit are recorded as findings with recommen
 | Browser transaction guard | `web/src/lib/txguard.ts` |
 
 **Standards used:** EIP-712, EIP-4361 (SIWE), EIP-191, ERC-1271, ERC-6492, ERC-4626, ERC-20, EIP-6963, EIP-5792 (wallet batch calls, when the wallet supports them), Chainlink `AggregatorV3Interface`, Safe v1.4.1 modules and `MultiSendCallOnly`.
+
+---
+
+<div align="center"><sub>[README](../README.md) · [Technical Documentation](TECHNICAL_DOCUMENTATION.md) · [Security Self-Assessment](SECURITY_SELF_ASSESSMENT_REPORT.md) · [Execution Evidence](EXECUTION_EVIDENCE.md) · [Live demo](https://porthmos.vercel.app) · <a href="#contents">Back to contents</a></sub></div>

@@ -1,4 +1,24 @@
+<p align="center">
+  <img src="figures/sec-banner.png" alt="Porthmos security self-assessment: 16 findings, no Critical, one High open with a fix" width="100%" />
+</p>
+
+<div align="center">
+
 # Porthmos: Security Self-Assessment Report
+
+<img alt="Network: Base Sepolia" src="https://img.shields.io/badge/network-Base_Sepolia_(84532)-0052FF" />
+<img alt="Revision 1c19881" src="https://img.shields.io/badge/revision-1c19881-4EC397" />
+<img alt="Audited 20 Oct 2026" src="https://img.shields.io/badge/audit_date-20_Oct_2026-F99510" />
+<img alt="Findings 16" src="https://img.shields.io/badge/findings-16-F99510" />
+<img alt="Critical 0" src="https://img.shields.io/badge/critical-0-4EC397" />
+<img alt="High 1 open" src="https://img.shields.io/badge/high-1_open-ff6b5e" />
+
+[README](../README.md) · [Technical Documentation](TECHNICAL_DOCUMENTATION.md) · **Security Self-Assessment** · [Execution Evidence](EXECUTION_EVIDENCE.md) · [Live demo](https://porthmos.vercel.app)
+
+</div>
+
+> [!IMPORTANT]
+> This is a **self-assessment by the project team**, not a third-party audit or certification. No mainnet deployment exists.
 
 | | |
 |:-|:-|
@@ -87,6 +107,10 @@ No Critical or High severity issue was found in the contracts. One High-impact i
 
 ### 3.1 Protected assets
 
+<p align="center">
+  <img src="figures/key-isolation.png" alt="Key isolation: each service process loads only its own key, and the blast radius of each leaked key" width="100%" />
+</p>
+
 | Asset | Where | Protection |
 |:-|:-|:-|
 | Treasury funds (test USDC) in each tenant Safe and in vaults | Safe, MockVault | Safe custody; `AegisModule` typed actions; `PolicyRegistry` limits |
@@ -99,6 +123,10 @@ No Critical or High severity issue was found in the contracts. One High-impact i
 | Privacy data | Client IP hashes, chat text | Salted SHA-256 for IPs; chat text sent to the LLM provider |
 
 ### 3.2 Trust boundaries
+
+<p align="center">
+  <img src="figures/trust-boundaries.png" alt="Trust boundaries: untrusted browser and external services, a trusted but bounded API host, and the chain as the enforcement layer" width="100%" />
+</p>
 
 | Boundary | Crossed by | Trust decision |
 |:-|:-|:-|
@@ -130,6 +158,10 @@ No Critical or High severity issue was found in the contracts. One High-impact i
 Out of scope: compromise of the owner's own key (self-custody), consensus attacks, bugs in Safe core contracts, malware in the visitor's browser.
 
 ### 4.2 Attack surfaces and threat scenarios
+
+<p align="center">
+  <img src="figures/threat-map.png" alt="Threat model: 15 scenarios, 13 contained or bounded, S10 not prevented and S13 not detectable" width="100%" />
+</p>
 
 | # | Scenario | Adversary | Existing protections | Result |
 |:-|:-|:-|:-|:-|
@@ -206,6 +238,10 @@ There is no global pause and no upgrade mechanism: all three contracts are immut
 
 ## 6. AI agent security assessment
 
+<p align="center">
+  <img src="figures/ai-containment.png" alt="AI agent containment: what a manipulated model can do, and the on-chain bound that holds regardless" width="100%" />
+</p>
+
 | Concern | Control | Verification |
 |:-|:-|:-|
 | Prompt injection via chat | Rule parser decides if a message is an action; questions are read-only; action + injection markers refused whole (`SuspiciousRequest`); addresses other than the session Safe flagged `crossClient` | `tests/test_copilot_safety.py` (147 cases), `tests/integration/test_copilot_anvil.py`; E4c ledger record |
@@ -260,6 +296,10 @@ There is no global pause and no upgrade mechanism: all three contracts are immut
 
 ## 9. Security controls matrix
 
+<p align="center">
+  <img src="figures/security-scorecard.png" alt="Controls and regression scorecard: 30 controls mapped, 14 of 14 mandatory regression scenarios pass" width="100%" />
+</p>
+
 Status values: **Verified (test)**, **Verified (on-chain)**, **Implemented** (code present, no specific test found), **Partial**, **Planned**.
 
 | Control | Implementation | Verification evidence | Status | Residual risk |
@@ -303,6 +343,10 @@ Severity reflects impact if the design were used with real funds, adjusted for l
 
 ### 10.1 Confirmed findings
 
+<p align="center">
+  <img src="figures/findings-overview.png" alt="Findings PRT-01 to PRT-16 by severity and status: no Critical, one High, four Medium, eight Low, three Informational" width="100%" />
+</p>
+
 | ID | Severity | Component | Finding | Status |
 |:-|:-|:-|:-|:-|
 | PRT-01 | High | Web onboarding | Onboarding addresses taken from the API without pinning | Open |
@@ -323,6 +367,9 @@ Severity reflects impact if the design were used with real funds, adjusted for l
 | PRT-16 | Informational | Exit key | A leaked Exit key can quarantine every tenant's vaults (availability) | Accepted |
 
 #### PRT-01 Onboarding addresses taken from the API without pinning (High, Open)
+
+> [!WARNING]
+> Highest-severity open finding. Fix first: it protects new tenants against a compromised API host.
 
 - **Component:** `web/src/lib/onboard/runner.ts`, `web/src/pages/SignUp.tsx`.
 - **Explanation:** During sign-up the browser key creates the Safe through `config.safeProxyFactory`/`safeSingleton`, enables `config.module` on it, and allows `config.vaults` in `config.registry`. All of these come from `GET /api/onboard/config`, and the onboarding senders (`onboard/signers.ts`) send directly, without `txguard`.
@@ -486,6 +533,10 @@ Mock vaults, price feed and issuers; shared hot server keys (PRT-02, PRT-03); un
 
 ### 14.2 Controls required before any real-money use
 
+<p align="center">
+  <img src="figures/production-path.png" alt="Ten controls between the testnet prototype and real-money use" width="100%" />
+</p>
+
 1. Independent smart-contract audit of `AegisModule`, `PolicyRegistry` and `TradeEscrow`, plus static analysis and formal checks of the invariants.
 2. HSM or MPC custody for the Authorizer and Exit keys, per-tenant or per-cohort keys, and a rotation runbook.
 3. Real ERC-4626 vaults with due diligence, real price feeds (with staleness and deviation handling per asset), and removal of every mock admin power.
@@ -506,3 +557,7 @@ Mock vaults, price feed and issuers; shared hot server keys (PRT-02, PRT-03); un
 **What remains unverified.** Live behaviour of the hosted API during this assessment (unreachable), the live LLM path, and any property that depends on real-world issuers, vaults or price feeds.
 
 **Testnet demonstration vs production readiness.** Porthmos is a credible, well-engineered **testnet prototype**: its most important safety property, that an AI agent cannot move treasury funds outside policy, rests on on-chain checks rather than on the model. It is **not production-ready**: it uses mocks, shared hot keys and a single host, and it has not been externally audited. The findings above are the list of work between the two.
+
+---
+
+<div align="center"><sub>[README](../README.md) · [Technical Documentation](TECHNICAL_DOCUMENTATION.md) · [Security Self-Assessment](SECURITY_SELF_ASSESSMENT_REPORT.md) · [Execution Evidence](EXECUTION_EVIDENCE.md) · [Live demo](https://porthmos.vercel.app) · <a href="#contents">Back to contents</a></sub></div>

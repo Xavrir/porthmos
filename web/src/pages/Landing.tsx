@@ -411,7 +411,7 @@ export function Landing() {
               <p id="pm-f2" className="pm-foot-head">CONTRACTS ON BASESCAN/</p>
               <ul className="pm-foot-list">
                 <li><Ext href={addressUrl(REFERENCE.registry)}>PolicyRegistry</Ext></li>
-                <li><Ext href={addressUrl(REFERENCE.module)}>AegisModule</Ext></li>
+                <li><Ext href={addressUrl(REFERENCE.module)}>Porthmos Module</Ext></li>
                 <li><Ext href={addressUrl(REFERENCE.safe)}>Reference Safe</Ext></li>
               </ul>
             </nav>

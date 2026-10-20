@@ -38,7 +38,7 @@ export const GATES: { id: Gate; name: string; who: string; detail: string }[] = 
   { id: 'policy', name: 'Policy check', who: 'Policy verifier', detail: 'Caps, allowlist, freezes and the reserve floor; the tier the contract will demand.' },
   { id: 'simulation', name: 'Simulation', who: 'Simulator', detail: 'module.check plus an eth_call from the Safe. The exact balance change is measured.' },
   { id: 'signature', name: 'Signature', who: 'Authorizer, owner, bank', detail: 'EIP-712 records: owner approval for T3, bank as well for T4, then the authorizer’s DAR.' },
-  { id: 'guard', name: 'On-chain guard', who: 'AegisModule', detail: 'Re-checks every condition at execution: signer, nonce, expiry, oracle band, floor, caps.' },
+  { id: 'guard', name: 'On-chain guard', who: 'Porthmos module', detail: 'Re-checks every condition at execution: signer, nonce, expiry, oracle band, floor, caps.' },
   { id: 'execute', name: 'Execute or reject', who: 'Safe', detail: 'Exact approve, deposit to the Safe, approve back to zero. Or a typed revert.' },
 ]
 

@@ -9,6 +9,11 @@
       "source": "/proof",
       "destination": "https://sepolia.basescan.org/address/0x786863E82d233eb60555dfeEFEe06068d8EcB318",
       "permanent": false
+    },
+    {
+      "source": "/video",
+      "destination": "https://drive.google.com/file/d/127r0BIf40liFVrNWyrLmLyvY2ktjiKRa/view",
+      "permanent": false
     }
   ],
   "rewrites": [

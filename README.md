@@ -33,7 +33,7 @@ An AI agent wallet for cross-border trade treasuries: the agent proposes, determ
 |:-|:-|
 | **Live app** | <https://porthmos.vercel.app> |
 | **Source** | <https://github.com/Xavrir/porthmos> |
-| **Demo video** | <https://bit.ly/Porthmos-Video-Demo> |
+| **Demo video** | <https://bit.ly/Porthmos-Video> |
 | **All agent transactions** | [AegisModule on BaseScan](https://sepolia.basescan.org/address/0x786863E82d233eb60555dfeEFEe06068d8EcB318) |
 | **Built for** | 2026 Shenzhen International FinTechathon · Topic F: Agent Wallet |
 

@@ -19,5 +19,13 @@ voice/out/
 voice/ref/
 voice/**/*.wav
 voice/**/*.mp3
+voice/**/*.flac
+voice/**/*.ogg
+voice/**/*.m4a
+voice/**/*.aac
 film/assets/team/
 film/.tools/
+SCRIPT.md
+VOICEOVER.md
+VOICEOVER-ELEVENLABS.md
+REVIEW-draft1.md

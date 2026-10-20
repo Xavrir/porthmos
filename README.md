@@ -325,9 +325,7 @@ In E6c, E6f and E6g the evidence script signs the release with the Authorizer ke
 | [**Execution Evidence**](docs/EXECUTION_EVIDENCE.md) | Every recorded transaction with decoded results, classification, reproduction steps, test matrix, demo guide |
 | [Design specification v0.7](docs/TECHNICAL-DOCUMENT.md) | The team's detailed design: check orders, test IDs, design-review history |
 | [Interface spec](docs/INTERFACES.md), [Multi-tenant spec](docs/MULTI-TENANT.md) | Implementation-time specifications |
-| [Knowledge base](docs/KNOWLEDGE-BASE.md) | Talking points for demos and Q&A |
 | [`contracts/`](contracts/README.md), [`service/`](service/README.md), [`web/`](web/README.md), [`deploy/tencent/`](deploy/tencent/README.md) | Component guides |
-| [`docs/archive/`](docs/archive/) | Earlier specification versions and concept notes |
 
 ```
 contracts/      Solidity: AegisModule, PolicyRegistry, TradeEscrow, mocks; Foundry tests and deploy scripts
@@ -335,9 +333,8 @@ service/        Python service (package `aegis`): core, agent, procs, tradeflow,
 web/            React app: landing, onboarding, Treasury, Copilot, Risk, Audit, Bank desk, Orders
 deployments/    deployed addresses (84532, 31337) and the recorded evidence
 deploy/tencent/ container, compose file and Caddy site block for the hosted API
-docs/           final documents, design specification, specs, design reviews, archive
+docs/           final documents, design specification and specs
 video/          demo film sources (not part of the runtime)
-design-samples/ visual design explorations (not part of the runtime)
 brand/          logo files
 ```
 
@@ -371,7 +368,7 @@ The full list, with impact and recommendations: [Security Self-Assessment §14](
 
 Built for the **2026 Shenzhen International FinTechathon**, International AI Track, Topic F: Agent Wallet.
 
-**Acknowledgments.** Built on [Safe](https://github.com/safe-global/safe-smart-account) v1.4.1, [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) 5.4, [Foundry](https://getfoundry.sh), [viem](https://viem.sh) and [wagmi](https://wagmi.sh), FastAPI, and CLIProxyAPI. Design references include the PACE paper (policy-attested contract execution), AgentDojo, kpk's exit agents on Morpho and TradeTrust; see [Technical Documentation §18](docs/TECHNICAL_DOCUMENTATION.md#18-references-and-further-documentation) and the [design specification references](docs/TECHNICAL-DOCUMENT.md#references). Image credits for design explorations: [`design-samples/assets/CREDITS.md`](design-samples/assets/CREDITS.md).
+**Acknowledgments.** Built on [Safe](https://github.com/safe-global/safe-smart-account) v1.4.1, [OpenZeppelin Contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) 5.4, [Foundry](https://getfoundry.sh), [viem](https://viem.sh) and [wagmi](https://wagmi.sh), FastAPI, and CLIProxyAPI. Design references include the PACE paper (policy-attested contract execution), AgentDojo, kpk's exit agents on Morpho and TradeTrust; see [Technical Documentation §18](docs/TECHNICAL_DOCUMENTATION.md#18-references-and-further-documentation) and the [design specification references](docs/TECHNICAL-DOCUMENT.md#references).
 
 ## License
 

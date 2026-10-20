@@ -289,7 +289,6 @@ deployments/          deployed addresses (84532, 31337) and the recorded evidenc
 deploy/tencent/       Dockerfile, docker-compose.yml, Caddy site block, environment template
 docs/                 this document set, design specification v0.7, interface specs, archive/
 video/                demo film sources (not part of the runtime)
-design-samples/       visual design explorations (not part of the runtime)
 brand/                logo files
 ```
 
@@ -1001,8 +1000,7 @@ The 20 Oct 2026 audit changed **documentation only**. No contract, service, web,
 |:-|:-|
 | New final documents | `docs/TECHNICAL_DOCUMENTATION.md`, `docs/SECURITY_SELF_ASSESSMENT_REPORT.md`, `docs/EXECUTION_EVIDENCE.md` |
 | Rewritten repository homepage | `README.md` |
-| Reading guide added to the design specification; stale facts corrected in the knowledge base | `docs/TECHNICAL-DOCUMENT.md`, `docs/KNOWLEDGE-BASE.md` |
-| Superseded drafts moved, unchanged, to an archive | `docs/archive/` (specification v0.1 to v0.6, concept notes, first design review) |
+| Reading guide added to the design specification | `docs/TECHNICAL-DOCUMENT.md` |
 
 Issues found in the code during the audit are recorded as findings with recommended fixes in the [Security Self-Assessment Report §10](SECURITY_SELF_ASSESSMENT_REPORT.md#10-security-findings).
 
@@ -1015,9 +1013,7 @@ Issues found in the code during the audit are recorded as findings with recommen
 - [Security Self-Assessment Report](SECURITY_SELF_ASSESSMENT_REPORT.md) · [Execution Evidence](EXECUTION_EVIDENCE.md)
 - [Design specification v0.7](TECHNICAL-DOCUMENT.md): check orders, test IDs (C1 to C32, R1 to R11, A1 to A16, M1 to M12, T1 to T54), design-review history
 - [Interface spec v1](INTERFACES.md) and [Multi-tenant spec v2.1](MULTI-TENANT.md): implementation-time specifications
-- [Knowledge base](KNOWLEDGE-BASE.md): talking points for demos
 - Component guides: [`contracts/README.md`](../contracts/README.md), [`service/README.md`](../service/README.md), [`web/README.md`](../web/README.md), [`deploy/tencent/README.md`](../deploy/tencent/README.md)
-- [`docs/archive/`](archive/): earlier specification versions, concept notes and design reviews
 
 **Code locations for the main claims**
 

@@ -1,5 +1,5 @@
 """TradeFlow on the in-memory chain (TECHNICAL-DOCUMENT 05, T29, T36 to T42, T48 to T51, T53; findings C1, C3 to C10
-and V1 of docs/design-tribunal-v0.3/REVIEW.md)."""
+and V1 of the v0.3 design review)."""
 
 from __future__ import annotations
 

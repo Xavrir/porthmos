@@ -14,7 +14,7 @@ We built it for the 2026 Shenzhen International FinTechathon, International Trac
 
 ## The team
 
-The original Porthmos concept came from Stanley: the obligation-aware reserve, state-bound authorization, the decision ledger, and the Stress Lab demo. We merged it with our own treasury agent research, which added the bank risk desk, the Exit Agent design taken from kpk, and the Safe-based wallet. The team is Rizky (Alvido), Stanley, and Aarief.
+The original Porthmos concept came from Stanley: the obligation-aware reserve, state-bound authorization, the decision ledger, and the Stress Lab demo. We merged it with our own treasury agent research, which added the bank risk desk, the Exit Agent design taken from kpk, and the Safe-based wallet. The team is Stanley Nathanael Wijaya, Rizky Mirzaviandy Priambodo (Alvido), Aarief Fawwaz Satriahutama and Hansel Mitchell Tumanggor.
 
 ## What problem it solves
 
@@ -86,7 +86,7 @@ We planned Zodiac Roles first. In the end a small custom Safe module was simpler
 
 ## Testing
 
-Checked on 17 October 2026. 106 Foundry tests, including 59 for TradeEscrow, plus fuzz and invariant tests for containment, the reserve floor and the escrow. 161 backend unit tests and 15 integration tests on a local chain, including a two-tenant run where tenant B sees nothing of tenant A, and a bank freeze that blocks deposits while the exit still works. 61 web tests. The website went through a UX review with 21 issues, all fixed, and 0 accessibility violations.
+Checked again on 20 October 2026. 106 Foundry tests, including the TradeEscrow tests, plus fuzz and invariant tests for containment, the reserve floor and the escrow. 412 backend unit tests and 20 integration tests on a local chain, including a two-tenant run where tenant B sees nothing of tenant A, and a bank freeze that blocks deposits while the exit still works. 176 web tests. The website went through a UX review with 21 issues, all fixed, and 0 accessibility violations.
 
 ## On-chain evidence
 
@@ -96,7 +96,7 @@ All contracts are deployed on Base Sepolia, and all scenarios are recorded with 
 
 TradeFlow is built and deployed on Base Sepolia. It is our first module on top of the treasury. A buyer funds a trade order of three milestones. The TradeEscrow contract holds the money and pays the supplier only when a trusted issuer signs a proof that the milestone is met, and the treasury's Authorizer signs the release too. The supplier address and every amount are fixed when the order is funded, so neither the agent nor an issuer can redirect money. The owner funds an order with one Safe transaction. The agent never funds an order itself.
 
-In the demo the issuers are server keys: a carrier, a temperature sensor and a surveyor. They stand in for real bills of lading and sensors. Be honest about that: the demo shows the authorization path, not real document checking. Trade escrow itself is not new. Tazapay and Escrow.com do it, and another entry in our topic built milestone escrow. Ours is tied to the treasury, the bank freeze and the decision ledger. TradeEscrow sits at 0x009c…ce76 on Base Sepolia. The web Orders page is still in progress, so today orders run through the API.
+In the demo the issuers are server keys: a carrier, a temperature sensor and a surveyor. They stand in for real bills of lading and sensors. Be honest about that: the demo shows the authorization path, not real document checking. Trade escrow itself is not new. Tazapay and Escrow.com do it, and another entry in our topic built milestone escrow. Ours is tied to the treasury, the bank freeze and the decision ledger. TradeEscrow sits at 0x009c…ce76 on Base Sepolia. The web Orders page is built: it lists orders, shows the milestone timeline, funds an order through the Safe, and lets the owner waive or refund.
 
 ## E6: the TradeFlow proofs
 
@@ -104,7 +104,7 @@ E6 is recorded on the reference treasury, through the real pipeline: Proof Verif
 
 ## Is it a real app or a demo
 
-It is a real app. Anyone can open porthmos.vercel.app, click Create your treasury, and get their own treasury on Base Sepolia in about a minute: an owner key and a bank key are generated in the browser, our faucet sends test ETH, and the treasury gets 100,000 test USDC. About 13 real transactions set it up. Then they can run the agent, approve plans, freeze it from the bank seat, and try attacks that the contract refuses on-chain. The backend runs on our own server. The contracts did not need any change, because every rule is already stored per treasury. The web Orders page is still in progress. It is testnet only: the contracts are not audited and the vaults are mocks.
+It is a real app. Anyone can open porthmos.vercel.app, click Create your treasury, and get their own treasury on Base Sepolia in about a minute: an owner key and a bank key are generated in the browser, our faucet sends test ETH, and the treasury gets 100,000 test USDC. About 13 real transactions set it up. Then they can run the agent, approve plans, freeze it from the bank seat, and try attacks that the contract refuses on-chain. The backend runs on our own server. The contracts did not need any change, because every rule is already stored per treasury. It is testnet only: the contracts are not audited and the vaults are mocks.
 
 ## Is it just an LLM wrapper
 

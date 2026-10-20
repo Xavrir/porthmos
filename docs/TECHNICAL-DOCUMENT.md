@@ -2,13 +2,15 @@
 
 **2026 FINTECHATHON · International AI Track · Topic F (Agent Wallet)**
 
+> **Reading guide (added 20 Oct 2026).** This file is the team's detailed design specification (v0.7), kept because it records every design decision, check order and test ID. The maintained documentation set, audited against the code on 20 Oct 2026, is [Technical Documentation](TECHNICAL_DOCUMENTATION.md), [Security Self-Assessment Report](SECURITY_SELF_ASSESSMENT_REPORT.md) and [Execution Evidence](EXECUTION_EVIDENCE.md). Where they differ, those three documents describe the current state, for example the current test counts. Earlier versions of this specification are in [`docs/archive/`](archive/).
+
 | | |
 |---|---|
 | Product | Porthmos (named AEGIS Treasury up to v0.2) |
 | Team name | TBD |
 | Competition track | International AI Track, Topic F: Agent Wallet |
 | Submission date | TBD (deadline 20 Oct 2026, 23:59 UTC+8) |
-| Document status | Draft v0.7. v0.7 records the Copilot changes of 18 Oct 2026: read-only questions never become actions, a confirm gate for chat-derived T1 and T2 actions, batched chain reads, replies in the owner's language, and streamed replies with the reply guard applied while they stream; it also marks the web Orders page as built (see "Changes from v0.6"); the previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.6.md`. v0.6 added wallet sign-in with Sign-In with Ethereum (EIP-4361), smart contract wallet signatures (ERC-1271, ERC-6492) and the wallet picker (see "Changes from v0.5"); the previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.5.md`. TradeFlow is now built and recorded on Base Sepolia (E6a to E6g). v0.4 applied the eleven confirmed findings of the design tribunal on v0.3 (see "Changes from v0.3"); v0.5 records what was built (see "Changes from v0.4"). The previous version is kept as `docs/TECHNICAL-DOCUMENT-v0.4.md`. Values marked TBD are filled in after testing. |
+| Document status | Draft v0.7. v0.7 records the Copilot changes of 18 Oct 2026: read-only questions never become actions, a confirm gate for chat-derived T1 and T2 actions, batched chain reads, replies in the owner's language, and streamed replies with the reply guard applied while they stream; it also marks the web Orders page as built (see "Changes from v0.6"); the previous version is kept as `docs/archive/TECHNICAL-DOCUMENT-v0.6.md`. v0.6 added wallet sign-in with Sign-In with Ethereum (EIP-4361), smart contract wallet signatures (ERC-1271, ERC-6492) and the wallet picker (see "Changes from v0.5"); the previous version is kept as `docs/archive/TECHNICAL-DOCUMENT-v0.5.md`. TradeFlow is now built and recorded on Base Sepolia (E6a to E6g). v0.4 applied the eleven confirmed findings of the design tribunal on v0.3 (see "Changes from v0.3"); v0.5 records what was built (see "Changes from v0.4"). The previous version is kept as `docs/archive/TECHNICAL-DOCUMENT-v0.4.md`. Values marked TBD are filled in after testing. |
 
 **Build status labels.** **[Built]** means the part runs on Base Sepolia and has tests in the repository. **[In progress]** means the part is being built now. In v0.5 all of TradeFlow was [Built] except the web Orders page; since v0.7 the Orders page is [Built] too, so no part is [In progress]. A change made in v0.4 is marked with the finding it answers, for example (v0.4, C1). Text without a label describes the built system. The TradeEscrow contract interface in 04 is unchanged from v0.3.
 
@@ -1387,4 +1389,4 @@ Gaps from the review that v0.2 closed: oracle keeper and heartbeat (60 s, `maxOr
 - Topic F entries reviewed: github.com/Nostidus4/TreasuryPilot, github.com/sucsage/agentic-wallet, github.com/Khawpuneiei/ReceivableOS
 - Market sources from the team's feasibility analysis: WTO, BPS, Asian Development Bank, Bank Indonesia, OJK, Singapore MTI and SingStat, MAS
 - CLIProxyAPI (OpenAI-compatible proxy), image `eceasy/cli-proxy-api:v8.0.29`
-- Project documents: `docs/INTERFACES.md` (v1), `docs/MULTI-TENANT.md` (v2.1), `docs/IDEA-merged.md` (master context v1.2), `deploy/tencent/README.md`
+- Project documents: `docs/INTERFACES.md` (v1), `docs/MULTI-TENANT.md` (v2.1), `docs/archive/IDEA-merged.md` (master context v1.2), `deploy/tencent/README.md`

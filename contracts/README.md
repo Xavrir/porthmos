@@ -28,6 +28,8 @@ forge build
 forge test -vv
 ```
 
+Use a Foundry 1.8.x nightly (verified with 1.8.6-nightly `bbc7910` on 20 Oct 2026: 106 tests reported, all pass). The vendored forge-std 1.17.0 expects the newer `vm.lastCallGas()` result, so with Foundry 1.5.1-stable or 1.6.0-nightly one test (`test_T1_createOrderThroughSafeMultiSendCallOnly`) fails at its gas-logging line.
+
 Tests deploy a real Safe v1.4.1 proxy (SafeL2 singleton, proxy factory, fallback handler) and enable the module
 through an owner-signed Safe transaction.
 
@@ -113,11 +115,11 @@ cast receipt <hash> --rpc-url http://127.0.0.1:8545     # status 0 (failed)
 cast run <hash> --rpc-url http://127.0.0.1:8545         # trace ends in e.g. [Revert] NonceUsed()
 ```
 
-## Base Sepolia (not done)
+## Base Sepolia (deployed)
 
-Base Sepolia (84532) deployment has not been run. It needs funded keys that the user must provide; the public
-Anvil keys must never be used on a public network. Outside chain 31337 both scripts read every key from the
-environment and stop if one is missing:
+The contracts are deployed on Base Sepolia (84532); addresses are in `deployments/84532.json` and the README. The deployed runtime bytecode matches `forge build` of this repository (see `docs/EXECUTION_EVIDENCE.md` §4). The recorded evidence (E1 to E6g) was sent by `service/scripts/evidence_84532.py`, not by `Attack.s.sol`: the testnet roles did not hold enough ETH for the script's legacy pricing and 1,500,000 gas limit, so the Python script sends the same calls with EIP-1559 fees and an 800,000 gas limit.
+
+To deploy again elsewhere, never use the public Anvil keys on a public network. Outside chain 31337 both scripts read every key from the environment and stop if one is missing:
 
 ```
 DEPLOYER_KEY OWNER_KEY BANK_KEY AUTHORIZER_KEY EXIT_KEY EXECUTOR_KEY KEEPER_KEY ATTACKER_KEY

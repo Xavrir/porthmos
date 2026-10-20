@@ -2,7 +2,7 @@
 
 React + Vite + TypeScript front end for Porthmos, formerly AEGIS Treasury (FinTechathon 2026, Topic F). It reads the Porthmos service API (`docs/INTERFACES.md` §2) and `deployments/<chainId>.json` (§1.6), and signs EIP-712 approvals with an injected wallet, or with the public Anvil demo keys on chain 31337 only.
 
-Pages: Landing (story and live system), Treasury, Copilot, Risk, Audit, Bank desk.
+Pages: Landing (story and live system), Sign in, Sign up (onboarding), Treasury, Copilot, Risk, Audit, Bank desk, Orders and Order (TradeFlow), and the public supplier view `/o/:id`.
 
 ## Run
 
@@ -47,13 +47,11 @@ Run it whenever the evidence file changes, then commit the regenerated `src/repl
 | E2 (Depeg button) | Quarantine of Vault A, then Vault B | The exit redeems: the recorded exits were 500.00 and 900.18, which do not match the replay positions |
 | E3 (New invoice button) | `setReserveFloor(8,499.70)` and the 1,099.82 redeem from Vault B | The second leg from Vault A that replay needs to cover its larger shortfall |
 | E4c | Listed with its request id in the Audit evidence panel (no transaction exists) | |
-| E4a, E4b, E4d, E5 | Scheduled (see below) | All, until recorded |
+| E4a, E4b, E4d, E5 | The mined, reverted attack transactions, linked to Basescan | |
 
-The refusals E4a (`BadSignature`), E4b (`NonceUsed`), E4d (`PriceOutOfBand`) and E5 (`Frozen`) can only be recorded after the 24-hour vault quarantine from E2 ends (chain time 15 Oct 17:18 UTC; the script reads the time from the evidence file's `failures`). Until then the landing "Refused by the contract" section, the Audit evidence panel, the Audit `?error=` banner and the Copilot decision view say that no reverted transaction exists yet and name the contract test that proves each refusal (`src/lib/proof.ts`: C3, C5, C16, C19, plus C8, C9, C12, C18, C24 for the test-only ones; 47 Foundry tests in `contracts/test`). Replay ledger rows for these refusals read "Refused in replay" and show no transaction.
+The refusals E4a (`BadSignature`), E4b (`NonceUsed`), E4d (`PriceOutOfBand`) and E5 (`Frozen`) are recorded on Base Sepolia (15 Oct 2026), as are E6a to E6g (16 Oct 2026); the synced `src/replay/evidence.ts` links each one to Basescan. The refusal slots (`e4a`, `e4b`, `e4d`, `e5-deposit`) accept only a mined, reverted transaction (`expected` is not `success` and `receiptStatus` is 0), so a setup transaction in the same scenario can never stand in for a refusal. To try another evidence file without touching the real one: `EVIDENCE_SOURCE=/path/evidence.json EVIDENCE_TARGET=/tmp/evidence.ts npm run evidence:sync`.
 
-The refusal slots (`e4a`, `e4b`, `e4d`, `e5-deposit`) accept only a mined, reverted transaction (`expected` is not `success` and `receiptStatus` is 0), so a setup transaction in the same scenario can never stand in for a refusal. Once the attack phase is recorded, `npm run evidence:sync` is enough: the tiles link straight to Basescan ("Reverted on Base Sepolia, block N"), the hero proof list adds the first reverted attack, and the "scheduled" wording disappears. To try a file without touching the real one: `EVIDENCE_SOURCE=/path/evidence.json EVIDENCE_TARGET=/tmp/evidence.ts npm run evidence:sync`.
-
-In the E3 scenario the invoice amount is derived from the recorded floor (8,499.70 is 1.1 × 7,727.00 of outflows, so the invoice is 7,727.00 minus the replay's other obligations). When E4a to E5 are recorded, run the sync again. Their rows link automatically only if the slot rules match their labels; check the script's output line listing the recorded slots, and the amounts of the matching replay rows.
+In the E3 scenario the invoice amount is derived from the recorded floor (8,499.70 is 1.1 × 7,727.00 of outflows, so the invoice is 7,727.00 minus the replay's other obligations).
 
 The Audit page has a "Recorded on Base Sepolia" panel that lists every scenario and transaction from the evidence file with Basescan links, whatever the mode.
 

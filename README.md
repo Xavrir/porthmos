@@ -1,6 +1,8 @@
-<div align="center">
+<p align="center">
+  <img src="docs/readme/banner.png" alt="Porthmos: pay suppliers on proof, keep spare cash safe and earning" width="100%" />
+</p>
 
-<img src="brand/porthmos-mark.png" alt="Porthmos" width="110" />
+<div align="center">
 
 # Porthmos
 
@@ -14,6 +16,10 @@ An AI agent wallet for cross-border trade treasuries: the agent proposes, determ
 <img alt="Solidity 0.8.28" src="https://img.shields.io/badge/Solidity-0.8.28-363636?logo=solidity" />
 <img alt="Python 3.12+" src="https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white" />
 <img alt="React 19" src="https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white" />
+<img alt="Safe v1.4.1" src="https://img.shields.io/badge/Safe-v1.4.1-4EC397" />
+<img alt="Recorded scenarios" src="https://img.shields.io/badge/recorded_scenarios-15-F99510" />
+<img alt="Automated tests" src="https://img.shields.io/badge/automated_tests-714-4EC397" />
+<img alt="Deployed on Vercel" src="https://img.shields.io/badge/web-Vercel-111111?logo=vercel&logoColor=white" />
 
 *2026 Shenzhen International FinTechathon · International AI Track · Topic F: Agent Wallet*
 
@@ -22,6 +28,14 @@ An AI agent wallet for cross-border trade treasuries: the agent proposes, determ
 > **Testnet prototype.** Everything runs on Base Sepolia with test USDC, mock vaults and a mock price feed. The contracts are not externally audited. Do not use with real funds.
 >
 > **Name note.** Porthmos was called AEGIS Treasury until design v0.2. On-chain and code identifiers keep the old name (`AegisModule`, `PolicyRegistry`, EIP-712 domain `"AegisModule"`, Python package `aegis`), because renaming would change deployed bytecode and signature digests.
+
+| | |
+|:-|:-|
+| **Live app** | <https://porthmos.vercel.app> |
+| **Source** | <https://github.com/Xavrir/porthmos> |
+| **Demo video** | <https://bit.ly/Porthmos-Video-Demo> |
+| **All agent transactions** | [AegisModule on BaseScan](https://sepolia.basescan.org/address/0x786863E82d233eb60555dfeEFEe06068d8EcB318) |
+| **Built for** | 2026 Shenzhen International FinTechathon · Topic F: Agent Wallet |
 
 ## Contents
 
@@ -91,6 +105,10 @@ Open **[porthmos.vercel.app](https://porthmos.vercel.app)** (Base Sepolia, no re
 
 ## How it works
 
+<p align="center">
+  <img src="docs/readme/decision-flow.png" alt="One request end to end: ask, plan, check, sign, enforce, record, with four checks and the approval tiers" width="100%" />
+</p>
+
 **One request, end to end.** The owner asks in chat. A rule parser decides whether the message is a question or an instruction; the LLM may only fill missing parameters. Deterministic code computes the reserve, scores the vaults and builds plan options; the LLM may pick the default, a smaller option or hold, and anything larger escalates to the owner's signature. The service runs policy checks and a simulation. A separate **Authorizer** process re-derives everything from its own chain reads and signs a short-lived **Decision Authorization Record (DAR)**. Anyone can submit it; the **Executor** usually does. `AegisModule` re-checks every condition on-chain and reverts with a typed error if any no longer holds. Without an LLM, the Copilot runs in rule-based mode and every check still applies.
 
 | Responsibility | AI (LLM) | Deterministic service | Smart contract |
@@ -111,9 +129,20 @@ Open **[porthmos.vercel.app](https://porthmos.vercel.app)** (Base Sepolia, no re
 | T4 Escalated | Above `bankLimit` | Authorizer + owner + bank |
 | Blocked | Any transfer out, any other receiver, any vault the owner did not add | Not representable |
 
+<p align="center">
+  <img src="docs/readme/tradeflow.png" alt="TradeFlow order 1 on Base Sepolia: 1,000 USDC paid 200 / 400 / 400 on proof, with a held cold-chain milestone" width="100%" />
+</p>
+
 **TradeFlow.** A milestone release needs two signatures that the contract checks: the issuer's `MilestoneProof` and the Authorizer's `ReleaseAuthorization` (separate EIP-712 domain `TradeEscrow`). The contract checks the proof's conditions itself (document hash, temperature range) and pays only the fixed amount, only to the fixed supplier, only in order. The owner can waive a held milestone or refund after the deadline.
 
 ## Architecture
+
+<p align="center">
+  <img src="docs/readme/architecture.png" alt="Porthmos architecture: people and issuers, the five-process service with one key each, and the Base Sepolia contracts" width="100%" />
+</p>
+
+<details>
+<summary>Text version (Mermaid)</summary>
 
 ```mermaid
 flowchart LR
@@ -166,6 +195,8 @@ flowchart LR
   Keeper ==> Chain
   API ==> Ledger
 ```
+
+</details>
 
 Each process loads only its own key (`service/aegis/supervisor.py`). Component responsibilities, trust boundaries and sequence diagrams: [Technical Documentation §2](docs/TECHNICAL_DOCUMENTATION.md#2-system-architecture).
 
